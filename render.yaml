@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: p2p-crypto-exchange
+    env: go
+    buildCommand: go build -o p2p-exchange main.go
+    startCommand: ./p2p-exchange

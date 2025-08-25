@@ -1,0 +1,763 @@
+package service
+
+import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"log"
+	"strings"
+	"time"
+
+	"p2pTG-crypto-exchange/internal/model"
+	"p2pTG-crypto-exchange/internal/repository"
+)
+
+// Service представляет слой бизнес-логики приложения
+// Содержит все основные операции P2P криптобиржи
+// Связывает слой обработчиков с репозиторием данных
+type Service struct {
+	repo          repository.RepositoryInterface // Интерфейс репозитория для работы с данными
+	telegramToken string                         // Токен Telegram бота для авторизации
+	chatID        string                         // ID закрытого чата для проверки членства
+}
+
+// NewService создает новый экземпляр сервиса
+// Принимает интерфейс репозитория, токен бота и ID чата
+func NewService(repo repository.RepositoryInterface, telegramToken, chatID string) *Service {
+	log.Println("[INFO] Инициализация сервиса бизнес-логики")
+	return &Service{
+		repo:          repo,
+		telegramToken: telegramToken,
+		chatID:        chatID,
+	}
+}
+
+// =====================================================
+// АВТОРИЗАЦИЯ И АУТЕНТИФИКАЦИЯ
+// =====================================================
+
+// AuthenticateUser выполняет авторизацию пользователя через Telegram WebApp
+// Проверяет подлинность данных от Telegram и создает/обновляет пользователя
+func (s *Service) AuthenticateUser(authData *model.TelegramAuthData) (*model.User, error) {
+	log.Printf("[INFO] Попытка авторизации пользователя: TelegramID=%d, Username=%s",
+		authData.ID, authData.Username)
+
+	// Проверяем подлинность данных от Telegram WebApp
+	if !s.validateTelegramAuth(authData) {
+		log.Printf("[WARN] Неверная подпись авторизации для пользователя TelegramID=%d", authData.ID)
+		return nil, fmt.Errorf("неверная подпись авторизации")
+	}
+
+	// Проверяем срок действия авторизации (не более 24 часов)
+	authTime := time.Unix(authData.AuthDate, 0)
+	if time.Since(authTime) > 24*time.Hour {
+		log.Printf("[WARN] Истекший токен авторизации для пользователя TelegramID=%d", authData.ID)
+		return nil, fmt.Errorf("срок действия авторизации истек")
+	}
+
+	// Пытаемся найти существующего пользователя
+	user, err := s.repo.GetUserByTelegramID(authData.ID)
+	if err != nil {
+		// Если пользователь не найден, создаем нового
+		if strings.Contains(err.Error(), "не найден") {
+			log.Printf("[INFO] Создание нового пользователя: TelegramID=%d", authData.ID)
+			user = &model.User{
+				TelegramID:      authData.ID,
+				TelegramUserID:  authData.Username,
+				FirstName:       authData.FirstName,
+				LastName:        authData.LastName,
+				Username:        authData.Username,
+				PhotoURL:        authData.PhotoURL,
+				IsBot:           false,
+				LanguageCode:    "ru",
+				IsActive:        true,
+				Rating:          0.0,
+				TotalDeals:      0,
+				SuccessfulDeals: 0,
+				ChatMember:      false, // Будет обновлено после проверки членства
+			}
+
+			// Создаем пользователя в базе данных
+			if err := s.repo.CreateUser(user); err != nil {
+				log.Printf("[ERROR] Не удалось создать пользователя: %v", err)
+				return nil, fmt.Errorf("не удалось создать пользователя: %w", err)
+			}
+		} else {
+			log.Printf("[ERROR] Ошибка при поиске пользователя: %v", err)
+			return nil, fmt.Errorf("ошибка при поиске пользователя: %w", err)
+		}
+	} else {
+		log.Printf("[INFO] Найден существующий пользователь: ID=%d, TelegramID=%d",
+			user.ID, user.TelegramID)
+	}
+
+	// TODO: Проверяем членство пользователя в закрытом чате
+	// В реальной реализации здесь должен быть вызов Telegram Bot API
+	// для проверки статуса пользователя в чате
+	isChatMember := true // Заглушка - в реальности проверяем через Bot API
+
+	// Обновляем статус членства если изменился
+	if user.ChatMember != isChatMember {
+		if err := s.repo.UpdateUserChatMembership(user.TelegramID, isChatMember); err != nil {
+			log.Printf("[WARN] Не удалось обновить статус членства: %v", err)
+		} else {
+			user.ChatMember = isChatMember
+		}
+	}
+
+	// Проверяем, является ли пользователь членом чата
+	if !user.ChatMember {
+		log.Printf("[WARN] Пользователь TelegramID=%d не является членом закрытого чата", user.TelegramID)
+		return nil, fmt.Errorf("доступ запрещен: вы не являетесь членом закрытого чата")
+	}
+
+	// Проверяем, активен ли пользователь (не заблокирован)
+	if !user.IsActive {
+		log.Printf("[WARN] Попытка входа заблокированного пользователя TelegramID=%d", user.TelegramID)
+		return nil, fmt.Errorf("ваш аккаунт заблокирован")
+	}
+
+	log.Printf("[INFO] Успешная авторизация пользователя: ID=%d, TelegramID=%d",
+		user.ID, user.TelegramID)
+
+	return user, nil
+}
+
+// validateTelegramAuth проверяет подлинность данных авторизации от Telegram WebApp
+// Использует HMAC-SHA256 для валидации подписи
+func (s *Service) validateTelegramAuth(authData *model.TelegramAuthData) bool {
+	// Создаем строку для подписи из данных авторизации
+	// Порядок полей важен и должен соответствовать документации Telegram
+	dataCheckString := fmt.Sprintf("auth_date=%d\nfirst_name=%s\nid=%d\nlast_name=%s\nphoto_url=%s\nusername=%s",
+		authData.AuthDate,
+		authData.FirstName,
+		authData.ID,
+		authData.LastName,
+		authData.PhotoURL,
+		authData.Username,
+	)
+
+	// Создаем HMAC ключ из токена бота
+	secretKey := sha256.Sum256([]byte(s.telegramToken))
+
+	// Вычисляем HMAC-SHA256 подпись
+	h := hmac.New(sha256.New, secretKey[:])
+	h.Write([]byte(dataCheckString))
+	expectedHash := hex.EncodeToString(h.Sum(nil))
+
+	// Сравниваем полученную подпись с ожидаемой
+	return hmac.Equal([]byte(authData.Hash), []byte(expectedHash))
+}
+
+// =====================================================
+// УПРАВЛЕНИЕ ЗАЯВКАМИ
+// =====================================================
+
+// CreateOrder создает новую заявку на покупку или продажу криптовалюты
+// Проверяет валидность данных и сохраняет заявку в базе данных
+func (s *Service) CreateOrder(userID int64, orderData *model.Order) (*model.Order, error) {
+	log.Printf("[INFO] Создание заявки пользователем ID=%d: Type=%s, Crypto=%s, Amount=%.8f",
+		userID, orderData.Type, orderData.Cryptocurrency, orderData.Amount)
+
+	// Проверяем права пользователя на создание заявки
+	user, err := s.repo.GetUserByTelegramID(userID)
+	if err != nil {
+		log.Printf("[ERROR] Пользователь ID=%d не найден при создании заявки", userID)
+		return nil, fmt.Errorf("пользователь не найден")
+	}
+
+	if !user.IsActive || !user.ChatMember {
+		log.Printf("[WARN] Попытка создания заявки неактивным пользователем ID=%d", userID)
+		return nil, fmt.Errorf("недостаточно прав для создания заявки")
+	}
+
+	// Валидируем данные заявки
+	if err := s.validateOrderData(orderData); err != nil {
+		log.Printf("[WARN] Невалидные данные заявки от пользователя ID=%d: %v", userID, err)
+		return nil, err
+	}
+
+	// Заполняем системные поля заявки
+	orderData.UserID = user.ID
+	orderData.Status = model.OrderStatusActive
+	orderData.IsActive = true
+	orderData.TotalAmount = orderData.Amount * orderData.Price
+	orderData.ExpiresAt = time.Now().Add(24 * time.Hour) // Заявка действует 24 часа
+
+	// Если не указан минимальный и максимальный лимит, устанавливаем их равными общей сумме
+	if orderData.MinAmount == 0 {
+		orderData.MinAmount = orderData.TotalAmount
+	}
+	if orderData.MaxAmount == 0 {
+		orderData.MaxAmount = orderData.TotalAmount
+	}
+
+	// Сохраняем заявку в базе данных
+	if err := s.repo.CreateOrder(orderData); err != nil {
+		log.Printf("[ERROR] Не удалось сохранить заявку пользователя ID=%d: %v", userID, err)
+		return nil, fmt.Errorf("не удалось создать заявку: %w", err)
+	}
+
+	// Пытаемся автоматически сопоставить заявку если включено автосопоставление
+	if orderData.AutoMatch {
+		go s.tryAutoMatchOrder(orderData) // Запускаем в отдельной горутине для неблокирующего выполнения
+	}
+
+	log.Printf("[INFO] Успешно создана заявка: ID=%d, UserID=%d, Type=%s",
+		orderData.ID, userID, orderData.Type)
+
+	return orderData, nil
+}
+
+// GetOrders получает список заявок с фильтрацией и пагинацией
+// Позволяет найти подходящие заявки для пользователя
+func (s *Service) GetOrders(filter *model.OrderFilter) ([]*model.Order, error) {
+	log.Printf("[INFO] Поиск заявок с фильтром: Type=%v, Crypto=%v, Status=%v",
+		filter.Type, filter.Cryptocurrency, filter.Status)
+
+	// Устанавливаем значения по умолчанию для пагинации
+	if filter.Limit == 0 {
+		filter.Limit = 50 // По умолчанию показываем 50 заявок
+	}
+	if filter.Limit > 100 {
+		filter.Limit = 100 // Максимум 100 заявок за запрос
+	}
+
+	// Получаем заявки из репозитория
+	orders, err := s.repo.GetOrdersByFilter(filter)
+	if err != nil {
+		log.Printf("[ERROR] Ошибка при поиске заявок: %v", err)
+		return nil, fmt.Errorf("не удалось получить заявки: %w", err)
+	}
+
+	log.Printf("[INFO] Найдено заявок: %d", len(orders))
+	return orders, nil
+}
+
+// CancelOrder отменяет активную заявку пользователя
+// Только создатель заявки может ее отменить
+func (s *Service) CancelOrder(userID, orderID int64) error {
+	log.Printf("[INFO] Отмена заявки ID=%d пользователем ID=%d", orderID, userID)
+
+	// TODO: Добавить проверку прав пользователя на отмену заявки
+	// Нужно проверить, что заявка принадлежит пользователю и имеет статус "active"
+
+	// Обновляем статус заявки на "cancelled"
+	err := s.repo.UpdateOrderStatus(orderID, model.OrderStatusCancelled)
+	if err != nil {
+		log.Printf("[ERROR] Не удалось отменить заявку ID=%d: %v", orderID, err)
+		return fmt.Errorf("не удалось отменить заявку: %w", err)
+	}
+
+	log.Printf("[INFO] Заявка ID=%d успешно отменена", orderID)
+	return nil
+}
+
+// =====================================================
+// ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ
+// =====================================================
+
+// validateOrderData проверяет корректность данных заявки
+func (s *Service) validateOrderData(order *model.Order) error {
+	// Проверяем тип заявки
+	if order.Type != model.OrderTypeBuy && order.Type != model.OrderTypeSell {
+		return fmt.Errorf("неверный тип заявки: %s", order.Type)
+	}
+
+	// Проверяем криптовалюту
+	supportedCryptos := []string{"BTC", "ETH", "USDT", "USDC", "LTC"}
+	isValidCrypto := false
+	for _, crypto := range supportedCryptos {
+		if order.Cryptocurrency == crypto {
+			isValidCrypto = true
+			break
+		}
+	}
+	if !isValidCrypto {
+		return fmt.Errorf("неподдерживаемая криптовалюта: %s", order.Cryptocurrency)
+	}
+
+	// Проверяем фиатную валюту
+	supportedFiats := []string{"RUB", "USD", "EUR", "UAH"}
+	isValidFiat := false
+	for _, fiat := range supportedFiats {
+		if order.FiatCurrency == fiat {
+			isValidFiat = true
+			break
+		}
+	}
+	if !isValidFiat {
+		return fmt.Errorf("неподдерживаемая фиатная валюта: %s", order.FiatCurrency)
+	}
+
+	// Проверяем количество и цену
+	if order.Amount <= 0 {
+		return fmt.Errorf("количество должно быть больше нуля")
+	}
+	if order.Price <= 0 {
+		return fmt.Errorf("цена должна быть больше нуля")
+	}
+
+	// Проверяем лимиты
+	if order.MinAmount < 0 {
+		return fmt.Errorf("минимальная сумма не может быть отрицательной")
+	}
+	if order.MaxAmount > 0 && order.MaxAmount < order.MinAmount {
+		return fmt.Errorf("максимальная сумма не может быть меньше минимальной")
+	}
+
+	// Проверяем способы оплаты
+	if len(order.PaymentMethods) == 0 {
+		return fmt.Errorf("необходимо указать хотя бы один способ оплаты")
+	}
+
+	supportedPayments := []string{"bank_transfer", "sberbank", "tinkoff", "qiwi", "yandex_money", "cash"}
+	for _, method := range order.PaymentMethods {
+		isValidPayment := false
+		for _, supported := range supportedPayments {
+			if method == supported {
+				isValidPayment = true
+				break
+			}
+		}
+		if !isValidPayment {
+			return fmt.Errorf("неподдерживаемый способ оплаты: %s", method)
+		}
+	}
+
+	return nil
+}
+
+// HealthCheck проверяет состояние сервиса и его зависимостей
+func (s *Service) HealthCheck() error {
+	// Проверяем соединение с базой данных
+	if err := s.repo.HealthCheck(); err != nil {
+		return fmt.Errorf("сервис недоступен: %w", err)
+	}
+
+	return nil
+}
+
+// =====================================================
+// ЛОГИКА P2P ТОРГОВЛИ
+// =====================================================
+
+// tryAutoMatchOrder пытается автоматически сопоставить заявку с подходящими
+// Выполняется в отдельной горутине для неблокирующей работы
+func (s *Service) tryAutoMatchOrder(order *model.Order) {
+	log.Printf("[INFO] Попытка автоматического сопоставления заявки ID=%d", order.ID)
+
+	// Ищем подходящие заявки
+	matchingOrders, err := s.repo.GetMatchingOrders(order)
+	if err != nil {
+		log.Printf("[ERROR] Не удалось найти подходящие заявки для Order ID=%d: %v", order.ID, err)
+		return
+	}
+
+	if len(matchingOrders) == 0 {
+		log.Printf("[INFO] Подходящие заявки для Order ID=%d не найдены", order.ID)
+		return
+	}
+
+	// Пытаемся сопоставить с первой подходящей заявкой
+	matchingOrder := matchingOrders[0]
+
+	// Проверяем совместимость цен
+	if !s.isPriceCompatible(order, matchingOrder) {
+		log.Printf("[INFO] Цены заявок ID=%d и ID=%d несовместимы", order.ID, matchingOrder.ID)
+		return
+	}
+
+	// Проверяем совместимость лимитов
+	if !s.isAmountCompatible(order, matchingOrder) {
+		log.Printf("[INFO] Лимиты заявок ID=%d и ID=%d несовместимы", order.ID, matchingOrder.ID)
+		return
+	}
+
+	// Проверяем совместимость способов оплаты
+	if !s.hasCommonPaymentMethods(order, matchingOrder) {
+		log.Printf("[INFO] У заявок ID=%d и ID=%d нет общих способов оплаты", order.ID, matchingOrder.ID)
+		return
+	}
+
+	// Сопоставляем заявки
+	if err := s.repo.MatchOrders(order.ID, matchingOrder.ID); err != nil {
+		log.Printf("[ERROR] Не удалось сопоставить заявки ID=%d и ID=%d: %v", order.ID, matchingOrder.ID, err)
+		return
+	}
+
+	// Создаем сделку
+	deal, err := s.createDealFromOrders(order, matchingOrder)
+	if err != nil {
+		log.Printf("[ERROR] Не удалось создать сделку для заявок ID=%d и ID=%d: %v", order.ID, matchingOrder.ID, err)
+		return
+	}
+
+	log.Printf("[INFO] Автоматическое сопоставление успешно: создана сделка ID=%d", deal.ID)
+
+	// TODO: Отправить уведомления участникам через Telegram бота
+	// s.notifyUsersAboutDeal(deal)
+}
+
+// isPriceCompatible проверяет совместимость цен двух заявок
+func (s *Service) isPriceCompatible(order1, order2 *model.Order) bool {
+	// Для покупки: цена покупателя должна быть >= цены продавца
+	// Для продажи: цена продавца должна быть <= цены покупателя
+
+	if order1.Type == model.OrderTypeBuy && order2.Type == model.OrderTypeSell {
+		return order1.Price >= order2.Price // Покупатель готов платить >= чем просит продавец
+	}
+
+	if order1.Type == model.OrderTypeSell && order2.Type == model.OrderTypeBuy {
+		return order1.Price <= order2.Price // Продавец готов продать <= чем готов платить покупатель
+	}
+
+	return false
+}
+
+// isAmountCompatible проверяет совместимость сумм двух заявок
+func (s *Service) isAmountCompatible(order1, order2 *model.Order) bool {
+	// Проверяем что суммы заявок пересекаются в допустимых диапазонах
+
+	// Общее количество не должно превышать минимум из двух заявок
+	minAmount := order1.Amount
+	if order2.Amount < minAmount {
+		minAmount = order2.Amount
+	}
+
+	// Проверяем минимальные лимиты
+	if order1.MinAmount > 0 && minAmount*order1.Price < order1.MinAmount {
+		return false
+	}
+
+	if order2.MinAmount > 0 && minAmount*order2.Price < order2.MinAmount {
+		return false
+	}
+
+	// Проверяем максимальные лимиты
+	if order1.MaxAmount > 0 && minAmount*order1.Price > order1.MaxAmount {
+		return false
+	}
+
+	if order2.MaxAmount > 0 && minAmount*order2.Price > order2.MaxAmount {
+		return false
+	}
+
+	return true
+}
+
+// hasCommonPaymentMethods проверяет есть ли общие способы оплаты у двух заявок
+func (s *Service) hasCommonPaymentMethods(order1, order2 *model.Order) bool {
+	// Создаем карту способов оплаты первой заявки для быстрого поиска
+	methods1 := make(map[string]bool)
+	for _, method := range order1.PaymentMethods {
+		methods1[method] = true
+	}
+
+	// Проверяем есть ли пересечения с методами второй заявки
+	for _, method := range order2.PaymentMethods {
+		if methods1[method] {
+			return true // Найден общий способ оплаты
+		}
+	}
+
+	return false
+}
+
+// createDealFromOrders создает сделку на основе двух сопоставленных заявок
+func (s *Service) createDealFromOrders(order1, order2 *model.Order) (*model.Deal, error) {
+	var buyOrder, sellOrder *model.Order
+
+	// Определяем какая заявка на покупку, а какая на продажу
+	if order1.Type == model.OrderTypeBuy {
+		buyOrder = order1
+		sellOrder = order2
+	} else {
+		buyOrder = order2
+		sellOrder = order1
+	}
+
+	// Определяем параметры сделки
+	// Количество: минимум из двух заявок
+	dealAmount := buyOrder.Amount
+	if sellOrder.Amount < dealAmount {
+		dealAmount = sellOrder.Amount
+	}
+
+	// Цена: используем цену продавца (обычно более выгодная для покупателя)
+	dealPrice := sellOrder.Price
+
+	// Общая сумма
+	totalAmount := dealAmount * dealPrice
+
+	// Способ оплаты: берем первый общий метод
+	var paymentMethod model.PaymentMethod
+	for _, method := range buyOrder.PaymentMethods {
+		for _, method2 := range sellOrder.PaymentMethods {
+			if method == method2 {
+				paymentMethod = model.PaymentMethod(method)
+				break
+			}
+		}
+		if paymentMethod != "" {
+			break
+		}
+	}
+
+	// Создаем объект сделки
+	deal := &model.Deal{
+		BuyOrderID:      buyOrder.ID,
+		SellOrderID:     sellOrder.ID,
+		BuyerID:         buyOrder.UserID,
+		SellerID:        sellOrder.UserID,
+		Cryptocurrency:  buyOrder.Cryptocurrency,
+		FiatCurrency:    buyOrder.FiatCurrency,
+		Amount:          dealAmount,
+		Price:           dealPrice,
+		TotalAmount:     totalAmount,
+		PaymentMethod:   paymentMethod,
+		Status:          "pending", // Статус ожидания подтверждения
+		BuyerConfirmed:  false,
+		SellerConfirmed: false,
+	}
+
+	// Сохраняем сделку в базу данных
+	if err := s.repo.CreateDeal(deal); err != nil {
+		return nil, fmt.Errorf("не удалось создать сделку в базе данных: %w", err)
+	}
+
+	return deal, nil
+}
+
+// =====================================================
+// УПРАВЛЕНИЕ СДЕЛКАМИ
+// =====================================================
+
+// GetUserDeals получает все сделки пользователя
+func (s *Service) GetUserDeals(userID int64) ([]*model.Deal, error) {
+	log.Printf("[INFO] Получение сделок для пользователя ID=%d", userID)
+
+	deals, err := s.repo.GetDealsByUserID(userID)
+	if err != nil {
+		log.Printf("[ERROR] Не удалось получить сделки пользователя ID=%d: %v", userID, err)
+		return nil, fmt.Errorf("не удалось получить сделки: %w", err)
+	}
+
+	log.Printf("[INFO] Найдено сделок для пользователя ID=%d: %d", userID, len(deals))
+	return deals, nil
+}
+
+// GetDeal получает сделку по ID с проверкой прав доступа
+func (s *Service) GetDeal(dealID, userID int64) (*model.Deal, error) {
+	log.Printf("[INFO] Получение сделки ID=%d пользователем ID=%d", dealID, userID)
+
+	deal, err := s.repo.GetDealByID(dealID)
+	if err != nil {
+		log.Printf("[ERROR] Не удалось получить сделку ID=%d: %v", dealID, err)
+		return nil, fmt.Errorf("сделка не найдена")
+	}
+
+	// Проверяем что пользователь участвует в сделке
+	if deal.BuyerID != userID && deal.SellerID != userID {
+		log.Printf("[WARN] Пользователь ID=%d пытается получить доступ к чужой сделке ID=%d", userID, dealID)
+		return nil, fmt.Errorf("доступ запрещен: вы не участвуете в данной сделке")
+	}
+
+	return deal, nil
+}
+
+// ConfirmDeal подтверждает сделку со стороны пользователя
+func (s *Service) ConfirmDeal(dealID, userID int64, paymentProof string) error {
+	log.Printf("[INFO] Подтверждение сделки ID=%d пользователем ID=%d", dealID, userID)
+
+	// Проверяем доступ к сделке
+	deal, err := s.GetDeal(dealID, userID)
+	if err != nil {
+		return err
+	}
+
+	// Проверяем что сделка в подходящем статусе
+	if deal.Status != "pending" && deal.Status != "payment_sent" {
+		return fmt.Errorf("сделка в статусе '%s' не может быть подтверждена", deal.Status)
+	}
+
+	// Определяем тип подтверждения
+	var isPaymentProof bool
+	if userID == deal.SellerID && paymentProof != "" {
+		isPaymentProof = true
+	}
+
+	// Подтверждаем сделку
+	if err := s.repo.ConfirmDeal(dealID, userID, isPaymentProof, paymentProof); err != nil {
+		log.Printf("[ERROR] Не удалось подтвердить сделку ID=%d: %v", dealID, err)
+		return fmt.Errorf("не удалось подтвердить сделку: %w", err)
+	}
+
+	log.Printf("[INFO] Сделка ID=%d подтверждена пользователем ID=%d", dealID, userID)
+	return nil
+}
+
+// =====================================================
+// СИСТЕМА ОТЗЫВОВ И РЕЙТИНГОВ
+// =====================================================
+
+// CreateReview создает новый отзыв после завершения сделки
+func (s *Service) CreateReview(userID int64, reviewData *model.CreateReviewRequest) (*model.Review, error) {
+	log.Printf("[INFO] Создание отзыва от пользователя ID=%d для сделки ID=%d", userID, reviewData.DealID)
+
+	// Проверяем права на создание отзыва
+	canReview, err := s.repo.CheckCanReview(reviewData.DealID, userID, reviewData.ToUserID)
+	if err != nil {
+		log.Printf("[WARN] Пользователь ID=%d не может оставить отзыв: %v", userID, err)
+		return nil, err
+	}
+
+	if !canReview {
+		return nil, fmt.Errorf("отзыв не может быть создан")
+	}
+
+	// Валидируем данные отзыва
+	if err := s.validateReviewData(reviewData); err != nil {
+		log.Printf("[WARN] Невалидные данные отзыва от пользователя ID=%d: %v", userID, err)
+		return nil, err
+	}
+
+	// Создаем отзыв
+	review := &model.Review{
+		DealID:      reviewData.DealID,
+		FromUserID:  userID,
+		ToUserID:    reviewData.ToUserID,
+		Rating:      reviewData.Rating,
+		Comment:     reviewData.Comment,
+		IsAnonymous: reviewData.IsAnonymous,
+		IsVisible:   true,
+	}
+
+	// Сохраняем отзыв в базе данных
+	if err := s.repo.CreateReview(review); err != nil {
+		log.Printf("[ERROR] Не удалось создать отзыв: %v", err)
+		return nil, fmt.Errorf("не удалось создать отзыв: %w", err)
+	}
+
+	log.Printf("[INFO] Отзыв создан успешно: ID=%d, Rating=%d", review.ID, review.Rating)
+	return review, nil
+}
+
+// GetUserReviews получает отзывы о пользователе с пагинацией
+func (s *Service) GetUserReviews(userID int64, limit, offset int) ([]*model.Review, error) {
+	log.Printf("[INFO] Получение отзывов для пользователя ID=%d (limit=%d, offset=%d)", userID, limit, offset)
+
+	// Устанавливаем разумные лимиты
+	if limit <= 0 || limit > 50 {
+		limit = 20 // По умолчанию 20 отзывов
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	// Получаем отзывы из репозитория
+	reviews, err := s.repo.GetReviewsByUserID(userID, limit, offset)
+	if err != nil {
+		log.Printf("[ERROR] Не удалось получить отзывы для пользователя ID=%d: %v", userID, err)
+		return nil, fmt.Errorf("не удалось получить отзывы: %w", err)
+	}
+
+	log.Printf("[INFO] Получено отзывов: %d", len(reviews))
+	return reviews, nil
+}
+
+// GetUserRating получает рейтинг пользователя
+func (s *Service) GetUserRating(userID int64) (*model.Rating, error) {
+	log.Printf("[INFO] Получение рейтинга пользователя ID=%d", userID)
+
+	rating, err := s.repo.GetUserRating(userID)
+	if err != nil {
+		log.Printf("[ERROR] Не удалось получить рейтинг пользователя ID=%d: %v", userID, err)
+		return nil, fmt.Errorf("не удалось получить рейтинг: %w", err)
+	}
+
+	return rating, nil
+}
+
+// GetUserProfile получает полный профиль пользователя включая рейтинг и статистику
+func (s *Service) GetUserProfile(userID int64) (*model.ReviewStats, error) {
+	log.Printf("[INFO] Получение профиля пользователя ID=%d", userID)
+
+	stats, err := s.repo.GetUserReviewStats(userID)
+	if err != nil {
+		log.Printf("[ERROR] Не удалось получить статистику пользователя ID=%d: %v", userID, err)
+		return nil, fmt.Errorf("не удалось получить профиль пользователя: %w", err)
+	}
+
+	return stats, nil
+}
+
+// ReportReview создает жалобу на неподходящий отзыв
+func (s *Service) ReportReview(userID, reviewID int64, reason, comment string) error {
+	log.Printf("[INFO] Жалоба на отзыв ID=%d от пользователя ID=%d", reviewID, userID)
+
+	// Валидируем данные жалобы
+	if reason == "" {
+		return fmt.Errorf("необходимо указать причину жалобы")
+	}
+
+	supportedReasons := []string{
+		"spam",
+		"inappropriate_language",
+		"fake_review",
+		"personal_attack",
+		"irrelevant_content",
+		"other",
+	}
+
+	isValidReason := false
+	for _, validReason := range supportedReasons {
+		if reason == validReason {
+			isValidReason = true
+			break
+		}
+	}
+
+	if !isValidReason {
+		return fmt.Errorf("неподдерживаемая причина жалобы")
+	}
+
+	// Создаем жалобу
+	report := &model.ReviewReport{
+		ReviewID: reviewID,
+		UserID:   userID,
+		Reason:   reason,
+		Comment:  comment,
+		Status:   "pending",
+	}
+
+	// Сохраняем жалобу в базе данных
+	if err := s.repo.ReportReview(report); err != nil {
+		log.Printf("[ERROR] Не удалось создать жалобу: %v", err)
+		return fmt.Errorf("не удалось создать жалобу: %w", err)
+	}
+
+	log.Printf("[INFO] Жалоба создана успешно: ID=%d", report.ID)
+	return nil
+}
+
+// validateReviewData валидирует данные отзыва
+func (s *Service) validateReviewData(review *model.CreateReviewRequest) error {
+	// Проверяем рейтинг
+	if review.Rating < 1 || review.Rating > 5 {
+		return fmt.Errorf("рейтинг должен быть от 1 до 5 звезд")
+	}
+
+	// Проверяем длину комментария
+	if len(review.Comment) > 500 {
+		return fmt.Errorf("комментарий не должен превышать 500 символов")
+	}
+
+	// Проверяем что комментарий не пустой для низких оценок
+	if review.Rating <= 2 && strings.TrimSpace(review.Comment) == "" {
+		return fmt.Errorf("для оценки 1-2 звезды необходимо указать комментарий")
+	}
+
+	return nil
+}
