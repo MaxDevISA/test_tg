@@ -313,6 +313,34 @@ func (s *Service) GetOrders(filter *model.OrderFilter) ([]*model.Order, error) {
 	return orders, nil
 }
 
+// GetOrder получает заявку по ID
+func (s *Service) GetOrder(orderID int64) (*model.Order, error) {
+	log.Printf("[INFO] Получение заявки по ID=%d", orderID)
+
+	// Получаем все заявки и ищем нужную (пока нет отдельного метода GetOrderByID)
+	filter := &model.OrderFilter{
+		Limit:  1000, // Получаем больше заявок для поиска
+		Offset: 0,
+	}
+
+	orders, err := s.repo.GetOrdersByFilter(filter)
+	if err != nil {
+		log.Printf("[ERROR] Ошибка при поиске заявки ID=%d: %v", orderID, err)
+		return nil, fmt.Errorf("ошибка поиска заявки")
+	}
+
+	// Ищем заявку с нужным ID
+	for _, order := range orders {
+		if order.ID == orderID {
+			log.Printf("[INFO] Заявка найдена: ID=%d, Type=%s", order.ID, order.Type)
+			return order, nil
+		}
+	}
+
+	log.Printf("[WARN] Заявка ID=%d не найдена", orderID)
+	return nil, fmt.Errorf("заявка с ID=%d не найдена", orderID)
+}
+
 // CancelOrder отменяет активную заявку пользователя
 // Только создатель заявки может ее отменить
 func (s *Service) CancelOrder(userID, orderID int64) error {

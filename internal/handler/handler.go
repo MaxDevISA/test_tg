@@ -230,11 +230,20 @@ func (h *Handler) handleGetOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: Реализовать получение заявки по ID
 	log.Printf("[INFO] Запрос заявки по ID: %d", orderID)
+
+	// Получаем заявку через сервис
+	order, err := h.service.GetOrder(orderID)
+	if err != nil {
+		log.Printf("[WARN] Заявка ID=%d не найдена: %v", orderID, err)
+		h.sendErrorResponse(w, "Заявка не найдена", http.StatusNotFound)
+		return
+	}
+
+	log.Printf("[INFO] Заявка ID=%d успешно получена", orderID)
 	h.sendJSONResponse(w, map[string]interface{}{
-		"message":  "Эндпоинт в разработке",
-		"order_id": orderID,
+		"success": true,
+		"order":   order,
 	})
 }
 
@@ -649,26 +658,17 @@ func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
 
         <!-- Раздел "Мои заявки" -->
         <div id="my-ordersView" class="view hidden">
-            <div class="text-center mt-md">
-                <h2>Мои заявки</h2>
-                <p class="text-muted">Здесь будут отображаться ваши активные и завершенные заявки</p>
-            </div>
+            <!-- Контент будет загружен через JavaScript -->
         </div>
 
         <!-- Раздел "Сделки" -->
         <div id="dealsView" class="view hidden">
-            <div class="text-center mt-md">
-                <h2>История сделок</h2>
-                <p class="text-muted">Здесь будет история ваших завершенных сделок</p>
-            </div>
+            <!-- Контент будет загружен через JavaScript -->
         </div>
 
         <!-- Раздел "Профиль" -->
         <div id="profileView" class="view hidden">
-            <div class="text-center mt-md">
-                <h2>Мой профиль</h2>
-                <p class="text-muted">Информация о профиле, рейтинг и отзывы</p>
-            </div>
+            <!-- Контент будет загружен через JavaScript -->
         </div>
     </div>
 
@@ -752,6 +752,8 @@ func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
             </form>
         </div>
     </div>
+
+
 
     <script src="/static/app.js"></script>
 </body>
