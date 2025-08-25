@@ -70,6 +70,12 @@ type ReviewStats struct {
 	RatingDistribution map[int]int `json:"rating_distribution"` // Распределение оценок по звездам
 }
 
+// FullUserProfile содержит полную информацию о пользователе включая данные профиля и статистику отзывов
+type FullUserProfile struct {
+	User  *User        `json:"user"`  // Данные пользователя
+	Stats *ReviewStats `json:"stats"` // Статистика отзывов
+}
+
 // CreateReviewRequest содержит данные для создания нового отзыва
 type CreateReviewRequest struct {
 	DealID      int64  `json:"deal_id" validate:"required"`            // ID сделки (обязательно)

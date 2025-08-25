@@ -512,50 +512,43 @@ async function loadProfile() {
     content.innerHTML = '<div class="loading"><div class="spinner"></div><p>Загрузка профиля...</p></div>';
     
     try {
-        // Получаем пользователя по Telegram ID
-        const user = await getUserByTelegramID();
-        if (!user) {
-            displayProfile(currentUser);
-            return;
-        }
-
-        // Параллельно загружаем профиль, отзывы и рейтинг
-        const [profileResponse, reviewsResponse, ratingResponse] = await Promise.all([
+        // Получаем данные пользователя и статистику параллельно
+        const [userResponse, statsResponse, reviewsResponse] = await Promise.all([
             fetch('/api/v1/auth/me', {
                 headers: { 'X-Telegram-User-ID': currentUser.id.toString() }
             }).catch(() => null),
-            fetch(`/api/v1/reviews?user_id=${user.id}&limit=5`, {
+            fetch('/api/v1/auth/stats', {
                 headers: { 'X-Telegram-User-ID': currentUser.id.toString() }
             }).catch(() => null),
-            fetch(`/api/v1/users/${user.id}/profile`, {
+            fetch('/api/v1/reviews?limit=5', {
                 headers: { 'X-Telegram-User-ID': currentUser.id.toString() }
             }).catch(() => null)
         ]);
 
-        let profileData = currentUser;
-        let reviews = [];
-        let stats = null;
+        let userData = currentUser;
+        let userStats = null;
+        let userReviews = [];
 
         // Парсим ответы
-        if (profileResponse && profileResponse.ok) {
-            const profileResult = await profileResponse.json();
-            profileData = profileResult.user || currentUser;
+        if (userResponse && userResponse.ok) {
+            const userResult = await userResponse.json();
+            userData = userResult.user || currentUser;
+        }
+
+        if (statsResponse && statsResponse.ok) {
+            const statsResult = await statsResponse.json();
+            userStats = statsResult.stats;
         }
 
         if (reviewsResponse && reviewsResponse.ok) {
             const reviewsResult = await reviewsResponse.json();
-            reviews = reviewsResult.reviews || [];
+            userReviews = reviewsResult.reviews || [];
         }
 
-        if (ratingResponse && ratingResponse.ok) {
-            const statsResult = await ratingResponse.json();
-            stats = statsResult;
-        }
-
-        displayProfileWithReviews(profileData, reviews, stats);
+        displayMyProfile(userData, userStats, userReviews);
     } catch (error) {
         console.error('[ERROR] Ошибка загрузки профиля:', error);
-        displayProfile(currentUser);
+        displayMyProfile(currentUser, null, []);
     }
 }
 
@@ -684,6 +677,139 @@ function displayProfileWithReviews(user, reviews, stats) {
 // Отображение профиля (упрощенная версия без отзывов)
 function displayProfile(user) {
     displayProfileWithReviews(user, [], null);
+}
+
+// Отображение моего профиля с полной статистикой
+function displayMyProfile(user, stats, reviews) {
+    const content = document.getElementById('profileView');
+    
+    // Данные пользователя
+    const avatarUrl = user.photo_url || '';
+    const userName = user.first_name + (user.last_name ? ` ${user.last_name}` : '');
+    const username = user.username ? `@${user.username}` : '';
+    
+    // Статистика рейтинга
+    const rating = stats?.average_rating || user.rating || 0;
+    const totalReviews = stats?.total_reviews || 0;
+    const stars = '⭐'.repeat(Math.floor(rating)) + '☆'.repeat(5 - Math.floor(rating));
+    
+    let html = `
+        <div style="padding: 20px;">
+            <!-- Заголовок -->
+            <div style="text-align: center; margin-bottom: 24px;">
+                <h2 style="margin-bottom: 16px; font-size: 20px; font-weight: 600; color: var(--tg-theme-text-color, #000000);">
+                    👤 Мой профиль
+                </h2>
+                
+                <!-- Аватар -->
+                <div style="margin-bottom: 16px;">
+                    ${avatarUrl ? 
+                        `<img src="${avatarUrl}" style="width: 80px; height: 80px; border-radius: 50%; border: 3px solid var(--tg-theme-link-color, #2481cc);" alt="Аватар">` :
+                        `<div style="width: 80px; height: 80px; border-radius: 50%; background: var(--tg-theme-link-color, #2481cc); display: flex; align-items: center; justify-content: center; margin: 0 auto; font-size: 32px; color: white;">
+                            ${user.first_name ? user.first_name[0].toUpperCase() : '👤'}
+                        </div>`
+                    }
+                </div>
+                
+                <!-- Имя и username -->
+                <div style="margin-bottom: 12px;">
+                    <div style="font-size: 20px; font-weight: 600; margin-bottom: 4px; color: var(--tg-theme-text-color, #000000);">
+                        ${userName}
+                    </div>
+                    ${username ? `
+                    <div style="font-size: 14px; color: var(--tg-theme-hint-color, #708499);">
+                        ${username}
+                    </div>` : ''}
+                </div>
+                
+                <!-- Рейтинг -->
+                <div style="font-size: 16px; margin-bottom: 8px;">
+                    ${stars} ${rating.toFixed(1)}
+                </div>
+                <div style="font-size: 13px; color: var(--tg-theme-hint-color, #708499);">
+                    ${totalReviews} отзыв${totalReviews === 1 ? '' : totalReviews > 4 ? 'ов' : 'а'}
+                </div>
+            </div>
+            
+            <!-- Статистика сделок -->
+            <div class="profile-stats-grid" style="margin-bottom: 24px;">
+                <div class="profile-stat-card">
+                    <div class="profile-stat-number" style="color: #22c55e;">${stats?.completed_deals || 0}</div>
+                    <div class="profile-stat-label">Завершено сделок</div>
+                </div>
+                <div class="profile-stat-card">
+                    <div class="profile-stat-number" style="color: #f59e0b;">${stats?.active_orders || 0}</div>
+                    <div class="profile-stat-label">Активных заявок</div>
+                </div>
+                <div class="profile-stat-card">
+                    <div class="profile-stat-number" style="color: #3b82f6;">${stats?.total_orders || 0}</div>
+                    <div class="profile-stat-label">Всего заявок</div>
+                </div>
+                <div class="profile-stat-card">
+                    <div class="profile-stat-number" style="color: #8b5cf6;">
+                        ${stats?.success_rate ? stats.success_rate.toFixed(0) + '%' : '0%'}
+                    </div>
+                    <div class="profile-stat-label">Успешность</div>
+                </div>
+            </div>
+            
+            <!-- Объем торгов -->
+            ${stats?.total_trade_volume > 0 ? `
+            <div style="background: var(--tg-theme-secondary-bg-color, #f8f9fa); border-radius: 12px; padding: 16px; margin-bottom: 24px; text-align: center;">
+                <div style="font-size: 14px; color: var(--tg-theme-hint-color, #708499); margin-bottom: 4px;">
+                    Общий объем торгов
+                </div>
+                <div style="font-size: 24px; font-weight: 700; color: #22c55e;">
+                    $${stats.total_trade_volume.toLocaleString('ru')}
+                </div>
+            </div>` : ''}
+    `;
+    
+    // Отзывы
+    if (reviews && reviews.length > 0) {
+        html += `
+            <div class="profile-reviews-section">
+                <div class="profile-reviews-title">📝 Последние отзывы обо мне</div>
+        `;
+        
+        reviews.slice(0, 3).forEach(review => {
+            const reviewStars = '⭐'.repeat(review.rating) + '☆'.repeat(5 - review.rating);
+            const reviewDate = new Date(review.created_at).toLocaleDateString('ru');
+            
+            html += `
+                <div class="profile-review-card">
+                    <div class="profile-review-header">
+                        <span class="profile-review-stars">${reviewStars}</span>
+                        <span class="profile-review-date">${reviewDate}</span>
+                    </div>
+                    ${review.comment ? `
+                    <div class="profile-review-comment">
+                        ${review.comment}
+                    </div>
+                    ` : ''}
+                </div>
+            `;
+        });
+        
+        html += `</div>`;
+    } else {
+        html += `
+            <div style="text-center; padding: 20px; color: var(--tg-theme-hint-color, #666); font-size: 13px;">
+                📝 Пока нет отзывов обо мне
+            </div>
+        `;
+    }
+    
+    // Дата регистрации
+    html += `
+            <div style="margin-top: 24px; text-align: center; padding-top: 16px; border-top: 1px solid var(--tg-theme-section-separator-color, #e1e8ed); font-size: 12px; color: var(--tg-theme-hint-color, #708499);">
+                🗓️ Участник с ${new Date(user.created_at || Date.now()).toLocaleDateString('ru')}
+                ${stats?.first_deal_date ? ` • Первая сделка: ${new Date(stats.first_deal_date).toLocaleDateString('ru')}` : ''}
+            </div>
+        </div>
+    `;
+    
+    content.innerHTML = html;
 }
 
 // Вспомогательные функции
@@ -1013,15 +1139,37 @@ function displayUserProfileModal(profileData, reviews) {
         return;
     }
 
-    const rating = profileData.average_rating || 0;
-    const totalReviews = profileData.total_reviews || 0;
-    const stars = '⭐'.repeat(Math.floor(rating)) + '☆'.repeat(5 - Math.floor(rating));
-    const positivePercent = profileData.positive_percent || 0;
+    // Информация о пользователе
+    const user = profileData.user || {};
+    const stats = profileData.stats || profileData;
     
+    // Используем данные из stats если profileData содержит только статистику (для обратной совместимости)
+    const userId = user.id || stats.user_id;
+    const rating = stats.average_rating || 0;
+    const totalReviews = stats.total_reviews || 0;
+    const positivePercent = stats.positive_percent || 0;
+    const stars = '⭐'.repeat(Math.floor(rating)) + '☆'.repeat(5 - Math.floor(rating));
+    
+    // Формируем отображаемое имя пользователя
+    let userDisplayName = `Пользователь #${userId}`;
+    if (user.username) {
+        userDisplayName = `@${user.username}`;
+    } else if (user.first_name) {
+        userDisplayName = user.first_name;
+        if (user.last_name) {
+            userDisplayName += ` ${user.last_name}`;
+        }
+    }
+
     let html = `
         <div class="text-center" style="margin-bottom: 20px;">
             <div style="font-size: 18px; font-weight: 600; margin-bottom: 8px; color: var(--tg-theme-text-color, #000000);">
-                Пользователь #${profileData.user_id}
+                ${user.username ? 
+                    `<a href="https://t.me/${user.username}" target="_blank" style="color: var(--tg-theme-link-color, #2481cc); text-decoration: none;">
+                        ${userDisplayName}
+                    </a>` : 
+                    userDisplayName
+                }
             </div>
             <div style="font-size: 16px; margin-bottom: 8px;">
                 ${stars} ${rating.toFixed(1)} (${totalReviews} отзывов)
@@ -1044,14 +1192,16 @@ function displayUserProfileModal(profileData, reviews) {
         </div>
     `;
     
-    // Отзывы
-    if (reviews && reviews.length > 0) {
+    // Отзывы (используем переданные reviews или recent_reviews из stats)
+    const reviewsToShow = reviews && reviews.length > 0 ? reviews : (stats.recent_reviews || []);
+    
+    if (reviewsToShow.length > 0) {
         html += `
             <div class="profile-reviews-section">
                 <div class="profile-reviews-title">📝 Последние отзывы</div>
         `;
         
-        reviews.slice(0, 3).forEach(review => {
+        reviewsToShow.slice(0, 3).forEach(review => {
             const reviewStars = '⭐'.repeat(review.rating) + '☆'.repeat(5 - review.rating);
             const reviewDate = new Date(review.created_at).toLocaleDateString('ru');
             

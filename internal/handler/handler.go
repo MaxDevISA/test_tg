@@ -56,6 +56,7 @@ func (h *Handler) RegisterRoutes(router *mux.Router) {
 	api.HandleFunc("/reviews", h.handleGetReviews).Methods("GET")                // Получить отзывы пользователя
 	api.HandleFunc("/reviews", h.handleCreateReview).Methods("POST")             // Оставить отзыв
 	api.HandleFunc("/users/{id}/profile", h.handleGetUserProfile).Methods("GET") // Получить профиль пользователя
+	api.HandleFunc("/auth/stats", h.handleGetMyStats).Methods("GET")             // Получить статистику текущего пользователя
 
 	// Информационные эндпоинты
 	api.HandleFunc("/health", h.handleHealthCheck).Methods("GET") // Проверка состояния сервиса
@@ -624,8 +625,8 @@ func (h *Handler) handleGetUserProfile(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("[INFO] Запрос профиля пользователя ID=%d", userID)
 
-	// Получаем статистику профиля пользователя
-	profile, err := h.service.GetUserProfile(userID)
+	// Получаем данные пользователя и статистику профиля
+	userProfile, err := h.service.GetFullUserProfile(userID)
 	if err != nil {
 		log.Printf("[ERROR] Ошибка получения профиля пользователя ID=%d: %v", userID, err)
 		h.sendErrorResponse(w, "Не удалось получить профиль пользователя", http.StatusInternalServerError)
@@ -635,7 +636,49 @@ func (h *Handler) handleGetUserProfile(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[INFO] Профиль пользователя ID=%d получен успешно", userID)
 	h.sendJSONResponse(w, map[string]interface{}{
 		"success": true,
-		"profile": profile,
+		"profile": userProfile,
+	})
+}
+
+// handleGetMyStats обрабатывает получение статистики текущего пользователя
+func (h *Handler) handleGetMyStats(w http.ResponseWriter, r *http.Request) {
+	// Получаем Telegram ID пользователя из заголовка
+	telegramIDStr := r.Header.Get("X-Telegram-User-ID")
+	if telegramIDStr == "" {
+		log.Printf("[WARN] Не передан Telegram ID пользователя")
+		h.sendErrorResponse(w, "Требуется авторизация", http.StatusUnauthorized)
+		return
+	}
+
+	telegramID, err := strconv.ParseInt(telegramIDStr, 10, 64)
+	if err != nil {
+		log.Printf("[WARN] Неверный формат Telegram ID: %v", err)
+		h.sendErrorResponse(w, "Неверный ID пользователя", http.StatusBadRequest)
+		return
+	}
+
+	// Получаем пользователя по Telegram ID
+	user, err := h.service.GetUserByTelegramID(telegramID)
+	if err != nil {
+		log.Printf("[ERROR] Пользователь не найден: %v", err)
+		h.sendErrorResponse(w, "Пользователь не найден", http.StatusNotFound)
+		return
+	}
+
+	log.Printf("[INFO] Запрос статистики пользователя ID=%d", user.ID)
+
+	// Получаем статистику пользователя
+	stats, err := h.service.GetUserStats(user.ID)
+	if err != nil {
+		log.Printf("[ERROR] Ошибка получения статистики пользователя ID=%d: %v", user.ID, err)
+		h.sendErrorResponse(w, "Не удалось получить статистику", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("[INFO] Статистика пользователя ID=%d получена успешно", user.ID)
+	h.sendJSONResponse(w, map[string]interface{}{
+		"success": true,
+		"stats":   stats,
 	})
 }
 

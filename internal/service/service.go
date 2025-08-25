@@ -799,6 +799,140 @@ func (s *Service) GetUserProfile(userID int64) (*model.ReviewStats, error) {
 	return stats, nil
 }
 
+// GetFullUserProfile получает полную информацию о пользователе включая данные профиля и статистику отзывов
+func (s *Service) GetFullUserProfile(userID int64) (*model.FullUserProfile, error) {
+	log.Printf("[INFO] Получение полного профиля пользователя ID=%d", userID)
+
+	// Получаем данные пользователя
+	user, err := s.repo.GetUserByID(userID)
+	if err != nil {
+		log.Printf("[ERROR] Пользователь ID=%d не найден: %v", userID, err)
+		return nil, fmt.Errorf("пользователь не найден")
+	}
+
+	// Получаем статистику отзывов
+	stats, err := s.repo.GetUserReviewStats(userID)
+	if err != nil {
+		log.Printf("[ERROR] Не удалось получить статистику пользователя ID=%d: %v", userID, err)
+		return nil, fmt.Errorf("не удалось получить статистику пользователя: %w", err)
+	}
+
+	// Собираем полный профиль
+	userProfile := &model.FullUserProfile{
+		User:  user,
+		Stats: stats,
+	}
+
+	log.Printf("[INFO] Полный профиль пользователя ID=%d получен успешно", userID)
+	return userProfile, nil
+}
+
+// GetUserStats получает подробную статистику пользователя
+func (s *Service) GetUserStats(userID int64) (*model.UserStats, error) {
+	log.Printf("[INFO] Получение статистики пользователя ID=%d", userID)
+
+	// Получаем статистику отзывов
+	reviewStats, err := s.repo.GetUserReviewStats(userID)
+	if err != nil {
+		log.Printf("[ERROR] Не удалось получить статистику отзывов пользователя ID=%d: %v", userID, err)
+		return nil, fmt.Errorf("не удалось получить статистику отзывов: %w", err)
+	}
+
+	// Получаем заявки пользователя для подсчета статистики
+	orderFilter := &model.OrderFilter{
+		UserID: &userID,
+		Limit:  1000, // Получаем все заявки
+		Offset: 0,
+	}
+
+	orders, err := s.repo.GetOrdersByFilter(orderFilter)
+	if err != nil {
+		log.Printf("[ERROR] Не удалось получить заявки пользователя ID=%d: %v", userID, err)
+		return nil, fmt.Errorf("не удалось получить заявки: %w", err)
+	}
+
+	// Получаем сделки пользователя
+	deals, err := s.repo.GetDealsByUserID(userID)
+	if err != nil {
+		log.Printf("[ERROR] Не удалось получить сделки пользователя ID=%d: %v", userID, err)
+		return nil, fmt.Errorf("не удалось получить сделки: %w", err)
+	}
+
+	// Подсчитываем статистику заявок
+	totalOrders := len(orders)
+	activeOrders := 0
+	completedOrders := 0
+
+	for _, order := range orders {
+		switch order.Status {
+		case model.OrderStatusActive:
+			activeOrders++
+		case model.OrderStatusCompleted:
+			completedOrders++
+		}
+	}
+
+	// Подсчитываем статистику сделок
+	totalDeals := len(deals)
+	completedDeals := 0
+	cancelledDeals := 0
+	totalVolume := float64(0)
+	var firstDealDate *time.Time
+	var lastActivityDate *time.Time
+
+	for _, deal := range deals {
+		// Обновляем даты
+		if firstDealDate == nil || deal.CreatedAt.Before(*firstDealDate) {
+			firstDealDate = &deal.CreatedAt
+		}
+		if lastActivityDate == nil || deal.CreatedAt.After(*lastActivityDate) {
+			lastActivityDate = &deal.CreatedAt
+		}
+
+		// Подсчитываем статистику по статусам
+		switch deal.Status {
+		case "completed":
+			completedDeals++
+			totalVolume += deal.TotalAmount
+		case "cancelled":
+			cancelledDeals++
+		}
+	}
+
+	// Вычисляем процент успешных сделок
+	successRate := float32(0)
+	if totalDeals > 0 {
+		successRate = float32(completedDeals) / float32(totalDeals) * 100
+	}
+
+	// Средняя продолжительность сделки (упрощенно)
+	avgDealTime := 0
+	if completedDeals > 0 {
+		avgDealTime = 60 // Пока заглушка - 60 минут
+	}
+
+	// Собираем статистику
+	stats := &model.UserStats{
+		UserID:           userID,
+		TotalOrders:      totalOrders,
+		ActiveOrders:     activeOrders,
+		CompletedOrders:  completedOrders,
+		TotalDeals:       totalDeals,
+		CompletedDeals:   completedDeals,
+		CancelledDeals:   cancelledDeals,
+		TotalTradeVolume: totalVolume,
+		AvgDealTime:      avgDealTime,
+		FirstDealDate:    firstDealDate,
+		LastActivityDate: lastActivityDate,
+		SuccessRate:      successRate,
+		AverageRating:    reviewStats.AverageRating,
+		TotalReviews:     reviewStats.TotalReviews,
+	}
+
+	log.Printf("[INFO] Статистика пользователя ID=%d собрана: %d заявок, %d сделок", userID, totalOrders, totalDeals)
+	return stats, nil
+}
+
 // ReportReview создает жалобу на неподходящий отзыв
 func (s *Service) ReportReview(userID, reviewID int64, reason, comment string) error {
 	log.Printf("[INFO] Жалоба на отзыв ID=%d от пользователя ID=%d", reviewID, userID)

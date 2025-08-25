@@ -199,6 +199,27 @@ func (r *FileRepository) GetUserByTelegramID(telegramID int64) (*model.User, err
 	return nil, fmt.Errorf("пользователь с Telegram ID %d не найден", telegramID)
 }
 
+// GetUserByID находит пользователя по внутреннему ID
+func (r *FileRepository) GetUserByID(userID int64) (*model.User, error) {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+
+	// Загружаем пользователей
+	var users []model.User
+	if err := r.loadFromFile("users.json", &users); err != nil {
+		return nil, fmt.Errorf("не удалось загрузить пользователей: %w", err)
+	}
+
+	// Ищем пользователя по ID
+	for _, user := range users {
+		if user.ID == userID {
+			return &user, nil
+		}
+	}
+
+	return nil, fmt.Errorf("пользователь с ID %d не найден", userID)
+}
+
 // UpdateUserChatMembership обновляет статус членства в чате
 func (r *FileRepository) UpdateUserChatMembership(telegramID int64, isMember bool) error {
 	r.mutex.Lock()
