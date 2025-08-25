@@ -42,9 +42,9 @@ func (h *Handler) RegisterRoutes(router *mux.Router) {
 	// Управление заявками (ордерами)
 	api.HandleFunc("/orders", h.handleGetOrders).Methods("GET")           // Получить список заявок
 	api.HandleFunc("/orders", h.handleCreateOrder).Methods("POST")        // Создать новую заявку
+	api.HandleFunc("/orders/my", h.handleGetMyOrders).Methods("GET")      // Получить мои заявки (ВАЖНО: должно быть ДО {id})
 	api.HandleFunc("/orders/{id}", h.handleGetOrder).Methods("GET")       // Получить заявку по ID
 	api.HandleFunc("/orders/{id}", h.handleCancelOrder).Methods("DELETE") // Отменить заявку
-	api.HandleFunc("/orders/my", h.handleGetMyOrders).Methods("GET")      // Получить мои заявки
 
 	// Управление сделками
 	api.HandleFunc("/deals", h.handleGetDeals).Methods("GET")                  // Получить список сделок пользователя
