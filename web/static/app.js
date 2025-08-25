@@ -722,25 +722,36 @@ function displayProfile(user) {
 
 // Отображение моего профиля с полной статистикой
 function displayMyProfile(user, stats, reviews) {
-    const content = document.getElementById('profileView');
-    
     console.log('[DEBUG] displayMyProfile вызвана с:', { user, stats, reviews });
     
-    // Данные пользователя
-    const avatarUrl = user.photo_url || '';
-    const userName = user.first_name + (user.last_name ? ` ${user.last_name}` : '');
-    const username = user.username ? `@${user.username}` : '';
-    
-    // Статистика рейтинга  
-    const rating = stats?.average_rating || user.rating || 0;
-    const totalReviews = stats?.total_reviews || 0;
-    const stars = '⭐'.repeat(Math.floor(rating)) + '☆'.repeat(5 - Math.floor(rating));
-    
-    // Проверяем есть ли статистика
-    const hasStats = stats && (stats.total_orders > 0 || stats.total_deals > 0 || totalReviews > 0);
-    
-    console.log('[DEBUG] hasStats =', hasStats, 'на основе stats =', stats, 'totalReviews =', totalReviews);
-    console.log('[DEBUG] Начинаем формировать HTML...');
+    try {
+        const content = document.getElementById('profileView');
+        if (!content) {
+            console.error('[ERROR] Элемент profileView не найден в DOM!');
+            return;
+        }
+        
+        // Проверяем что user содержит данные, а не ошибку
+        if (!user || user.message) {
+            console.error('[ERROR] Данные пользователя содержат ошибку:', user);
+            user = currentUser; // Используем fallback
+        }
+        
+        // Данные пользователя
+        const avatarUrl = user.photo_url || '';
+        const userName = user.first_name + (user.last_name ? ` ${user.last_name}` : '');
+        const username = user.username ? `@${user.username}` : '';
+        
+        // Статистика рейтинга  
+        const rating = stats?.average_rating || user.rating || 0;
+        const totalReviews = stats?.total_reviews || 0;
+        const stars = '⭐'.repeat(Math.floor(rating)) + '☆'.repeat(5 - Math.floor(rating));
+        
+        // Проверяем есть ли статистика
+        const hasStats = stats && (stats.total_orders > 0 || stats.total_deals > 0 || totalReviews > 0);
+        
+        console.log('[DEBUG] hasStats =', hasStats, 'на основе stats =', stats, 'totalReviews =', totalReviews);
+        console.log('[DEBUG] Начинаем формировать HTML...');
     
     let html = `
         <div style="padding: 20px;">
@@ -885,6 +896,34 @@ function displayMyProfile(user, stats, reviews) {
     
     content.innerHTML = html;
     console.log('[DEBUG] innerHTML установлен, профиль должен отображаться');
+    
+    // Проверяем что контент действительно установлен
+    setTimeout(() => {
+        if (content.innerHTML.length > 0) {
+            console.log('[DEBUG] Профиль успешно отображен!');
+        } else {
+            console.error('[ERROR] Профиль не отобразился - innerHTML пустой');
+        }
+    }, 100);
+    
+    } catch (error) {
+        console.error('[ERROR] Ошибка в displayMyProfile:', error);
+        console.error('[ERROR] Stack trace:', error.stack);
+        
+        // Показываем базовое сообщение об ошибке
+        const content = document.getElementById('profileView');
+        if (content) {
+            content.innerHTML = `
+                <div style="padding: 20px; text-align: center;">
+                    <h2>⚠️ Ошибка загрузки профиля</h2>
+                    <p style="color: #666; margin-top: 10px;">
+                        Произошла ошибка при отображении профиля.<br/>
+                        Попробуйте обновить страницу.
+                    </p>
+                </div>
+            `;
+        }
+    }
 }
 
 // Вспомогательные функции

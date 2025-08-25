@@ -106,10 +106,35 @@ func (h *Handler) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 // handleGetCurrentUser возвращает информацию о текущем пользователе
 func (h *Handler) handleGetCurrentUser(w http.ResponseWriter, r *http.Request) {
-	// TODO: Реализовать получение пользователя из JWT токена
-	// В реальной реализации здесь должна быть проверка JWT токена
+	log.Printf("[INFO] Обработка запроса получения текущего пользователя")
+
+	// Получаем Telegram ID пользователя из заголовка
+	telegramIDStr := r.Header.Get("X-Telegram-User-ID")
+	if telegramIDStr == "" {
+		log.Printf("[WARN] Не передан Telegram ID пользователя в /auth/me")
+		h.sendErrorResponse(w, "Требуется авторизация", http.StatusUnauthorized)
+		return
+	}
+
+	telegramID, err := strconv.ParseInt(telegramIDStr, 10, 64)
+	if err != nil {
+		log.Printf("[WARN] Неверный формат Telegram ID в /auth/me: %v", err)
+		h.sendErrorResponse(w, "Неверный ID пользователя", http.StatusBadRequest)
+		return
+	}
+
+	// Получаем пользователя по Telegram ID
+	user, err := h.service.GetUserByTelegramID(telegramID)
+	if err != nil {
+		log.Printf("[ERROR] Пользователь не найден в /auth/me: %v", err)
+		h.sendErrorResponse(w, "Пользователь не найден", http.StatusNotFound)
+		return
+	}
+
+	log.Printf("[INFO] Данные текущего пользователя получены: ID=%d, TelegramID=%d", user.ID, user.TelegramID)
 	h.sendJSONResponse(w, map[string]interface{}{
-		"message": "Эндпоинт в разработке - требуется JWT middleware",
+		"success": true,
+		"user":    user,
 	})
 }
 
