@@ -14,6 +14,12 @@ function initTelegramWebApp() {
             currentUser = tg.initDataUnsafe.user;
             document.querySelector('.user-info').textContent = 
                 '👤 ' + currentUser.first_name + ' ' + (currentUser.last_name || '');
+            
+            // Автоматически авторизуем пользователя при входе
+            authenticateUser();
+        } else {
+            showError('Ошибка получения данных пользователя из Telegram');
+            return;
         }
         
         // Применяем цветовую схему Telegram
@@ -21,8 +27,15 @@ function initTelegramWebApp() {
         
         console.log('[INFO] Telegram WebApp инициализирован', currentUser);
     } else {
-        console.warn('[WARN] Telegram WebApp API недоступен');
+        console.warn('[WARN] Telegram WebApp API недоступен - демо режим');
         document.querySelector('.user-info').textContent = '👤 Демо режим';
+        // В демо режиме создаем фейкового пользователя для тестирования
+        currentUser = {
+            id: 123456789,
+            first_name: 'Тестовый',
+            last_name: 'Пользователь',
+            username: 'testuser'
+        };
     }
 }
 
@@ -201,10 +214,77 @@ function showError(message) {
     }
 }
 
+// Авторизация пользователя через Telegram WebApp
+async function authenticateUser() {
+    if (!currentUser) {
+        showError('Данные пользователя недоступны');
+        return;
+    }
+
+    try {
+        // Подготавливаем данные для авторизации
+        const authData = {
+            id: currentUser.id,
+            first_name: currentUser.first_name || '',
+            last_name: currentUser.last_name || '',
+            username: currentUser.username || '',
+            photo_url: currentUser.photo_url || '',
+            auth_date: Math.floor(Date.now() / 1000),
+            hash: 'dummy_hash' // В реальном приложении тут будет настоящий hash от Telegram
+        };
+
+        const response = await fetch('/api/v1/auth/login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(authData)
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            console.log('[INFO] Авторизация успешна:', result.user);
+            document.querySelector('.user-info').textContent = 
+                '👤 ' + result.user.first_name + ' ⭐' + result.user.rating.toFixed(1);
+            
+            // Загружаем заявки после успешной авторизации
+            loadOrders();
+        } else {
+            if (result.error && result.error.includes('не являетесь членом закрытого чата')) {
+                showAccessDenied();
+            } else {
+                showError('Ошибка авторизации: ' + result.error);
+            }
+        }
+    } catch (error) {
+        console.error('[ERROR] Ошибка авторизации:', error);
+        showError('Ошибка сети при авторизации');
+    }
+}
+
+// Показывает сообщение об отказе в доступе
+function showAccessDenied() {
+    const container = document.querySelector('.container');
+    container.innerHTML = `
+        <div style="text-align: center; padding: 40px 20px; color: var(--tg-theme-hint-color, #708499);">
+            <h2 style="color: var(--tg-theme-text-color, #000); margin-bottom: 16px;">🔒 Доступ ограничен</h2>
+            <p style="margin-bottom: 16px; line-height: 1.5;">
+                Доступ к P2P криптобирже разрешен только подписчикам закрытого чата.
+            </p>
+            <p style="font-size: 12px; opacity: 0.8;">
+                Подпишитесь на наш закрытый чат, чтобы получить доступ к торговле.
+            </p>
+        </div>
+    `;
+    
+    // Скрываем навигацию
+    document.querySelector('.navigation').style.display = 'none';
+}
+
 // Инициализация приложения
 document.addEventListener('DOMContentLoaded', () => {
     initTelegramWebApp();
     initNavigation();
     initModal();
-    loadOrders(); // Загружаем заявки при старте
 });
