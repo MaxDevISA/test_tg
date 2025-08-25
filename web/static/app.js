@@ -377,6 +377,12 @@ function displayMyOrders(orders) {
     console.log('[DEBUG] Количество заявок для отображения:', orders.length);
     
     const content = document.getElementById('my-ordersView');
+    console.log('[DEBUG] displayMyOrders: Элемент my-ordersView найден?', !!content);
+    
+    if (!content) {
+        console.error('[ERROR] displayMyOrders: Элемент my-ordersView не найден!');
+        return;
+    }
     
     if (orders.length === 0) {
         content.innerHTML = `
@@ -401,11 +407,20 @@ function displayMyOrders(orders) {
         return;
     }
     
+    console.log('[DEBUG] displayMyOrders: Переходим к группировке заявок...');
+    
     // Группируем заявки по статусу
     const activeOrders = orders.filter(o => o.status === 'active');
-    const inDealOrders = orders.filter(o => o.status === 'matched' || o.status === 'in_progress');  
+    const inDealOrders = orders.filter(o => o.status === 'matched' || o.status === 'in_progress');
+    
+    console.log('[DEBUG] displayMyOrders: activeOrders =', activeOrders.length);
+    console.log('[DEBUG] displayMyOrders: inDealOrders =', inDealOrders.length);  
     const completedOrders = orders.filter(o => o.status === 'completed');
     const cancelledOrders = orders.filter(o => o.status === 'cancelled');
+    
+    console.log('[DEBUG] displayMyOrders: completedOrders =', completedOrders.length);
+    console.log('[DEBUG] displayMyOrders: cancelledOrders =', cancelledOrders.length);
+    console.log('[DEBUG] displayMyOrders: Начинаем формировать HTML...');
     
     let html = `
         <div style="padding: 20px;">
@@ -470,7 +485,13 @@ function displayMyOrders(orders) {
     }
     
     html += `</div>`;
+    
+    console.log('[DEBUG] displayMyOrders: Готовый HTML длиной', html.length, 'символов');
+    console.log('[DEBUG] displayMyOrders: Устанавливаем innerHTML...');
+    
     content.innerHTML = html;
+    
+    console.log('[DEBUG] displayMyOrders: Завершено успешно!');
 }
 
 // Создание карточки заявки с действиями
