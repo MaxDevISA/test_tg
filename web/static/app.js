@@ -135,7 +135,11 @@ async function handleCreateOrder(e) {
         
         const result = await response.json();
         
+        // Отладочная информация
+        console.log('[DEBUG] Результат создания заявки:', result);
+        
         if (result.success) {
+            console.log('[DEBUG] Заявка создана успешно, перезагружаем список...');
             showSuccess('Заявка успешно создана!');
             document.getElementById('createOrderModal').classList.remove('show');
             e.target.reset();
@@ -158,9 +162,14 @@ async function loadOrders() {
         const response = await fetch('/api/v1/orders');
         const result = await response.json();
         
+        // Отладочная информация
+        console.log('[DEBUG] Ответ сервера на загрузку заявок:', result);
+        
         if (result.success) {
+            console.log('[DEBUG] Количество заявок:', (result.orders || []).length);
             displayOrders(result.orders || []);
         } else {
+            console.log('[DEBUG] Ошибка загрузки заявок:', result.error);
             content.innerHTML = '<p class="text-center text-muted">Ошибка загрузки заявок</p>';
         }
     } catch (error) {
@@ -173,13 +182,30 @@ async function loadOrders() {
 function displayOrders(orders) {
     const content = document.getElementById('ordersContent');
     
+    // Отладочная информация
+    console.log('[DEBUG] Отображение заявок:', orders);
+    
     if (orders.length === 0) {
+        console.log('[DEBUG] Массив заявок пуст');
         content.innerHTML = '<p class="text-center text-muted">Заявок пока нет</p>';
         return;
     }
     
-    const ordersHTML = orders.map(order => 
-        '<div style="border: 1px solid var(--tg-theme-section-separator-color, #e1e8ed); ' +
+    const ordersHTML = orders.map((order, index) => {
+        console.log(`[DEBUG] Обработка заявки ${index}:`, order);
+        
+        // Проверяем критические поля
+        if (!order.type || !order.amount || !order.cryptocurrency || !order.price || !order.fiat_currency) {
+            console.log(`[DEBUG] Заявка ${index} имеет пустые обязательные поля:`, {
+                type: order.type,
+                amount: order.amount, 
+                cryptocurrency: order.cryptocurrency,
+                price: order.price,
+                fiat_currency: order.fiat_currency
+            });
+        }
+        
+        return '<div style="border: 1px solid var(--tg-theme-section-separator-color, #e1e8ed); ' +
                     'border-radius: 8px; padding: 12px; margin-bottom: 8px; ' +
                     'background: var(--tg-theme-secondary-bg-color, #f8f9fa);">' +
             '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">' +
@@ -187,18 +213,18 @@ function displayOrders(orders) {
                     (order.type === 'buy' ? '🟢 Покупка' : '🔴 Продажа') +
                 '</span>' +
                 '<span style="font-size: 12px; color: var(--tg-theme-hint-color, #708499);">' +
-                    new Date(order.created_at).toLocaleString('ru') +
+                    (order.created_at ? new Date(order.created_at).toLocaleString('ru') : 'Дата неизвестна') +
                 '</span>' +
             '</div>' +
             '<div style="margin-bottom: 8px;">' +
-                '<strong>' + order.amount + ' ' + order.cryptocurrency + '</strong> за <strong>' + order.price + ' ' + order.fiat_currency + '</strong>' +
+                '<strong>' + (order.amount || '?') + ' ' + (order.cryptocurrency || '?') + '</strong> за <strong>' + (order.price || '?') + ' ' + (order.fiat_currency || '?') + '</strong>' +
             '</div>' +
             '<div style="font-size: 12px; color: var(--tg-theme-hint-color, #708499);">' +
                 'Способы оплаты: ' + ((order.payment_methods || []).join(', ') || 'Не указано') +
             '</div>' +
             (order.description ? '<div style="font-size: 12px; margin-top: 4px;">' + order.description + '</div>' : '') +
-        '</div>'
-    ).join('');
+        '</div>';
+    }).join('');
     
     content.innerHTML = ordersHTML;
 }
@@ -290,11 +316,15 @@ function showAccessDenied() {
 
 // Загрузка моих заявок
 async function loadMyOrders() {
+    console.log('[DEBUG] Запрос загрузки моих заявок');
+    
     if (!currentUser) {
+        console.log('[DEBUG] Пользователь не авторизован');
         showError('Пользователь не авторизован');
         return;
     }
 
+    console.log('[DEBUG] Загрузка заявок для пользователя:', currentUser);
     const content = document.getElementById('my-ordersView');
     content.innerHTML = '<div class="loading"><div class="spinner"></div><p>Загрузка ваших заявок...</p></div>';
     
