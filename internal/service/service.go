@@ -17,7 +17,7 @@ import (
 
 // TelegramChatMemberResponse структура ответа от Telegram Bot API для проверки членства
 type TelegramChatMemberResponse struct {
-	OK     bool `json:"ok"`
+    OK     bool `json:"ok"`
 	Result struct {
 		Status string `json:"status"`
 		User   struct {
