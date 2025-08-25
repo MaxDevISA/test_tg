@@ -895,6 +895,11 @@ function displayMyProfile(user, stats, reviews) {
     }
     
     content.innerHTML = html;
+    
+    // Убираем класс hidden чтобы профиль был виден
+    content.classList.remove('hidden');
+    console.log('[DEBUG] Убран класс hidden, профиль теперь должен быть видим');
+    
     console.log('[DEBUG] innerHTML установлен, профиль должен отображаться');
     
     // Проверяем что контент действительно установлен
