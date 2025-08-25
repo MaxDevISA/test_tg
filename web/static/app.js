@@ -356,10 +356,13 @@ async function loadMyOrders() {
         });
         
         const result = await response.json();
+        console.log('[DEBUG] loadMyOrders: Ответ сервера:', result);
         
         if (result.success) {
+            console.log('[DEBUG] loadMyOrders: Успешно, передаю заявки в displayMyOrders:', result.orders);
             displayMyOrders(result.orders || []);
         } else {
+            console.error('[ERROR] loadMyOrders: Ошибка от сервера:', result.error);
             content.innerHTML = '<p class="text-center text-muted">Ошибка загрузки заявок</p>';
         }
     } catch (error) {
@@ -370,6 +373,9 @@ async function loadMyOrders() {
 
 // Отображение моих заявок
 function displayMyOrders(orders) {
+    console.log('[DEBUG] displayMyOrders вызвана с данными:', orders);
+    console.log('[DEBUG] Количество заявок для отображения:', orders.length);
+    
     const content = document.getElementById('my-ordersView');
     
     if (orders.length === 0) {
