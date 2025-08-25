@@ -162,7 +162,7 @@ body {
     border-radius: 16px;
     width: 100%;
     max-width: 400px;
-    max-height: 85vh;
+    max-height: 90vh;
     overflow: hidden;
     box-shadow: 0 8px 32px rgba(0,0,0,0.3);
     border: 1px solid var(--tg-theme-section-separator-color, #e1e8ed);
@@ -216,7 +216,7 @@ body {
 
 .modal-body {
     padding: 16px 20px 20px;
-    max-height: calc(85vh - 80px);
+    max-height: calc(90vh - 80px);
     overflow-y: auto;
 }
 
@@ -387,30 +387,51 @@ body {
     color: var(--tg-theme-text-color, #000000);
 }
 
-/* Адаптация для очень маленьких экранов */
-@media (max-width: 375px) {
+/* Адаптация для мобильных устройств */
+@media (max-width: 480px) {
     .container {
         padding: 8px;
     }
     
     .modal {
-        padding: 12px;
+        padding: 8px;
     }
     
     .modal-content {
         max-width: none;
+        max-height: 95vh;
     }
     
     .modal-header {
-        padding: 12px 16px 8px;
+        padding: 10px 14px 8px;
     }
     
     .modal-body {
-        padding: 12px 16px 16px;
+        padding: 12px 14px 14px;
+        max-height: calc(95vh - 65px);
     }
     
     .form-row {
         grid-template-columns: 1fr;
+        gap: 8px;
+    }
+    
+    .form-group {
+        margin-bottom: 10px;
+    }
+    
+    .form-label {
+        font-size: 13px;
+        margin-bottom: 4px;
+    }
+    
+    .checkbox-group {
+        gap: 8px;
+    }
+    
+    .checkbox-group label {
+        font-size: 12px;
+        padding: 6px 10px;
     }
     
     .profile-stats-grid {
@@ -421,5 +442,25 @@ body {
     .modal-footer {
         flex-direction: column;
         gap: 8px;
+    }
+}
+
+/* Адаптация для очень маленьких экранов */
+@media (max-width: 375px) {
+    .modal {
+        padding: 6px;
+    }
+    
+    .modal-header {
+        padding: 8px 12px 6px;
+    }
+    
+    .modal-body {
+        padding: 10px 12px 12px;
+        max-height: calc(95vh - 60px);
+    }
+    
+    .form-group {
+        margin-bottom: 8px;
     }
 }

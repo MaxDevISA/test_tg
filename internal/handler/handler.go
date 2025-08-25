@@ -642,10 +642,12 @@ func (h *Handler) handleGetUserProfile(w http.ResponseWriter, r *http.Request) {
 
 // handleGetMyStats обрабатывает получение статистики текущего пользователя
 func (h *Handler) handleGetMyStats(w http.ResponseWriter, r *http.Request) {
+	log.Printf("[INFO] Обработка запроса получения статистики пользователя")
+
 	// Получаем Telegram ID пользователя из заголовка
 	telegramIDStr := r.Header.Get("X-Telegram-User-ID")
 	if telegramIDStr == "" {
-		log.Printf("[WARN] Не передан Telegram ID пользователя")
+		log.Printf("[WARN] Не передан Telegram ID пользователя для статистики")
 		h.sendErrorResponse(w, "Требуется авторизация", http.StatusUnauthorized)
 		return
 	}

@@ -175,6 +175,10 @@ func (r *FileRepository) CreateUser(user *model.User) error {
 	}
 
 	log.Printf("[INFO] Создан пользователь в JSON: ID=%d, TelegramID=%d", user.ID, user.TelegramID)
+
+	// Принудительно синхронизируем файловую систему
+	time.Sleep(10 * time.Millisecond)
+
 	return nil
 }
 

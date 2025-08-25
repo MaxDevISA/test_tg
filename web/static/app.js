@@ -508,43 +508,72 @@ async function loadProfile() {
         return;
     }
 
+    console.log('[DEBUG] Загрузка профиля для пользователя:', currentUser);
+    
     const content = document.getElementById('profileView');
     content.innerHTML = '<div class="loading"><div class="spinner"></div><p>Загрузка профиля...</p></div>';
     
     try {
+        console.log('[DEBUG] Отправка запросов для профиля...');
+        
         // Получаем данные пользователя и статистику параллельно
         const [userResponse, statsResponse, reviewsResponse] = await Promise.all([
             fetch('/api/v1/auth/me', {
                 headers: { 'X-Telegram-User-ID': currentUser.id.toString() }
-            }).catch(() => null),
+            }).catch(err => {
+                console.error('[DEBUG] Ошибка запроса /auth/me:', err);
+                return null;
+            }),
             fetch('/api/v1/auth/stats', {
                 headers: { 'X-Telegram-User-ID': currentUser.id.toString() }
-            }).catch(() => null),
+            }).catch(err => {
+                console.error('[DEBUG] Ошибка запроса /auth/stats:', err);
+                return null;
+            }),
             fetch('/api/v1/reviews?limit=5', {
                 headers: { 'X-Telegram-User-ID': currentUser.id.toString() }
-            }).catch(() => null)
+            }).catch(err => {
+                console.error('[DEBUG] Ошибка запроса /reviews:', err);
+                return null;
+            })
         ]);
 
         let userData = currentUser;
         let userStats = null;
         let userReviews = [];
 
+        console.log('[DEBUG] Статусы ответов:', {
+            user: userResponse ? userResponse.status : 'null',
+            stats: statsResponse ? statsResponse.status : 'null', 
+            reviews: reviewsResponse ? reviewsResponse.status : 'null'
+        });
+
         // Парсим ответы
         if (userResponse && userResponse.ok) {
             const userResult = await userResponse.json();
+            console.log('[DEBUG] Данные пользователя:', userResult);
             userData = userResult.user || currentUser;
+        } else if (userResponse) {
+            console.error('[DEBUG] Ошибка получения данных пользователя:', userResponse.status, await userResponse.text().catch(() => 'no text'));
         }
 
         if (statsResponse && statsResponse.ok) {
             const statsResult = await statsResponse.json();
+            console.log('[DEBUG] Статистика пользователя:', statsResult);
             userStats = statsResult.stats;
+        } else if (statsResponse) {
+            console.error('[DEBUG] Ошибка получения статистики:', statsResponse.status, await statsResponse.text().catch(() => 'no text'));
         }
 
         if (reviewsResponse && reviewsResponse.ok) {
             const reviewsResult = await reviewsResponse.json();
+            console.log('[DEBUG] Отзывы пользователя:', reviewsResult);
             userReviews = reviewsResult.reviews || [];
+        } else if (reviewsResponse) {
+            console.error('[DEBUG] Ошибка получения отзывов:', reviewsResponse.status, await reviewsResponse.text().catch(() => 'no text'));
         }
 
+        console.log('[DEBUG] Передача данных в displayMyProfile:', { userData, userStats, userReviews });
         displayMyProfile(userData, userStats, userReviews);
     } catch (error) {
         console.error('[ERROR] Ошибка загрузки профиля:', error);
