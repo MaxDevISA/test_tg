@@ -56,7 +56,13 @@ function initNavigation() {
             
             // Показываем нужный раздел
             views.forEach(view => {
-                view.style.display = view.id === viewName + 'View' ? 'block' : 'none';
+                if (view.id === viewName + 'View') {
+                    view.style.display = 'block';
+                    view.classList.remove('hidden');
+                } else {
+                    view.style.display = 'none';
+                    view.classList.add('hidden');
+                }
             });
             
             // Загружаем данные для раздела
