@@ -757,9 +757,6 @@ function displayMyProfile(user, stats, reviews) {
         <div style="padding: 20px;">
             <!-- Заголовок -->
             <div style="text-align: center; margin-bottom: 24px;">
-                <h2 style="margin-bottom: 16px; font-size: 20px; font-weight: 600; color: var(--tg-theme-text-color, #000000);">
-                    👤 Мой профиль
-                </h2>
                 
                 <!-- Аватар -->
                 <div style="margin-bottom: 16px;">
