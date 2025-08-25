@@ -181,9 +181,20 @@ func (h *Handler) handleGetOrders(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleCreateOrder(w http.ResponseWriter, r *http.Request) {
 	log.Println("[INFO] Обработка запроса создания заявки")
 
-	// TODO: Получить ID пользователя из JWT токена
-	// В реальной реализации userID должен браться из авторизованного пользователя
-	userID := int64(1) // Заглушка
+	// Получаем Telegram ID пользователя из заголовка
+	telegramIDStr := r.Header.Get("X-Telegram-User-ID")
+	if telegramIDStr == "" {
+		log.Printf("[WARN] Не передан Telegram ID пользователя")
+		h.sendErrorResponse(w, "Требуется авторизация", http.StatusUnauthorized)
+		return
+	}
+
+	telegramID, err := strconv.ParseInt(telegramIDStr, 10, 64)
+	if err != nil {
+		log.Printf("[WARN] Неверный формат Telegram ID: %v", err)
+		h.sendErrorResponse(w, "Неверный ID пользователя", http.StatusBadRequest)
+		return
+	}
 
 	// Читаем данные заявки из тела запроса
 	var orderData model.Order
@@ -193,8 +204,8 @@ func (h *Handler) handleCreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Создаем заявку через сервис
-	order, err := h.service.CreateOrder(userID, &orderData)
+	// Создаем заявку через сервис (передаем Telegram ID)
+	order, err := h.service.CreateOrder(telegramID, &orderData)
 	if err != nil {
 		log.Printf("[WARN] Ошибка создания заявки: %v", err)
 		h.sendErrorResponse(w, err.Error(), http.StatusBadRequest)
@@ -487,16 +498,266 @@ func (h *Handler) handleHealthCheck(w http.ResponseWriter, r *http.Request) {
 
 // handleIndex обрабатывает главную страницу веб-приложения
 func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
-	// Полноценный веб-интерфейс для Telegram мини-приложения
+	// Оптимизированный мобильный интерфейс для Telegram мини-приложения
 	html := `
 <!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
     <title>P2P Крипто Биржа</title>
-    <link rel="stylesheet" href="/static/style.css">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+/* Telegram WebApp оптимизированные стили */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--tg-theme-bg-color, #ffffff);
+    color: var(--tg-theme-text-color, #000000);
+    font-size: 14px;
+    line-height: 1.4;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+}
+
+.header {
+    background: var(--tg-theme-header-bg-color, #f8f9fa);
+    color: var(--tg-theme-text-color, #000000);
+    padding: 8px 16px;
+    text-align: center;
+    border-bottom: 1px solid var(--tg-theme-section-separator-color, #e1e8ed);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.header h1 {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 2px;
+}
+
+.user-info {
+    font-size: 12px;
+    opacity: 0.7;
+}
+
+.navigation {
+    display: flex;
+    background: var(--tg-theme-secondary-bg-color, #f1f3f4);
+    border-bottom: 1px solid var(--tg-theme-section-separator-color, #e1e8ed);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.nav-item {
+    flex: 1;
+    min-width: 70px;
+    padding: 8px 4px;
+    border: none;
+    background: transparent;
+    color: var(--tg-theme-hint-color, #708499);
+    font-size: 11px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s;
+}
+
+.nav-item.active {
+    color: var(--tg-theme-link-color, #2481cc);
+    background: var(--tg-theme-bg-color, #ffffff);
+}
+
+.container {
+    padding: 12px;
+    max-height: calc(100vh - 120px);
+    overflow-y: auto;
+}
+
+.view {
+    display: none;
+}
+
+.view:not(.hidden) {
+    display: block;
+}
+
+.filters {
+    margin-bottom: 12px;
+}
+
+.filter-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.form-select, .form-input {
+    padding: 8px;
+    border: 1px solid var(--tg-theme-section-separator-color, #e1e8ed);
+    border-radius: 6px;
+    background: var(--tg-theme-bg-color, #ffffff);
+    color: var(--tg-theme-text-color, #000000);
+    font-size: 13px;
+    width: 100%;
+}
+
+.btn {
+    padding: 8px 16px;
+    border-radius: 6px;
+    border: none;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-primary {
+    background: var(--tg-theme-button-color, #2481cc);
+    color: var(--tg-theme-button-text-color, #ffffff);
+    width: 100%;
+}
+
+.btn-primary:hover {
+    opacity: 0.9;
+}
+
+.loading {
+    text-align: center;
+    padding: 20px;
+    color: var(--tg-theme-hint-color, #708499);
+}
+
+.spinner {
+    border: 2px solid var(--tg-theme-section-separator-color, #e1e8ed);
+    border-top: 2px solid var(--tg-theme-link-color, #2481cc);
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    animation: spin 1s linear infinite;
+    margin: 0 auto;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    z-index: 1000;
+}
+
+.modal.show {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-content {
+    background: var(--tg-theme-bg-color, #ffffff);
+    padding: 16px;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 400px;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.modal-title {
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    color: var(--tg-theme-hint-color, #708499);
+}
+
+.form-group {
+    margin-bottom: 12px;
+}
+
+.form-label {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--tg-theme-hint-color, #708499);
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.form-textarea {
+    padding: 8px;
+    border: 1px solid var(--tg-theme-section-separator-color, #e1e8ed);
+    border-radius: 6px;
+    background: var(--tg-theme-bg-color, #ffffff);
+    color: var(--tg-theme-text-color, #000000);
+    font-size: 13px;
+    width: 100%;
+    resize: vertical;
+    font-family: inherit;
+}
+
+.text-center {
+    text-align: center;
+}
+
+.mt-md {
+    margin-top: 24px;
+}
+
+.text-muted {
+    color: var(--tg-theme-hint-color, #708499);
+    font-size: 12px;
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* Адаптация для очень маленьких экранов */
+@media (max-width: 375px) {
+    .container {
+        padding: 8px;
+    }
+    
+    .modal-content {
+        padding: 12px;
+    }
+    
+    .form-row {
+        grid-template-columns: 1fr;
+    }
+}
+    </style>
 </head>
 <body>
     <!-- Заголовок приложения -->
@@ -651,7 +912,218 @@ func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
         </div>
     </div>
 
-    <script src="/static/app.js"></script>
+    <script>
+// Глобальные переменные
+let currentUser = null;
+let tg = window.Telegram?.WebApp;
+
+// Инициализация Telegram WebApp
+function initTelegramWebApp() {
+    if (tg) {
+        tg.ready();
+        tg.expand();
+        tg.disableVerticalSwipes();
+        
+        // Получаем данные пользователя из Telegram
+        if (tg.initDataUnsafe?.user) {
+            currentUser = tg.initDataUnsafe.user;
+            document.querySelector('.user-info').textContent = 
+                `👤 ${currentUser.first_name} ${currentUser.last_name || ''}`.trim();
+        }
+        
+        // Применяем цветовую схему Telegram
+        document.body.style.backgroundColor = tg.backgroundColor || '#ffffff';
+        
+        console.log('[INFO] Telegram WebApp инициализирован', currentUser);
+    } else {
+        console.warn('[WARN] Telegram WebApp API недоступен');
+        document.querySelector('.user-info').textContent = '👤 Демо режим';
+    }
+}
+
+// Навигация между разделами
+function initNavigation() {
+    const navItems = document.querySelectorAll('.nav-item');
+    const views = document.querySelectorAll('.view');
+    
+    navItems.forEach(item => {
+        item.addEventListener('click', () => {
+            const viewName = item.dataset.view;
+            
+            // Обновляем активную навигацию
+            navItems.forEach(nav => nav.classList.remove('active'));
+            item.classList.add('active');
+            
+            // Показываем нужный раздел
+            views.forEach(view => {
+                view.style.display = view.id === viewName + 'View' ? 'block' : 'none';
+            });
+            
+            // Загружаем данные для раздела
+            if (viewName === 'orders') {
+                loadOrders();
+            }
+        });
+    });
+}
+
+// Модальное окно
+function initModal() {
+    const modal = document.getElementById('createOrderModal');
+    const createBtn = document.getElementById('createOrderBtn');
+    const closeBtn = document.querySelector('.modal-close');
+    const form = document.getElementById('createOrderForm');
+    
+    createBtn.addEventListener('click', () => {
+        modal.classList.add('show');
+    });
+    
+    closeBtn.addEventListener('click', () => {
+        modal.classList.remove('show');
+    });
+    
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.classList.remove('show');
+        }
+    });
+    
+    form.addEventListener('submit', handleCreateOrder);
+}
+
+// Создание заявки
+async function handleCreateOrder(e) {
+    e.preventDefault();
+    
+    if (!currentUser) {
+        showError('Пользователь не авторизован');
+        return;
+    }
+    
+    const formData = new FormData(e.target);
+    const paymentMethods = [];
+    
+    // Собираем выбранные способы оплаты
+    formData.getAll('payment_methods').forEach(method => {
+        paymentMethods.push(method);
+    });
+    
+    const orderData = {
+        type: formData.get('type'),
+        cryptocurrency: formData.get('cryptocurrency'),
+        fiat_currency: formData.get('fiat_currency'),
+        amount: parseFloat(formData.get('amount')),
+        price: parseFloat(formData.get('price')),
+        payment_methods: paymentMethods,
+        description: formData.get('description') || '',
+        auto_match: formData.has('auto_match')
+    };
+    
+    try {
+        const response = await fetch('/api/v1/orders', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Telegram-User-ID': currentUser.id.toString()
+            },
+            body: JSON.stringify(orderData)
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showSuccess('Заявка успешно создана!');
+            document.getElementById('createOrderModal').classList.remove('show');
+            e.target.reset();
+            loadOrders(); // Перезагружаем список заявок
+        } else {
+            showError(result.error || 'Ошибка создания заявки');
+        }
+    } catch (error) {
+        console.error('[ERROR] Ошибка создания заявки:', error);
+        showError('Ошибка сети. Попробуйте позже.');
+    }
+}
+
+// Загрузка заявок
+async function loadOrders() {
+    const content = document.getElementById('ordersContent');
+    content.innerHTML = '<div class="loading"><div class="spinner"></div><p>Загрузка заявок...</p></div>';
+    
+    try {
+        const response = await fetch('/api/v1/orders');
+        const result = await response.json();
+        
+        if (result.success) {
+            displayOrders(result.orders || []);
+        } else {
+            content.innerHTML = '<p class="text-center text-muted">Ошибка загрузки заявок</p>';
+        }
+    } catch (error) {
+        console.error('[ERROR] Ошибка загрузки заявок:', error);
+        content.innerHTML = '<p class="text-center text-muted">Ошибка сети</p>';
+    }
+}
+
+// Отображение заявок
+function displayOrders(orders) {
+    const content = document.getElementById('ordersContent');
+    
+    if (orders.length === 0) {
+        content.innerHTML = '<p class="text-center text-muted">Заявок пока нет</p>';
+        return;
+    }
+    
+    const ordersHTML = orders.map(order => `
+        <div style="border: 1px solid var(--tg-theme-section-separator-color, #e1e8ed); 
+                    border-radius: 8px; padding: 12px; margin-bottom: 8px;
+                    background: var(--tg-theme-secondary-bg-color, #f8f9fa);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <span style="font-weight: 600; color: ${order.type === 'buy' ? '#22c55e' : '#ef4444'};">
+                    ${order.type === 'buy' ? '🟢 Покупка' : '🔴 Продажа'}
+                </span>
+                <span style="font-size: 12px; color: var(--tg-theme-hint-color, #708499);">
+                    ${new Date(order.created_at).toLocaleString('ru')}
+                </span>
+            </div>
+            <div style="margin-bottom: 8px;">
+                <strong>${order.amount} ${order.cryptocurrency}</strong> за <strong>${order.price} ${order.fiat_currency}</strong>
+            </div>
+            <div style="font-size: 12px; color: var(--tg-theme-hint-color, #708499);">
+                Способы оплаты: ${(order.payment_methods || []).join(', ') || 'Не указано'}
+            </div>
+            ${order.description ? `<div style="font-size: 12px; margin-top: 4px;">${order.description}</div>` : ''}
+        </div>
+    `).join('');
+    
+    content.innerHTML = ordersHTML;
+}
+
+// Уведомления
+function showSuccess(message) {
+    if (tg) {
+        tg.showAlert(message);
+    } else {
+        alert('✅ ' + message);
+    }
+}
+
+function showError(message) {
+    if (tg) {
+        tg.showAlert('❌ ' + message);
+    } else {
+        alert('❌ ' + message);
+    }
+}
+
+// Инициализация приложения
+document.addEventListener('DOMContentLoaded', () => {
+    initTelegramWebApp();
+    initNavigation();
+    initModal();
+    loadOrders(); // Загружаем заявки при старте
+});
+    </script>
 </body>
 </html>`
 

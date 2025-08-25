@@ -1,0 +1,115 @@
+# Исполняемые файлы Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bot
+bot.exe
+
+# Файлы тестирования Go
+*.test
+
+# Файлы покрытия тестами
+*.out
+coverage.html
+coverage.txt
+
+# Зависимости Go (обычно не нужно игнорировать, но могут понадобиться в особых случаях)
+# vendor/
+
+# Файлы модулей Go (НЕ игнорируем go.mod и go.sum - они нужны для управления зависимостями)
+# go.mod
+# go.sum
+
+# Локальные данные приложения - JSON файлы с пользовательскими данными
+data/
+*.json
+
+# Файлы конфигурации с чувствительными данными
+.env
+*.env
+!env.example
+
+# Логи приложения
+*.log
+logs/
+log/
+
+# Временные файлы
+*.tmp
+*.temp
+*~
+.DS_Store
+Thumbs.db
+
+# IDE файлы
+# Visual Studio Code
+.vscode/
+*.code-workspace
+
+# GoLand/IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# Папки сборки
+build/
+dist/
+out/
+
+# Папки зависимостей Node.js (если используется для фронтенда)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Системные файлы
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Файлы резервных копий
+*.bak
+*.backup
+*.orig
+
+# Сертификаты и ключи безопасности
+*.pem
+*.key
+*.crt
+*.cert
+*.p12
+*.pfx
+
+# Файлы Docker (если используется)
+.dockerignore
+docker-compose.override.yml
+
+# Папки кэша
+.cache/
+.tmp/
