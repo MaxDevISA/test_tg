@@ -6,6 +6,8 @@
 *.dylib
 bot
 bot.exe
+p2p-exchange
+p2p-exchange.exe
 
 # Файлы тестирования Go
 *.test

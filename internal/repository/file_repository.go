@@ -449,18 +449,163 @@ func (r *FileRepository) HealthCheck() error {
 }
 
 // =====================================================
-// ЗАГЛУШКИ ДЛЯ ОСТАЛЬНЫХ МЕТОДОВ (ПОКА НЕ РЕАЛИЗОВАНЫ)
+// АВТОМАТИЧЕСКОЕ СОПОСТАВЛЕНИЕ ЗАЯВОК
 // =====================================================
 
-// GetMatchingOrders - заглушка для совместимости
+// GetMatchingOrders ищет заявки противоположного типа для автосопоставления
 func (r *FileRepository) GetMatchingOrders(order *model.Order) ([]*model.Order, error) {
-	log.Printf("[WARN] GetMatchingOrders не реализован для файлового хранилища")
-	return []*model.Order{}, nil
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+
+	log.Printf("[INFO] Поиск подходящих заявок для Order ID=%d, Type=%s", order.ID, order.Type)
+
+	// Загружаем все заявки
+	var orders []model.Order
+	if err := r.loadFromFile("orders.json", &orders); err != nil {
+		return nil, fmt.Errorf("не удалось загрузить заявки для сопоставления: %w", err)
+	}
+
+	// Определяем противоположный тип заявки
+	var oppositeType model.OrderType
+	if order.Type == model.OrderTypeBuy {
+		oppositeType = model.OrderTypeSell
+	} else {
+		oppositeType = model.OrderTypeBuy
+	}
+
+	var matchingOrders []*model.Order
+	currentTime := time.Now()
+
+	// Фильтруем подходящие заявки
+	for _, candidateOrder := range orders {
+		// Проверяем все критерии для сопоставления
+		if candidateOrder.Type == oppositeType && // Противоположный тип
+			candidateOrder.Cryptocurrency == order.Cryptocurrency && // Та же криптовалюта
+			candidateOrder.FiatCurrency == order.FiatCurrency && // Та же фиатная валюта
+			candidateOrder.Status == model.OrderStatusActive && // Активная заявка
+			candidateOrder.IsActive && // Не отключена
+			candidateOrder.AutoMatch && // Разрешено автосопоставление
+			candidateOrder.UserID != order.UserID && // Не наша заявка
+			candidateOrder.ExpiresAt.After(currentTime) { // Не истекла
+
+			// Проверяем совместимость цен
+			if r.isPriceCompatible(order, &candidateOrder) {
+				orderCopy := candidateOrder
+				matchingOrders = append(matchingOrders, &orderCopy)
+			}
+		}
+	}
+
+	// Сортируем по лучшим ценам
+	r.sortMatchingOrders(matchingOrders, order.Type)
+
+	// Ограничиваем результат (максимум 10 заявок)
+	if len(matchingOrders) > 10 {
+		matchingOrders = matchingOrders[:10]
+	}
+
+	log.Printf("[INFO] Найдено подходящих заявок для Order ID=%d: %d", order.ID, len(matchingOrders))
+	return matchingOrders, nil
 }
 
-// MatchOrders - заглушка для совместимости
+// isPriceCompatible проверяет совместимость цен для автосопоставления
+func (r *FileRepository) isPriceCompatible(order1, order2 *model.Order) bool {
+	// Для покупки: цена покупки должна быть >= цены продажи
+	// Для продажи: цена продажи должна быть <= цены покупки
+	if order1.Type == model.OrderTypeBuy {
+		return order1.Price >= order2.Price // Готовы купить по цене >= цены продажи
+	} else {
+		return order1.Price <= order2.Price // Готовы продать по цене <= цены покупки
+	}
+}
+
+// sortMatchingOrders сортирует подходящие заявки по оптимальным ценам
+func (r *FileRepository) sortMatchingOrders(orders []*model.Order, orderType model.OrderType) {
+	sort.Slice(orders, func(i, j int) bool {
+		// Для заявки покупки: сначала самые дешевые продажи
+		if orderType == model.OrderTypeBuy {
+			if orders[i].Price != orders[j].Price {
+				return orders[i].Price < orders[j].Price
+			}
+		} else {
+			// Для заявки продажи: сначала самые дорогие покупки
+			if orders[i].Price != orders[j].Price {
+				return orders[i].Price > orders[j].Price
+			}
+		}
+
+		// При равной цене: сначала более старые заявки (по времени создания)
+		return orders[i].CreatedAt.Before(orders[j].CreatedAt)
+	})
+}
+
+// MatchOrders создает сделку между двумя сопоставленными заявками
 func (r *FileRepository) MatchOrders(orderID1, orderID2 int64) error {
-	log.Printf("[WARN] MatchOrders не реализован для файлового хранилища")
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	log.Printf("[INFO] Сопоставление заявок: Order1 ID=%d, Order2 ID=%d", orderID1, orderID2)
+
+	// Загружаем все заявки
+	var orders []model.Order
+	if err := r.loadFromFile("orders.json", &orders); err != nil {
+		return fmt.Errorf("не удалось загрузить заявки для сопоставления: %w", err)
+	}
+
+	// Находим обе заявки
+	var order1, order2 *model.Order
+	for i := range orders {
+		if orders[i].ID == orderID1 {
+			order1 = &orders[i]
+		} else if orders[i].ID == orderID2 {
+			order2 = &orders[i]
+		}
+	}
+
+	if order1 == nil || order2 == nil {
+		return fmt.Errorf("не удалось найти одну или обе заявки для сопоставления")
+	}
+
+	// Проверяем что заявки можно сопоставить
+	if order1.Type == order2.Type {
+		return fmt.Errorf("нельзя сопоставить заявки одинакового типа")
+	}
+
+	if order1.Cryptocurrency != order2.Cryptocurrency || order1.FiatCurrency != order2.FiatCurrency {
+		return fmt.Errorf("заявки имеют разные валюты")
+	}
+
+	// Обновляем статусы заявок на "matched" (сопоставлено)
+	now := time.Now()
+
+	// Обновляем первую заявку
+	for i := range orders {
+		if orders[i].ID == orderID1 {
+			orders[i].Status = model.OrderStatusMatched
+			orders[i].MatchedUserID = &order2.UserID
+			orders[i].MatchedAt = &now
+			orders[i].UpdatedAt = now
+			break
+		}
+	}
+
+	// Обновляем вторую заявку
+	for i := range orders {
+		if orders[i].ID == orderID2 {
+			orders[i].Status = model.OrderStatusMatched
+			orders[i].MatchedUserID = &order1.UserID
+			orders[i].MatchedAt = &now
+			orders[i].UpdatedAt = now
+			break
+		}
+	}
+
+	// Сохраняем обновленные заявки
+	if err := r.saveToFile("orders.json", orders); err != nil {
+		return fmt.Errorf("не удалось сохранить сопоставленные заявки: %w", err)
+	}
+
+	log.Printf("[INFO] Заявки успешно сопоставлены: Order1 ID=%d, Order2 ID=%d", orderID1, orderID2)
 	return nil
 }
 
