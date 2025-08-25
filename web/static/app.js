@@ -60,6 +60,12 @@ function initNavigation() {
             // Загружаем данные для раздела
             if (viewName === 'orders') {
                 loadOrders();
+            } else if (viewName === 'my-orders') {
+                loadMyOrders();
+            } else if (viewName === 'deals') {
+                loadDeals();
+            } else if (viewName === 'profile') {
+                loadProfile();
             }
         });
     });
@@ -280,6 +286,302 @@ function showAccessDenied() {
     
     // Скрываем навигацию
     document.querySelector('.navigation').style.display = 'none';
+}
+
+// Загрузка моих заявок
+async function loadMyOrders() {
+    if (!currentUser) {
+        showError('Пользователь не авторизован');
+        return;
+    }
+
+    const content = document.getElementById('my-ordersView');
+    content.innerHTML = '<div class="loading"><div class="spinner"></div><p>Загрузка ваших заявок...</p></div>';
+    
+    try {
+        const response = await fetch('/api/v1/orders/my', {
+            headers: {
+                'X-Telegram-User-ID': currentUser.id.toString()
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            displayMyOrders(result.orders || []);
+        } else {
+            content.innerHTML = '<p class="text-center text-muted">Ошибка загрузки заявок</p>';
+        }
+    } catch (error) {
+        console.error('[ERROR] Ошибка загрузки моих заявок:', error);
+        content.innerHTML = '<p class="text-center text-muted">Ошибка сети</p>';
+    }
+}
+
+// Отображение моих заявок
+function displayMyOrders(orders) {
+    const content = document.getElementById('my-ordersView');
+    
+    if (orders.length === 0) {
+        content.innerHTML = `
+            <div class="text-center mt-md">
+                <h2>Мои заявки</h2>
+                <p class="text-muted">У вас пока нет активных заявок</p>
+                <button class="btn btn-primary" id="createFirstOrderBtn">Создать первую заявку</button>
+            </div>
+        `;
+        
+        // Добавляем обработчик для кнопки создания первой заявки
+        document.getElementById('createFirstOrderBtn').addEventListener('click', () => {
+            document.getElementById('createOrderModal').classList.add('show');
+        });
+        return;
+    }
+    
+    let html = '<h2 style="margin-bottom: 16px;">Мои заявки</h2>';
+    
+    orders.forEach(order => {
+        const statusColor = order.status === 'active' ? '#22c55e' : 
+                           order.status === 'matched' ? '#f59e0b' :
+                           order.status === 'completed' ? '#3b82f6' : '#ef4444';
+        
+        html += `
+            <div style="border: 1px solid var(--tg-theme-section-separator-color, #e1e8ed); 
+                        border-radius: 8px; padding: 12px; margin-bottom: 12px;
+                        background: var(--tg-theme-bg-color, #ffffff);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <span style="font-weight: 600; color: ${order.type === 'buy' ? '#22c55e' : '#ef4444'};">
+                        ${order.type === 'buy' ? '🟢 Покупка' : '🔴 Продажа'}
+                    </span>
+                    <span style="font-size: 12px; padding: 4px 8px; border-radius: 12px; background: ${statusColor}; color: white;">
+                        ${getStatusText(order.status)}
+                    </span>
+                </div>
+                <div style="margin-bottom: 8px;">
+                    <strong>${order.amount} ${order.cryptocurrency}</strong> за <strong>${order.price} ${order.fiat_currency}</strong>
+                </div>
+                <div style="font-size: 12px; color: var(--tg-theme-hint-color, #708499);">
+                    Создано: ${new Date(order.created_at).toLocaleString('ru')}
+                </div>
+                ${order.status === 'active' ? `
+                <div style="margin-top: 8px;">
+                    <button onclick="cancelOrder(${order.id})" style="background: #ef4444; color: white; border: none; padding: 4px 8px; border-radius: 4px; font-size: 12px;">
+                        Отменить
+                    </button>
+                </div>
+                ` : ''}
+            </div>
+        `;
+    });
+    
+    content.innerHTML = html;
+}
+
+// Загрузка сделок
+async function loadDeals() {
+    if (!currentUser) {
+        showError('Пользователь не авторизован');
+        return;
+    }
+
+    const content = document.getElementById('dealsView');
+    content.innerHTML = '<div class="loading"><div class="spinner"></div><p>Загрузка сделок...</p></div>';
+    
+    try {
+        const response = await fetch('/api/v1/deals', {
+            headers: {
+                'X-Telegram-User-ID': currentUser.id.toString()
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            displayDeals(result.deals || []);
+        } else {
+            content.innerHTML = '<p class="text-center text-muted">Ошибка загрузки сделок</p>';
+        }
+    } catch (error) {
+        console.error('[ERROR] Ошибка загрузки сделок:', error);
+        content.innerHTML = '<p class="text-center text-muted">Ошибка сети</p>';
+    }
+}
+
+// Отображение сделок
+function displayDeals(deals) {
+    const content = document.getElementById('dealsView');
+    
+    if (deals.length === 0) {
+        content.innerHTML = `
+            <div class="text-center mt-md">
+                <h2>История сделок</h2>
+                <p class="text-muted">У вас пока нет завершенных сделок</p>
+            </div>
+        `;
+        return;
+    }
+    
+    let html = '<h2 style="margin-bottom: 16px;">История сделок</h2>';
+    
+    deals.forEach(deal => {
+        const statusColor = deal.status === 'pending' ? '#f59e0b' : 
+                           deal.status === 'completed' ? '#22c55e' : '#ef4444';
+        
+        html += `
+            <div style="border: 1px solid var(--tg-theme-section-separator-color, #e1e8ed); 
+                        border-radius: 8px; padding: 12px; margin-bottom: 12px;
+                        background: var(--tg-theme-bg-color, #ffffff);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <span style="font-weight: 600;">
+                        💼 Сделка #${deal.id}
+                    </span>
+                    <span style="font-size: 12px; padding: 4px 8px; border-radius: 12px; background: ${statusColor}; color: white;">
+                        ${getDealStatusText(deal.status)}
+                    </span>
+                </div>
+                <div style="margin-bottom: 8px;">
+                    <strong>${deal.amount} ${deal.cryptocurrency}</strong> за <strong>${deal.total_amount} ${deal.fiat_currency}</strong>
+                </div>
+                <div style="font-size: 12px; color: var(--tg-theme-hint-color, #708499);">
+                    Создано: ${new Date(deal.created_at).toLocaleString('ru')}
+                </div>
+            </div>
+        `;
+    });
+    
+    content.innerHTML = html;
+}
+
+// Загрузка профиля
+async function loadProfile() {
+    if (!currentUser) {
+        showError('Пользователь не авторизован');
+        return;
+    }
+
+    const content = document.getElementById('profileView');
+    content.innerHTML = '<div class="loading"><div class="spinner"></div><p>Загрузка профиля...</p></div>';
+    
+    try {
+        const response = await fetch('/api/v1/auth/me', {
+            headers: {
+                'X-Telegram-User-ID': currentUser.id.toString()
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (result.success || result.user) {
+            displayProfile(result.user || currentUser);
+        } else {
+            displayProfile(currentUser); // Показываем базовую информацию
+        }
+    } catch (error) {
+        console.error('[ERROR] Ошибка загрузки профиля:', error);
+        displayProfile(currentUser); // Показываем базовую информацию
+    }
+}
+
+// Отображение профиля
+function displayProfile(user) {
+    const content = document.getElementById('profileView');
+    
+    const rating = user.rating || 0;
+    const stars = '⭐'.repeat(Math.floor(rating)) + '☆'.repeat(5 - Math.floor(rating));
+    
+    content.innerHTML = `
+        <div style="text-align: center; padding: 20px;">
+            <h2 style="margin-bottom: 16px;">👤 Мой профиль</h2>
+            
+            <div style="margin-bottom: 24px;">
+                <div style="font-size: 18px; font-weight: 600; margin-bottom: 8px;">
+                    ${user.first_name} ${user.last_name || ''}
+                </div>
+                <div style="font-size: 14px; color: var(--tg-theme-hint-color, #708499); margin-bottom: 12px;">
+                    @${user.username || 'пользователь'}
+                </div>
+                <div style="font-size: 16px; margin-bottom: 8px;">
+                    ${stars} ${rating.toFixed(1)}
+                </div>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px;">
+                <div style="text-align: center; padding: 12px; border: 1px solid var(--tg-theme-section-separator-color, #e1e8ed); border-radius: 8px;">
+                    <div style="font-size: 20px; font-weight: 600; color: var(--tg-theme-link-color, #2481cc);">
+                        ${user.total_deals || 0}
+                    </div>
+                    <div style="font-size: 12px; color: var(--tg-theme-hint-color, #708499);">
+                        Всего сделок
+                    </div>
+                </div>
+                <div style="text-align: center; padding: 12px; border: 1px solid var(--tg-theme-section-separator-color, #e1e8ed); border-radius: 8px;">
+                    <div style="font-size: 20px; font-weight: 600; color: #22c55e;">
+                        ${user.successful_deals || 0}
+                    </div>
+                    <div style="font-size: 12px; color: var(--tg-theme-hint-color, #708499);">
+                        Успешных
+                    </div>
+                </div>
+            </div>
+            
+            <div style="font-size: 12px; color: var(--tg-theme-hint-color, #708499);">
+                Telegram ID: ${user.id}
+            </div>
+        </div>
+    `;
+}
+
+// Вспомогательные функции
+function getStatusText(status) {
+    const statusMap = {
+        'active': 'Активна',
+        'matched': 'Сопоставлена',
+        'completed': 'Завершена',
+        'cancelled': 'Отменена'
+    };
+    return statusMap[status] || status;
+}
+
+function getDealStatusText(status) {
+    const statusMap = {
+        'pending': 'Ожидает',
+        'completed': 'Завершена',
+        'cancelled': 'Отменена'
+    };
+    return statusMap[status] || status;
+}
+
+// Отмена заявки
+async function cancelOrder(orderId) {
+    if (!currentUser) {
+        showError('Пользователь не авторизован');
+        return;
+    }
+    
+    if (!confirm('Вы уверены что хотите отменить эту заявку?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/v1/orders/${orderId}`, {
+            method: 'DELETE',
+            headers: {
+                'X-Telegram-User-ID': currentUser.id.toString()
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            showSuccess('Заявка успешно отменена');
+            loadMyOrders(); // Перезагружаем список заявок
+        } else {
+            showError('Ошибка отмены заявки: ' + result.error);
+        }
+    } catch (error) {
+        console.error('[ERROR] Ошибка отмены заявки:', error);
+        showError('Ошибка сети при отмене заявки');
+    }
 }
 
 // Инициализация приложения

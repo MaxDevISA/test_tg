@@ -17,7 +17,7 @@ import (
 
 // TelegramChatMemberResponse структура ответа от Telegram Bot API для проверки членства
 type TelegramChatMemberResponse struct {
-    OK     bool `json:"ok"`
+	OK     bool `json:"ok"`
 	Result struct {
 		Status string `json:"status"`
 		User   struct {
@@ -141,6 +141,20 @@ func (s *Service) AuthenticateUser(authData *model.TelegramAuthData) (*model.Use
 	log.Printf("[INFO] Успешная авторизация пользователя: ID=%d, TelegramID=%d",
 		user.ID, user.TelegramID)
 
+	return user, nil
+}
+
+// GetUserByTelegramID получает пользователя по его Telegram ID
+func (s *Service) GetUserByTelegramID(telegramID int64) (*model.User, error) {
+	log.Printf("[INFO] Получение пользователя по Telegram ID=%d", telegramID)
+
+	user, err := s.repo.GetUserByTelegramID(telegramID)
+	if err != nil {
+		log.Printf("[ERROR] Пользователь с Telegram ID=%d не найден: %v", telegramID, err)
+		return nil, fmt.Errorf("пользователь не найден")
+	}
+
+	log.Printf("[INFO] Пользователь найден: ID=%d, Telegram ID=%d", user.ID, user.TelegramID)
 	return user, nil
 }
 

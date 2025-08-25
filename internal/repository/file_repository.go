@@ -609,22 +609,102 @@ func (r *FileRepository) MatchOrders(orderID1, orderID2 int64) error {
 	return nil
 }
 
-// CreateDeal - заглушка для совместимости
+// =====================================================
+// УПРАВЛЕНИЕ СДЕЛКАМИ
+// =====================================================
+
+// CreateDeal создает новую сделку между пользователями
 func (r *FileRepository) CreateDeal(deal *model.Deal) error {
-	log.Printf("[WARN] CreateDeal не реализован для файлового хранилища")
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	log.Printf("[INFO] Создание сделки: Buyer ID=%d, Seller ID=%d, Amount=%.8f %s",
+		deal.BuyerID, deal.SellerID, deal.Amount, deal.Cryptocurrency)
+
+	// Загружаем существующие сделки
+	var deals []model.Deal
+	if err := r.loadFromFile("deals.json", &deals); err != nil {
+		return fmt.Errorf("не удалось загрузить сделки: %w", err)
+	}
+
+	// Генерируем новый ID для сделки
+	dealID, err := r.generateID("deals")
+	if err != nil {
+		return fmt.Errorf("не удалось сгенерировать ID для сделки: %w", err)
+	}
+
+	// Устанавливаем ID и временные метки
+	deal.ID = dealID
+	deal.Status = "pending" // Статус "ожидает подтверждения"
+	deal.CreatedAt = time.Now()
+
+	// Добавляем сделку в список
+	deals = append(deals, *deal)
+
+	// Сохраняем обновленный список сделок
+	if err := r.saveToFile("deals.json", deals); err != nil {
+		return fmt.Errorf("не удалось сохранить сделки: %w", err)
+	}
+
+	log.Printf("[INFO] Сделка успешно создана: ID=%d", deal.ID)
 	return nil
 }
 
-// GetDealsByUserID - заглушка для совместимости
+// GetDealsByUserID получает все сделки пользователя (как покупателя и продавца)
 func (r *FileRepository) GetDealsByUserID(userID int64) ([]*model.Deal, error) {
-	log.Printf("[WARN] GetDealsByUserID не реализован для файлового хранилища")
-	return []*model.Deal{}, nil
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+
+	log.Printf("[INFO] Получение сделок для пользователя ID=%d", userID)
+
+	// Загружаем все сделки
+	var deals []model.Deal
+	if err := r.loadFromFile("deals.json", &deals); err != nil {
+		return nil, fmt.Errorf("не удалось загрузить сделки: %w", err)
+	}
+
+	// Фильтруем сделки пользователя
+	var userDeals []*model.Deal
+	for _, deal := range deals {
+		// Пользователь участвует в сделке если он покупатель или продавец
+		if deal.BuyerID == userID || deal.SellerID == userID {
+			dealCopy := deal
+			userDeals = append(userDeals, &dealCopy)
+		}
+	}
+
+	// Сортируем по дате создания (новые сначала)
+	sort.Slice(userDeals, func(i, j int) bool {
+		return userDeals[i].CreatedAt.After(userDeals[j].CreatedAt)
+	})
+
+	log.Printf("[INFO] Найдено сделок для пользователя ID=%d: %d", userID, len(userDeals))
+	return userDeals, nil
 }
 
-// GetDealByID - заглушка для совместимости
+// GetDealByID получает сделку по её ID
 func (r *FileRepository) GetDealByID(dealID int64) (*model.Deal, error) {
-	log.Printf("[WARN] GetDealByID не реализован для файлового хранилища")
-	return nil, fmt.Errorf("метод не реализован")
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+
+	log.Printf("[INFO] Получение сделки по ID=%d", dealID)
+
+	// Загружаем все сделки
+	var deals []model.Deal
+	if err := r.loadFromFile("deals.json", &deals); err != nil {
+		return nil, fmt.Errorf("не удалось загрузить сделки: %w", err)
+	}
+
+	// Ищем сделку с нужным ID
+	for _, deal := range deals {
+		if deal.ID == dealID {
+			log.Printf("[INFO] Сделка найдена: ID=%d, Status=%s", deal.ID, deal.Status)
+			return &deal, nil
+		}
+	}
+
+	log.Printf("[WARN] Сделка с ID=%d не найдена", dealID)
+	return nil, fmt.Errorf("сделка с ID=%d не найдена", dealID)
 }
 
 // ConfirmDeal - заглушка для совместимости

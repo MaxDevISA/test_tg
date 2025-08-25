@@ -44,6 +44,7 @@ func (h *Handler) RegisterRoutes(router *mux.Router) {
 	api.HandleFunc("/orders", h.handleCreateOrder).Methods("POST")        // Создать новую заявку
 	api.HandleFunc("/orders/{id}", h.handleGetOrder).Methods("GET")       // Получить заявку по ID
 	api.HandleFunc("/orders/{id}", h.handleCancelOrder).Methods("DELETE") // Отменить заявку
+	api.HandleFunc("/orders/my", h.handleGetMyOrders).Methods("GET")      // Получить мои заявки
 
 	// Управление сделками
 	api.HandleFunc("/deals", h.handleGetDeals).Methods("GET")                  // Получить список сделок пользователя
@@ -263,6 +264,56 @@ func (h *Handler) handleCancelOrder(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleGetMyOrders обрабатывает получение заявок пользователя (страница "Мои")
+func (h *Handler) handleGetMyOrders(w http.ResponseWriter, r *http.Request) {
+	log.Println("[INFO] Обработка запроса получения заявок пользователя")
+
+	// Получаем Telegram ID пользователя из заголовка
+	telegramIDStr := r.Header.Get("X-Telegram-User-ID")
+	if telegramIDStr == "" {
+		log.Printf("[WARN] Не передан Telegram ID пользователя")
+		h.sendErrorResponse(w, "Требуется авторизация", http.StatusUnauthorized)
+		return
+	}
+
+	telegramID, err := strconv.ParseInt(telegramIDStr, 10, 64)
+	if err != nil {
+		log.Printf("[WARN] Неверный формат Telegram ID: %v", err)
+		h.sendErrorResponse(w, "Неверный ID пользователя", http.StatusBadRequest)
+		return
+	}
+
+	// Получаем пользователя по Telegram ID
+	user, err := h.service.GetUserByTelegramID(telegramID)
+	if err != nil {
+		log.Printf("[ERROR] Пользователь не найден: %v", err)
+		h.sendErrorResponse(w, "Пользователь не найден", http.StatusNotFound)
+		return
+	}
+
+	// Создаем фильтр для заявок пользователя
+	filter := &model.OrderFilter{
+		UserID: &user.ID, // Фильтруем по ID пользователя
+		Limit:  50,       // Ограничиваем 50 заявками
+		Offset: 0,
+	}
+
+	// Получаем заявки пользователя
+	orders, err := h.service.GetOrders(filter)
+	if err != nil {
+		log.Printf("[ERROR] Ошибка при получении заявок пользователя: %v", err)
+		h.sendErrorResponse(w, "Не удалось получить заявки", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("[INFO] Возвращено заявок пользователю ID=%d: %d", user.ID, len(orders))
+	h.sendJSONResponse(w, map[string]interface{}{
+		"success": true,
+		"orders":  orders,
+		"count":   len(orders),
+	})
+}
+
 // =====================================================
 // ОБРАБОТЧИКИ СДЕЛОК
 // =====================================================
@@ -271,18 +322,38 @@ func (h *Handler) handleCancelOrder(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleGetDeals(w http.ResponseWriter, r *http.Request) {
 	log.Println("[INFO] Обработка запроса получения сделок пользователя")
 
-	// TODO: Получить ID пользователя из JWT токена
-	userID := int64(1) // Заглушка
+	// Получаем Telegram ID пользователя из заголовка
+	telegramIDStr := r.Header.Get("X-Telegram-User-ID")
+	if telegramIDStr == "" {
+		log.Printf("[WARN] Не передан Telegram ID пользователя")
+		h.sendErrorResponse(w, "Требуется авторизация", http.StatusUnauthorized)
+		return
+	}
+
+	telegramID, err := strconv.ParseInt(telegramIDStr, 10, 64)
+	if err != nil {
+		log.Printf("[WARN] Неверный формат Telegram ID: %v", err)
+		h.sendErrorResponse(w, "Неверный ID пользователя", http.StatusBadRequest)
+		return
+	}
+
+	// Получаем пользователя по Telegram ID для получения внутреннего ID
+	user, err := h.service.GetUserByTelegramID(telegramID)
+	if err != nil {
+		log.Printf("[ERROR] Пользователь не найден: %v", err)
+		h.sendErrorResponse(w, "Пользователь не найден", http.StatusNotFound)
+		return
+	}
 
 	// Получаем сделки пользователя через сервис
-	deals, err := h.service.GetUserDeals(userID)
+	deals, err := h.service.GetUserDeals(user.ID)
 	if err != nil {
 		log.Printf("[ERROR] Ошибка при получении сделок: %v", err)
 		h.sendErrorResponse(w, "Не удалось получить сделки", http.StatusInternalServerError)
 		return
 	}
 
-	log.Printf("[INFO] Возвращено сделок пользователю: %d", len(deals))
+	log.Printf("[INFO] Возвращено сделок пользователю ID=%d: %d", user.ID, len(deals))
 	h.sendJSONResponse(w, map[string]interface{}{
 		"success": true,
 		"deals":   deals,
