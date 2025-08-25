@@ -531,10 +531,10 @@ async function loadProfile() {
                 console.error('[DEBUG] Ошибка запроса /auth/stats:', err);
                 return null;
             }),
-            fetch('/api/v1/reviews?limit=5', {
+            fetch('/api/v1/auth/reviews?limit=5', {
                 headers: { 'X-Telegram-User-ID': currentUser.id.toString() }
             }).catch(err => {
-                console.error('[DEBUG] Ошибка запроса /reviews:', err);
+                console.error('[DEBUG] Ошибка запроса /auth/reviews:', err);
                 return null;
             })
         ]);
@@ -581,9 +581,12 @@ async function loadProfile() {
             console.warn('[DEBUG] У пользователя пустая статистика!', userStats);
             console.log('[DEBUG] Данные пользователя:', userData);
             console.log('[DEBUG] currentInternalUserId:', currentInternalUserId);
+            console.log('[DEBUG] Должен отображаться экран приветствия для нового пользователя');
         }
         
+        console.log('[DEBUG] Вызываем displayMyProfile...');
         displayMyProfile(userData, userStats, userReviews);
+        console.log('[DEBUG] displayMyProfile завершена');
     } catch (error) {
         console.error('[ERROR] Ошибка загрузки профиля:', error);
         displayMyProfile(currentUser, null, []);
@@ -736,6 +739,9 @@ function displayMyProfile(user, stats, reviews) {
     // Проверяем есть ли статистика
     const hasStats = stats && (stats.total_orders > 0 || stats.total_deals > 0 || totalReviews > 0);
     
+    console.log('[DEBUG] hasStats =', hasStats, 'на основе stats =', stats, 'totalReviews =', totalReviews);
+    console.log('[DEBUG] Начинаем формировать HTML...');
+    
     let html = `
         <div style="padding: 20px;">
             <!-- Заголовок -->
@@ -869,7 +875,16 @@ function displayMyProfile(user, stats, reviews) {
         </div>
     `;
     
+    console.log('[DEBUG] HTML сформирован, длина:', html.length, 'символов');
+    console.log('[DEBUG] Устанавливаем innerHTML для элемента:', content);
+    
+    if (!content) {
+        console.error('[ERROR] Элемент profileView не найден!');
+        return;
+    }
+    
     content.innerHTML = html;
+    console.log('[DEBUG] innerHTML установлен, профиль должен отображаться');
 }
 
 // Вспомогательные функции

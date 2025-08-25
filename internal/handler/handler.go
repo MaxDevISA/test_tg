@@ -57,6 +57,7 @@ func (h *Handler) RegisterRoutes(router *mux.Router) {
 	api.HandleFunc("/reviews", h.handleCreateReview).Methods("POST")             // Оставить отзыв
 	api.HandleFunc("/users/{id}/profile", h.handleGetUserProfile).Methods("GET") // Получить профиль пользователя
 	api.HandleFunc("/auth/stats", h.handleGetMyStats).Methods("GET")             // Получить статистику текущего пользователя
+	api.HandleFunc("/auth/reviews", h.handleGetMyReviews).Methods("GET")         // Получить отзывы текущего пользователя
 
 	// Информационные эндпоинты
 	api.HandleFunc("/health", h.handleHealthCheck).Methods("GET") // Проверка состояния сервиса
@@ -637,6 +638,67 @@ func (h *Handler) handleGetUserProfile(w http.ResponseWriter, r *http.Request) {
 	h.sendJSONResponse(w, map[string]interface{}{
 		"success": true,
 		"profile": userProfile,
+	})
+}
+
+// handleGetMyReviews обрабатывает получение отзывов текущего пользователя
+func (h *Handler) handleGetMyReviews(w http.ResponseWriter, r *http.Request) {
+	log.Printf("[INFO] Обработка запроса получения отзывов текущего пользователя")
+
+	// Получаем Telegram ID пользователя из заголовка
+	telegramIDStr := r.Header.Get("X-Telegram-User-ID")
+	if telegramIDStr == "" {
+		log.Printf("[WARN] Не передан Telegram ID пользователя для отзывов")
+		h.sendErrorResponse(w, "Требуется авторизация", http.StatusUnauthorized)
+		return
+	}
+
+	telegramID, err := strconv.ParseInt(telegramIDStr, 10, 64)
+	if err != nil {
+		log.Printf("[WARN] Неверный формат Telegram ID: %v", err)
+		h.sendErrorResponse(w, "Неверный ID пользователя", http.StatusBadRequest)
+		return
+	}
+
+	// Получаем пользователя по Telegram ID
+	user, err := h.service.GetUserByTelegramID(telegramID)
+	if err != nil {
+		log.Printf("[ERROR] Пользователь не найден для отзывов: %v", err)
+		h.sendErrorResponse(w, "Пользователь не найден", http.StatusNotFound)
+		return
+	}
+
+	// Параметры пагинации
+	limit := 20
+	offset := 0
+
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if parsedLimit, err := strconv.Atoi(limitStr); err == nil && parsedLimit > 0 {
+			limit = parsedLimit
+		}
+	}
+
+	if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
+		if parsedOffset, err := strconv.Atoi(offsetStr); err == nil && parsedOffset >= 0 {
+			offset = parsedOffset
+		}
+	}
+
+	log.Printf("[INFO] Получение отзывов для пользователя ID=%d (limit=%d, offset=%d)", user.ID, limit, offset)
+
+	// Получаем отзывы пользователя
+	reviews, err := h.service.GetUserReviews(user.ID, limit, offset)
+	if err != nil {
+		log.Printf("[ERROR] Ошибка получения отзывов: %v", err)
+		h.sendErrorResponse(w, "Не удалось получить отзывы", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("[INFO] Получено отзывов: %d", len(reviews))
+	h.sendJSONResponse(w, map[string]interface{}{
+		"success": true,
+		"reviews": reviews,
+		"count":   len(reviews),
 	})
 }
 
