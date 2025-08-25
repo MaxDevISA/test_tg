@@ -4,8 +4,3 @@ services:
     env: go
     buildCommand: go build -o p2p-exchange main.go
     startCommand: ./p2p-exchange
-    envVars:
-      - key: DATA_DIR
-        value: /tmp/data
-      - key: PORT
-        value: 10000
