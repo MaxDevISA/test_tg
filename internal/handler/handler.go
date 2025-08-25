@@ -491,8 +491,28 @@ func (h *Handler) handleGetReviews(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleCreateReview(w http.ResponseWriter, r *http.Request) {
 	log.Println("[INFO] Обработка создания отзыва")
 
-	// TODO: Получить ID пользователя из JWT токена
-	userID := int64(1) // Заглушка
+	// Получаем Telegram ID пользователя из заголовка
+	telegramIDStr := r.Header.Get("X-Telegram-User-ID")
+	if telegramIDStr == "" {
+		log.Printf("[WARN] Не передан Telegram ID пользователя")
+		h.sendErrorResponse(w, "Требуется авторизация", http.StatusUnauthorized)
+		return
+	}
+
+	telegramID, err := strconv.ParseInt(telegramIDStr, 10, 64)
+	if err != nil {
+		log.Printf("[WARN] Неверный формат Telegram ID: %v", err)
+		h.sendErrorResponse(w, "Неверный ID пользователя", http.StatusBadRequest)
+		return
+	}
+
+	// Получаем пользователя по Telegram ID для получения внутреннего ID
+	user, err := h.service.GetUserByTelegramID(telegramID)
+	if err != nil {
+		log.Printf("[ERROR] Пользователь не найден: %v", err)
+		h.sendErrorResponse(w, "Пользователь не найден", http.StatusNotFound)
+		return
+	}
 
 	// Читаем данные отзыва из тела запроса
 	var reviewData model.CreateReviewRequest
@@ -506,7 +526,7 @@ func (h *Handler) handleCreateReview(w http.ResponseWriter, r *http.Request) {
 		reviewData.DealID, reviewData.ToUserID, reviewData.Rating)
 
 	// Создаем отзыв через сервис
-	review, err := h.service.CreateReview(userID, &reviewData)
+	review, err := h.service.CreateReview(user.ID, &reviewData)
 	if err != nil {
 		log.Printf("[WARN] Ошибка создания отзыва: %v", err)
 		h.sendErrorResponse(w, err.Error(), http.StatusBadRequest)
