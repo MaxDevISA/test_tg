@@ -286,6 +286,45 @@ body {
     flex: 2;
 }
 
+/* Маленькие кнопки для заявок */
+.btn-small {
+    border: none;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: opacity 0.2s;
+    flex: 1;
+}
+
+.btn-small:hover {
+    opacity: 0.8;
+}
+
+.btn-small:active {
+    transform: scale(0.98);
+}
+
+.btn-secondary {
+    background: var(--tg-theme-section-separator-color, #e1e8ed);
+    color: var(--tg-theme-text-color, #000000);
+}
+
+.btn-info {
+    background: #3b82f6;
+    color: #ffffff;
+}
+
+.btn-danger {
+    background: #ef4444;
+    color: #ffffff;
+}
+
+.btn-warning {
+    background: #f59e0b;
+    color: #ffffff;
+}
+
 .order-info-card {
     background: var(--tg-theme-bg-color, #f8f9fa);
     border: 1px solid var(--tg-theme-section-separator-color, #e1e8ed);
