@@ -845,11 +845,13 @@ func (s *Service) GetUserStats(userID int64) (*model.UserStats, error) {
 		Offset: 0,
 	}
 
+	log.Printf("[DEBUG] Поиск заявок пользователя ID=%d с фильтром: %+v", userID, orderFilter)
 	orders, err := s.repo.GetOrdersByFilter(orderFilter)
 	if err != nil {
 		log.Printf("[ERROR] Не удалось получить заявки пользователя ID=%d: %v", userID, err)
 		return nil, fmt.Errorf("не удалось получить заявки: %w", err)
 	}
+	log.Printf("[DEBUG] Найдено заявок для пользователя ID=%d: %d", userID, len(orders))
 
 	// Получаем сделки пользователя
 	deals, err := s.repo.GetDealsByUserID(userID)

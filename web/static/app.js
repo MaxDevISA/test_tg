@@ -1,3 +1,4 @@
+
 // Глобальные переменные для P2P криптобиржи
 let currentUser = null;
 let currentInternalUserId = null; // Внутренний ID пользователя в системе
@@ -574,6 +575,14 @@ async function loadProfile() {
         }
 
         console.log('[DEBUG] Передача данных в displayMyProfile:', { userData, userStats, userReviews });
+        
+        // Дополнительная отладка для пустого профиля
+        if (!userStats || (userStats.total_orders === 0 && userStats.total_deals === 0)) {
+            console.warn('[DEBUG] У пользователя пустая статистика!', userStats);
+            console.log('[DEBUG] Данные пользователя:', userData);
+            console.log('[DEBUG] currentInternalUserId:', currentInternalUserId);
+        }
+        
         displayMyProfile(userData, userStats, userReviews);
     } catch (error) {
         console.error('[ERROR] Ошибка загрузки профиля:', error);
@@ -712,15 +721,20 @@ function displayProfile(user) {
 function displayMyProfile(user, stats, reviews) {
     const content = document.getElementById('profileView');
     
+    console.log('[DEBUG] displayMyProfile вызвана с:', { user, stats, reviews });
+    
     // Данные пользователя
     const avatarUrl = user.photo_url || '';
     const userName = user.first_name + (user.last_name ? ` ${user.last_name}` : '');
     const username = user.username ? `@${user.username}` : '';
     
-    // Статистика рейтинга
+    // Статистика рейтинга  
     const rating = stats?.average_rating || user.rating || 0;
     const totalReviews = stats?.total_reviews || 0;
     const stars = '⭐'.repeat(Math.floor(rating)) + '☆'.repeat(5 - Math.floor(rating));
+    
+    // Проверяем есть ли статистика
+    const hasStats = stats && (stats.total_orders > 0 || stats.total_deals > 0 || totalReviews > 0);
     
     let html = `
         <div style="padding: 20px;">
@@ -760,7 +774,8 @@ function displayMyProfile(user, stats, reviews) {
                 </div>
             </div>
             
-            <!-- Статистика сделок -->
+            <!-- Статистика сделок или сообщение о начале работы -->
+            ${hasStats ? `
             <div class="profile-stats-grid" style="margin-bottom: 24px;">
                 <div class="profile-stat-card">
                     <div class="profile-stat-number" style="color: #22c55e;">${stats?.completed_deals || 0}</div>
@@ -780,7 +795,23 @@ function displayMyProfile(user, stats, reviews) {
                     </div>
                     <div class="profile-stat-label">Успешность</div>
                 </div>
+            </div>` : `
+            <div style="background: linear-gradient(135deg, var(--tg-theme-secondary-bg-color, #f8f9fa) 0%, var(--tg-theme-bg-color, #ffffff) 100%); border-radius: 16px; padding: 24px; margin-bottom: 24px; text-align: center; border: 1px solid var(--tg-theme-section-separator-color, #e1e8ed);">
+                <div style="font-size: 32px; margin-bottom: 12px;">🚀</div>
+                <div style="font-size: 18px; font-weight: 600; margin-bottom: 8px; color: var(--tg-theme-text-color, #000000);">
+                    Добро пожаловать на биржу!
+                </div>
+                <div style="font-size: 14px; color: var(--tg-theme-hint-color, #708499); line-height: 1.4;">
+                    Пока у вас нет заявок и сделок.<br/>
+                    Создайте первую заявку и начните торговать!
+                </div>
+                <div style="margin-top: 16px;">
+                    <button onclick="showView('orders')" style="background: var(--tg-theme-button-color, #2481cc); color: var(--tg-theme-button-text-color, #ffffff); border: none; border-radius: 8px; padding: 10px 20px; font-size: 14px; cursor: pointer;">
+                        📋 Перейти к заявкам
+                    </button>
+                </div>
             </div>
+            `}
             
             <!-- Объем торгов -->
             ${stats?.total_trade_volume > 0 ? `
@@ -821,9 +852,9 @@ function displayMyProfile(user, stats, reviews) {
         });
         
         html += `</div>`;
-    } else {
+    } else if (hasStats) {
         html += `
-            <div style="text-center; padding: 20px; color: var(--tg-theme-hint-color, #666); font-size: 13px;">
+            <div style="text-align: center; padding: 20px; color: var(--tg-theme-hint-color, #666); font-size: 13px;">
                 📝 Пока нет отзывов обо мне
             </div>
         `;
