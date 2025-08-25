@@ -781,7 +781,7 @@ async function createReview(dealId, toUserId, rating, comment, isAnonymous) {
 function openReviewModal(dealId, toUserId) {
     const modal = document.getElementById('reviewModal');
     if (modal) {
-        modal.style.display = 'flex';
+        modal.classList.add('show');
         
         // Сохраняем данные в модальном окне
         modal.dataset.dealId = dealId;
@@ -801,7 +801,7 @@ function openReviewModal(dealId, toUserId) {
 function closeReviewModal() {
     const modal = document.getElementById('reviewModal');
     if (modal) {
-        modal.style.display = 'none';
+        modal.classList.remove('show');
     }
 }
 
@@ -953,7 +953,7 @@ async function openUserProfile(userId) {
     const content = document.getElementById('profileModalContent');
     
     // Показываем модальное окно
-    modal.style.display = 'flex';
+    modal.classList.add('show');
     
     // Показываем загрузку
     content.innerHTML = `
@@ -1019,47 +1019,36 @@ function displayUserProfileModal(profileData, reviews) {
     const positivePercent = profileData.positive_percent || 0;
     
     let html = `
-        <div style="text-align: center; padding: 20px;">
-            <h3 style="margin-bottom: 16px;">👤 Профиль пользователя</h3>
-            
-            <div style="margin-bottom: 20px;">
-                <div style="font-size: 16px; font-weight: 600; margin-bottom: 8px;">
-                    Пользователь #${profileData.user_id}
-                </div>
-                <div style="font-size: 16px; margin-bottom: 8px;">
-                    ${stars} ${rating.toFixed(1)} (${totalReviews} отзывов)
-                </div>
-                ${positivePercent > 0 ? `
-                <div style="font-size: 12px; color: #22c55e;">
-                    ${positivePercent.toFixed(0)}% положительных отзывов
-                </div>` : ''}
+        <div class="text-center" style="margin-bottom: 20px;">
+            <div style="font-size: 18px; font-weight: 600; margin-bottom: 8px; color: var(--tg-theme-text-color, #000000);">
+                Пользователь #${profileData.user_id}
             </div>
-            
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px;">
-                <div style="text-align: center; padding: 12px; border: 1px solid #ddd; border-radius: 8px;">
-                    <div style="font-size: 18px; font-weight: 600; color: #007bff;">
-                        ${totalReviews}
-                    </div>
-                    <div style="font-size: 11px; color: #666;">
-                        Всего отзывов
-                    </div>
-                </div>
-                <div style="text-align: center; padding: 12px; border: 1px solid #ddd; border-radius: 8px;">
-                    <div style="font-size: 18px; font-weight: 600; color: #22c55e;">
-                        ${Math.round(positivePercent)}%
-                    </div>
-                    <div style="font-size: 11px; color: #666;">
-                        Положительных
-                    </div>
-                </div>
+            <div style="font-size: 16px; margin-bottom: 8px;">
+                ${stars} ${rating.toFixed(1)} (${totalReviews} отзывов)
             </div>
+            ${positivePercent > 0 ? `
+            <div style="font-size: 13px; color: #22c55e;">
+                ${positivePercent.toFixed(0)}% положительных отзывов
+            </div>` : ''}
+        </div>
+        
+        <div class="profile-stats-grid">
+            <div class="profile-stat-card">
+                <div class="profile-stat-number">${totalReviews}</div>
+                <div class="profile-stat-label">Всего отзывов</div>
+            </div>
+            <div class="profile-stat-card">
+                <div class="profile-stat-number" style="color: #22c55e;">${Math.round(positivePercent)}%</div>
+                <div class="profile-stat-label">Положительных</div>
+            </div>
+        </div>
     `;
     
     // Отзывы
     if (reviews && reviews.length > 0) {
         html += `
-            <div style="text-align: left;">
-                <h4 style="font-size: 14px; margin-bottom: 12px;">📝 Последние отзывы</h4>
+            <div class="profile-reviews-section">
+                <div class="profile-reviews-title">📝 Последние отзывы</div>
         `;
         
         reviews.slice(0, 3).forEach(review => {
@@ -1067,15 +1056,13 @@ function displayUserProfileModal(profileData, reviews) {
             const reviewDate = new Date(review.created_at).toLocaleDateString('ru');
             
             html += `
-                <div style="border: 1px solid #e1e8ed; border-radius: 6px; padding: 10px; margin-bottom: 8px; background: #f8f9fa;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                        <span style="font-size: 12px;">${reviewStars}</span>
-                        <span style="font-size: 10px; color: #666;">
-                            ${reviewDate}
-                        </span>
+                <div class="profile-review-card">
+                    <div class="profile-review-header">
+                        <span class="profile-review-stars">${reviewStars}</span>
+                        <span class="profile-review-date">${reviewDate}</span>
                     </div>
                     ${review.comment ? `
-                    <div style="font-size: 11px; line-height: 1.4;">
+                    <div class="profile-review-comment">
                         ${review.comment}
                     </div>
                     ` : ''}
@@ -1086,13 +1073,11 @@ function displayUserProfileModal(profileData, reviews) {
         html += `</div>`;
     } else {
         html += `
-            <div style="text-center; padding: 10px; color: #666; font-size: 12px;">
+            <div class="text-center" style="padding: 20px; color: var(--tg-theme-hint-color, #666); font-size: 13px;">
                 📝 Пока нет отзывов
             </div>
         `;
     }
-    
-    html += `</div>`;
     
     content.innerHTML = html;
 }
@@ -1120,7 +1105,7 @@ async function respondToOrder(orderId) {
     const orderDetails = document.getElementById('respondOrderDetails');
     
     // Показываем модальное окно
-    modal.style.display = 'flex';
+    modal.classList.add('show');
     modal.dataset.orderId = orderId;
     
     // Показываем загрузку
@@ -1155,23 +1140,37 @@ async function respondToOrder(orderId) {
 function displayOrderDetails(order) {
     const orderDetails = document.getElementById('respondOrderDetails');
     
+    const totalAmount = order.total_amount || (order.amount * order.price);
+    
     orderDetails.innerHTML = `
-        <div style="background: #f8f9fa; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
-            <h4 style="margin-bottom: 8px; font-size: 14px;">
+        <div class="order-info-card">
+            <div class="order-info-title">
                 ${order.type === 'buy' ? '🟢 Заявка на покупку' : '🔴 Заявка на продажу'}
-            </h4>
-            <div style="margin-bottom: 6px;">
-                <strong>${order.amount} ${order.cryptocurrency}</strong> за <strong>${order.price} ${order.fiat_currency}</strong>
             </div>
-            <div style="font-size: 12px; color: #666; margin-bottom: 4px;">
-                Общая сумма: <strong>${order.total_amount || (order.amount * order.price)} ${order.fiat_currency}</strong>
+            <div class="order-info-row">
+                <span class="order-info-label">Количество:</span>
+                <span class="order-info-value">${order.amount} ${order.cryptocurrency}</span>
             </div>
-            <div style="font-size: 12px; color: #666; margin-bottom: 4px;">
-                Способы оплаты: ${(order.payment_methods || []).join(', ') || 'Не указано'}
+            <div class="order-info-row">
+                <span class="order-info-label">Курс:</span>
+                <span class="order-info-value">${order.price} ${order.fiat_currency}</span>
+            </div>
+            <div class="order-info-row">
+                <span class="order-info-label">Общая сумма:</span>
+                <span class="order-info-value" style="color: #22c55e; font-size: 16px;">
+                    ${totalAmount.toFixed(2)} ${order.fiat_currency}
+                </span>
+            </div>
+            <div class="order-info-row">
+                <span class="order-info-label">Способы оплаты:</span>
+                <span class="order-info-value">${(order.payment_methods || []).join(', ') || 'Не указано'}</span>
             </div>
             ${order.description ? `
-            <div style="font-size: 12px; color: #666;">
-                Описание: ${order.description}
+            <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--tg-theme-section-separator-color, #e1e8ed);">
+                <div class="order-info-label" style="margin-bottom: 4px;">Описание:</div>
+                <div style="font-size: 13px; color: var(--tg-theme-text-color, #000000);">
+                    ${order.description}
+                </div>
             </div>
             ` : ''}
         </div>
@@ -1190,32 +1189,77 @@ async function submitResponse() {
         return;
     }
     
+    if (!orderId || orderId === 0) {
+        showError('Неверный ID заявки');
+        return;
+    }
+    
+    // Блокируем кнопку на время отправки
+    const submitBtn = modal.querySelector('button[onclick="submitResponse()"]');
+    const originalText = submitBtn.textContent;
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Отправка...';
+    
     try {
         console.log('[DEBUG] Отправка отклика на заявку:', { orderId, message, autoAccept });
         
-        // Пока что создаем автоматическую сделку (упрощенный вариант)
-        // В реальности здесь должна быть отдельная логика создания предложения
-        showSuccess('Отклик отправлен! Ожидайте подтверждения от контрагента');
-        closeRespondModal();
+        // Создаем сделку на основе заявки
+        const dealData = {
+            order_id: orderId,
+            message: message,
+            auto_accept: autoAccept
+        };
         
-        // В будущем здесь будет API call для создания предложения/сделки
+        const response = await fetch('/api/v1/deals', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Telegram-User-ID': currentUser.id.toString()
+            },
+            body: JSON.stringify(dealData)
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok && result.success) {
+            console.log('[INFO] Сделка создана:', result.deal);
+            showSuccess(`✅ Отклик отправлен! Сделка #${result.deal.id} создана`);
+            closeRespondModal();
+            
+            // Обновляем список заявок и сделок
+            loadOrders();
+            if (document.querySelector('.nav-item[onclick*="deals"]').classList.contains('active')) {
+                loadDeals();
+            }
+        } else {
+            console.warn('[WARN] Ошибка создания сделки:', result.error);
+            showError(result.error || 'Не удалось создать сделку');
+        }
         
     } catch (error) {
         console.error('[ERROR] Ошибка отправки отклика:', error);
-        showError('Ошибка отправки отклика');
+        showError('Ошибка сети при отправке отклика');
+    } finally {
+        // Восстанавливаем кнопку
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalText;
     }
 }
 
 // Создание модального окна профиля программно
 function createProfileModal() {
     const modalHTML = `
-        <div id="profileModal" class="modal" style="display: none;">
-            <div class="modal-content" style="max-width: 400px;">
+        <div id="profileModal" class="modal">
+            <div class="modal-content">
                 <div class="modal-header">
-                    <h3>Профиль пользователя</h3>
-                    <span class="close" onclick="closeProfileModal()">&times;</span>
+                    <div class="modal-title">👤 Профиль пользователя</div>
+                    <button class="modal-close" onclick="closeProfileModal()">&times;</button>
                 </div>
                 <div class="modal-body" id="profileModalContent">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <p>Загрузка профиля...</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1226,27 +1270,40 @@ function createProfileModal() {
 // Создание модального окна отклика программно  
 function createRespondModal() {
     const modalHTML = `
-        <div id="respondModal" class="modal" style="display: none;">
-            <div class="modal-content" style="max-width: 400px;">
+        <div id="respondModal" class="modal">
+            <div class="modal-content">
                 <div class="modal-header">
-                    <h3>Откликнуться на заявку</h3>
-                    <span class="close" onclick="closeRespondModal()">&times;</span>
+                    <div class="modal-title">🤝 Откликнуться на заявку</div>
+                    <button class="modal-close" onclick="closeRespondModal()">&times;</button>
                 </div>
                 <div class="modal-body">
-                    <div id="respondOrderDetails"></div>
-                    <div style="margin-bottom: 16px;">
-                        <label style="display: block; margin-bottom: 8px; font-weight: 600;">Сообщение контрагенту:</label>
-                        <textarea id="respondMessage" style="width: 100%; height: 60px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; resize: vertical;" maxlength="200" placeholder="Например: Готов к сделке, жду контакта"></textarea>
+                    <div id="respondOrderDetails">
+                        <div class="loading">
+                            <div class="spinner"></div>
+                            <p>Загрузка информации о заявке...</p>
+                        </div>
                     </div>
-                    <div style="margin-bottom: 16px;">
-                        <label style="display: flex; align-items: center; font-size: 14px;">
+                    
+                    <div class="form-group">
+                        <label class="form-label">Сообщение контрагенту (необязательно):</label>
+                        <textarea id="respondMessage" class="form-textarea" rows="3" maxlength="200" 
+                                  placeholder="Например: Готов к сделке, жду контакта"></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label style="display: flex; align-items: center; font-size: 14px; cursor: pointer;">
                             <input type="checkbox" id="respondAutoAccept" checked style="margin-right: 8px;">
                             Автоматически принять условия
                         </label>
                     </div>
-                    <div style="display: flex; gap: 8px;">
-                        <button onclick="closeRespondModal()" style="background: #6c757d; color: white; border: none; padding: 8px 16px; border-radius: 4px; flex: 1;">Отмена</button>
-                        <button onclick="submitResponse()" style="background: #22c55e; color: white; border: none; padding: 8px 16px; border-radius: 4px; flex: 2;">Откликнуться</button>
+                    
+                    <div class="modal-footer">
+                        <button type="button" onclick="closeRespondModal()" class="btn btn-secondary">
+                            Отмена
+                        </button>
+                        <button type="button" onclick="submitResponse()" class="btn btn-success">
+                            🚀 Откликнуться
+                        </button>
                     </div>
                 </div>
             </div>
@@ -1259,14 +1316,14 @@ function createRespondModal() {
 function closeProfileModal() {
     const modal = document.getElementById('profileModal');
     if (modal) {
-        modal.style.display = 'none';
+        modal.classList.remove('show');
     }
 }
 
 function closeRespondModal() {
     const modal = document.getElementById('respondModal');
     if (modal) {
-        modal.style.display = 'none';
+        modal.classList.remove('show');
         // Очищаем форму
         document.getElementById('respondMessage').value = '';
         document.getElementById('respondAutoAccept').checked = true;

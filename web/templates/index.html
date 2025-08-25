@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+    <title>P2P Крипто Биржа</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+    <!-- Заголовок приложения -->
+    <div class="header">
+        <h1>P2P Крипто Биржа ISA</h1>
+        <div class="user-info">Загрузка...</div>
+    </div>
+
+    <!-- Навигация -->
+    <div class="navigation">
+        <button class="nav-item active" data-view="orders">📋 Рынок</button>
+        <button class="nav-item" data-view="my-orders">📝 Заявки</button>
+        <button class="nav-item" data-view="deals">🤝 Сделки</button>
+        <button class="nav-item" data-view="profile">👤 Профиль</button>
+    </div>
+
+    <!-- Основной контент -->
+    <div class="container">
+        
+        <!-- Раздел "Все заявки" -->
+        <div id="ordersView" class="view">
+            <div class="filters">
+                <div class="filter-row">
+                    <select class="form-select filter-select" data-filter="type">
+                        <option value="">Все типы</option>
+                        <option value="buy">Покупка</option>
+                        <option value="sell">Продажа</option>
+                    </select>
+                    
+                    <select class="form-select filter-select" data-filter="cryptocurrency">
+                        <option value="">Все монеты</option>
+                        <option value="BTC">Bitcoin (BTC)</option>
+                        <option value="ETH">Ethereum (ETH)</option>
+                        <option value="USDT">Tether (USDT)</option>
+                        <option value="USDC">USD Coin (USDC)</option>
+                    </select>
+                </div>
+                
+                <button class="btn btn-primary" id="createOrderBtn">+ Создать заявку</button>
+            </div>
+            
+            <div id="ordersContent">
+                <div class="loading">
+                    <div class="spinner"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Раздел "Мои заявки" -->
+        <div id="my-ordersView" class="view hidden">
+            <!-- Контент будет загружен через JavaScript -->
+        </div>
+
+        <!-- Раздел "Сделки" -->
+        <div id="dealsView" class="view hidden">
+            <!-- Контент будет загружен через JavaScript -->
+        </div>
+
+        <!-- Раздел "Профиль" -->
+        <div id="profileView" class="view hidden">
+            <!-- Контент будет загружен через JavaScript -->
+        </div>
+    </div>
+
+    <!-- Модальное окно создания заявки -->
+    <div id="createOrderModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Создать заявку</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            
+            <form id="createOrderForm">
+                <div class="form-group">
+                    <label class="form-label">Тип операции</label>
+                    <select class="form-select" name="type" required>
+                        <option value="">Выберите тип</option>
+                        <option value="buy">Покупка</option>
+                        <option value="sell">Продажа</option>
+                    </select>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Криптовалюта</label>
+                        <select class="form-select" name="cryptocurrency" required>
+                            <option value="">Выберите монету</option>
+                            <option value="BTC">Bitcoin (BTC)</option>
+                            <option value="ETH">Ethereum (ETH)</option>
+                            <option value="USDT">Tether (USDT)</option>
+                            <option value="USDC">USD Coin (USDC)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Валюта</label>
+                        <select class="form-select" name="fiat_currency" required>
+                            <option value="RUB">Рубли (RUB)</option>
+                            <option value="USD">Доллары (USD)</option>
+                            <option value="EUR">Евро (EUR)</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Количество</label>
+                        <input type="number" class="form-input" name="amount" step="0.00000001" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Цена</label>
+                        <input type="number" class="form-input" name="price" step="0.01" required>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Способы оплаты</label>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                        <label><input type="checkbox" name="payment_methods" value="sberbank"> Сбербанк</label>
+                        <label><input type="checkbox" name="payment_methods" value="tinkoff"> Тинькофф</label>
+                        <label><input type="checkbox" name="payment_methods" value="qiwi"> QIWI</label>
+                        <label><input type="checkbox" name="payment_methods" value="yandex_money"> ЮMoney</label>
+                        <label><input type="checkbox" name="payment_methods" value="bank_transfer"> Банк</label>
+                        <label><input type="checkbox" name="payment_methods" value="cash"> Наличные</label>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Описание (необязательно)</label>
+                    <textarea class="form-textarea" name="description" rows="3" maxlength="200"></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" name="auto_match" checked> 
+                        Автоматическое сопоставление
+                    </label>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">Создать заявку</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

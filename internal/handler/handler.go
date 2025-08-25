@@ -48,6 +48,7 @@ func (h *Handler) RegisterRoutes(router *mux.Router) {
 
 	// Управление сделками
 	api.HandleFunc("/deals", h.handleGetDeals).Methods("GET")                  // Получить список сделок пользователя
+	api.HandleFunc("/deals", h.handleCreateDeal).Methods("POST")               // Создать новую сделку (отклик)
 	api.HandleFunc("/deals/{id}", h.handleGetDeal).Methods("GET")              // Получить сделку по ID
 	api.HandleFunc("/deals/{id}/confirm", h.handleConfirmDeal).Methods("POST") // Подтвердить сделку
 
@@ -370,6 +371,68 @@ func (h *Handler) handleGetDeals(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handleCreateDeal обрабатывает создание новой сделки (отклик на заявку)
+func (h *Handler) handleCreateDeal(w http.ResponseWriter, r *http.Request) {
+	log.Println("[INFO] Обработка запроса создания сделки")
+
+	// Получаем Telegram ID пользователя из заголовка
+	telegramIDStr := r.Header.Get("X-Telegram-User-ID")
+	if telegramIDStr == "" {
+		log.Printf("[WARN] Не передан Telegram ID пользователя")
+		h.sendErrorResponse(w, "Требуется авторизация", http.StatusUnauthorized)
+		return
+	}
+
+	telegramID, err := strconv.ParseInt(telegramIDStr, 10, 64)
+	if err != nil {
+		log.Printf("[WARN] Неверный формат Telegram ID: %v", err)
+		h.sendErrorResponse(w, "Неверный ID пользователя", http.StatusBadRequest)
+		return
+	}
+
+	// Читаем данные для создания сделки
+	var createDealRequest struct {
+		OrderID    int64  `json:"order_id"`
+		Message    string `json:"message"`
+		AutoAccept bool   `json:"auto_accept"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&createDealRequest); err != nil {
+		log.Printf("[WARN] Неверный формат данных сделки: %v", err)
+		h.sendErrorResponse(w, "Неверный формат данных", http.StatusBadRequest)
+		return
+	}
+
+	if createDealRequest.OrderID == 0 {
+		log.Printf("[WARN] Не указан ID заявки")
+		h.sendErrorResponse(w, "Требуется ID заявки", http.StatusBadRequest)
+		return
+	}
+
+	// Получаем пользователя по Telegram ID
+	user, err := h.service.GetUserByTelegramID(telegramID)
+	if err != nil {
+		log.Printf("[ERROR] Пользователь не найден: %v", err)
+		h.sendErrorResponse(w, "Пользователь не найден", http.StatusNotFound)
+		return
+	}
+
+	// Создаем сделку через сервис
+	deal, err := h.service.CreateDealFromOrder(user.ID, createDealRequest.OrderID, createDealRequest.Message, createDealRequest.AutoAccept)
+	if err != nil {
+		log.Printf("[WARN] Ошибка создания сделки: %v", err)
+		h.sendErrorResponse(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	log.Printf("[INFO] Создана новая сделка: ID=%d", deal.ID)
+	h.sendJSONResponse(w, map[string]interface{}{
+		"success": true,
+		"deal":    deal,
+		"message": "Сделка успешно создана",
+	})
+}
+
 // handleGetDeal обрабатывает получение сделки по ID
 func (h *Handler) handleGetDeal(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
@@ -598,170 +661,8 @@ func (h *Handler) handleHealthCheck(w http.ResponseWriter, r *http.Request) {
 
 // handleIndex обрабатывает главную страницу веб-приложения
 func (h *Handler) handleIndex(w http.ResponseWriter, r *http.Request) {
-	// Чистый HTML для Telegram мини-приложения с внешними CSS/JS файлами
-	html := `
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
-    <title>P2P Крипто Биржа</title>
-    <link rel="stylesheet" href="/static/style.css">
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-</head>
-<body>
-    <!-- Заголовок приложения -->
-    <div class="header">
-        <h1>🔄 P2P Крипто Биржа</h1>
-        <div class="user-info">Загрузка...</div>
-    </div>
-
-    <!-- Навигация -->
-    <div class="navigation">
-        <button class="nav-item active" data-view="orders">📋 Заявки</button>
-        <button class="nav-item" data-view="my-orders">📝 Мои</button>
-        <button class="nav-item" data-view="deals">🤝 Сделки</button>
-        <button class="nav-item" data-view="profile">👤 Профиль</button>
-    </div>
-
-    <!-- Основной контент -->
-    <div class="container">
-        
-        <!-- Раздел "Все заявки" -->
-        <div id="ordersView" class="view">
-            <div class="filters">
-                <div class="filter-row">
-                    <select class="form-select filter-select" data-filter="type">
-                        <option value="">Все типы</option>
-                        <option value="buy">Покупка</option>
-                        <option value="sell">Продажа</option>
-                    </select>
-                    
-                    <select class="form-select filter-select" data-filter="cryptocurrency">
-                        <option value="">Все монеты</option>
-                        <option value="BTC">Bitcoin (BTC)</option>
-                        <option value="ETH">Ethereum (ETH)</option>
-                        <option value="USDT">Tether (USDT)</option>
-                        <option value="USDC">USD Coin (USDC)</option>
-                    </select>
-                </div>
-                
-                <button class="btn btn-primary" id="createOrderBtn">+ Создать заявку</button>
-            </div>
-            
-            <div id="ordersContent">
-                <div class="loading">
-                    <div class="spinner"></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Раздел "Мои заявки" -->
-        <div id="my-ordersView" class="view hidden">
-            <!-- Контент будет загружен через JavaScript -->
-        </div>
-
-        <!-- Раздел "Сделки" -->
-        <div id="dealsView" class="view hidden">
-            <!-- Контент будет загружен через JavaScript -->
-        </div>
-
-        <!-- Раздел "Профиль" -->
-        <div id="profileView" class="view hidden">
-            <!-- Контент будет загружен через JavaScript -->
-        </div>
-    </div>
-
-    <!-- Модальное окно создания заявки -->
-    <div id="createOrderModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 class="modal-title">Создать заявку</h3>
-                <button class="modal-close">&times;</button>
-            </div>
-            
-            <form id="createOrderForm">
-                <div class="form-group">
-                    <label class="form-label">Тип операции</label>
-                    <select class="form-select" name="type" required>
-                        <option value="">Выберите тип</option>
-                        <option value="buy">Покупка</option>
-                        <option value="sell">Продажа</option>
-                    </select>
-                </div>
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="form-label">Криптовалюта</label>
-                        <select class="form-select" name="cryptocurrency" required>
-                            <option value="">Выберите монету</option>
-                            <option value="BTC">Bitcoin (BTC)</option>
-                            <option value="ETH">Ethereum (ETH)</option>
-                            <option value="USDT">Tether (USDT)</option>
-                            <option value="USDC">USD Coin (USDC)</option>
-                        </select>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Валюта</label>
-                        <select class="form-select" name="fiat_currency" required>
-                            <option value="RUB">Рубли (RUB)</option>
-                            <option value="USD">Доллары (USD)</option>
-                            <option value="EUR">Евро (EUR)</option>
-                        </select>
-                    </div>
-                </div>
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="form-label">Количество</label>
-                        <input type="number" class="form-input" name="amount" step="0.00000001" required>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Цена</label>
-                        <input type="number" class="form-input" name="price" step="0.01" required>
-                    </div>
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Способы оплаты</label>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                        <label><input type="checkbox" name="payment_methods" value="sberbank"> Сбербанк</label>
-                        <label><input type="checkbox" name="payment_methods" value="tinkoff"> Тинькофф</label>
-                        <label><input type="checkbox" name="payment_methods" value="qiwi"> QIWI</label>
-                        <label><input type="checkbox" name="payment_methods" value="yandex_money"> ЮMoney</label>
-                        <label><input type="checkbox" name="payment_methods" value="bank_transfer"> Банк</label>
-                        <label><input type="checkbox" name="payment_methods" value="cash"> Наличные</label>
-                    </div>
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Описание (необязательно)</label>
-                    <textarea class="form-textarea" name="description" rows="3" maxlength="200"></textarea>
-                </div>
-                
-                <div class="form-group">
-                    <label>
-                        <input type="checkbox" name="auto_match" checked> 
-                        Автоматическое сопоставление
-                    </label>
-                </div>
-                
-                <button type="submit" class="btn btn-primary">Создать заявку</button>
-            </form>
-        </div>
-    </div>
-
-
-
-    <script src="/static/app.js"></script>
-</body>
-</html>`
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(html))
+	// Отдаем HTML файл из папки templates
+	http.ServeFile(w, r, "web/templates/index.html")
 }
 
 // =====================================================

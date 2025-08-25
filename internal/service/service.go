@@ -867,3 +867,66 @@ func (s *Service) validateReviewData(review *model.CreateReviewRequest) error {
 
 	return nil
 }
+
+// CreateDealFromOrder создает сделку на основе заявки (отклик)
+func (s *Service) CreateDealFromOrder(userID, orderID int64, message string, autoAccept bool) (*model.Deal, error) {
+	log.Printf("[INFO] Создание сделки пользователем ID=%d на заявку ID=%d", userID, orderID)
+
+	// Получаем заявку для создания сделки
+	order, err := s.GetOrder(orderID)
+	if err != nil {
+		log.Printf("[ERROR] Заявка ID=%d не найдена: %v", orderID, err)
+		return nil, fmt.Errorf("заявка не найдена")
+	}
+
+	// Проверяем что пользователь не откликается на свою же заявку
+	if order.UserID == userID {
+		log.Printf("[WARN] Пользователь ID=%d пытается откликнуться на свою заявку ID=%d", userID, orderID)
+		return nil, fmt.Errorf("нельзя откликнуться на собственную заявку")
+	}
+
+	// Проверяем что заявка активна
+	if order.Status != model.OrderStatusActive {
+		log.Printf("[WARN] Заявка ID=%d неактивна, статус: %s", orderID, order.Status)
+		return nil, fmt.Errorf("заявка недоступна для отклика")
+	}
+
+	// Создаем сделку
+	deal := &model.Deal{
+		BuyOrderID:      orderID, // Используем заявку как основу
+		SellOrderID:     0,       // Пока не используется
+		BuyerID:         0,       // Определим ниже
+		SellerID:        0,       // Определим ниже
+		Cryptocurrency:  order.Cryptocurrency,
+		FiatCurrency:    order.FiatCurrency,
+		Amount:          order.Amount,
+		Price:           order.Price,
+		TotalAmount:     order.TotalAmount,
+		PaymentMethod:   "", // Пока пусто
+		Status:          "pending",
+		CreatedAt:       time.Now(),
+		BuyerConfirmed:  false,
+		SellerConfirmed: false,
+		Notes:           message,
+	}
+
+	// Определяем кто покупатель, а кто продавец
+	if order.Type == model.OrderTypeBuy {
+		// Заявка на покупку - автор заявки покупатель, откликнувшийся продавец
+		deal.BuyerID = order.UserID
+		deal.SellerID = userID
+	} else {
+		// Заявка на продажу - автор заявки продавец, откликнувшийся покупатель
+		deal.BuyerID = userID
+		deal.SellerID = order.UserID
+	}
+
+	// Сохраняем сделку
+	if err := s.repo.CreateDeal(deal); err != nil {
+		log.Printf("[ERROR] Ошибка создания сделки: %v", err)
+		return nil, fmt.Errorf("не удалось создать сделку")
+	}
+
+	log.Printf("[INFO] Сделка создана: ID=%d, Покупатель=%d, Продавец=%d", deal.ID, deal.BuyerID, deal.SellerID)
+	return deal, nil
+}
