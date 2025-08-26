@@ -448,20 +448,41 @@ async function loadMyOrders() {
     content.innerHTML = '<div class="loading"><div class="spinner"></div><p>Загрузка ваших заявок...</p></div>';
     
     try {
-        const response = await fetch('/api/v1/orders/my', {
-            headers: {
-                'X-Telegram-User-ID': currentUser.id.toString()
-            }
-        });
+        // Загружаем заявки и сделки параллельно
+        const [ordersResult, dealsResult] = await Promise.all([
+            fetch('/api/v1/orders/my', {
+                headers: { 'X-Telegram-User-ID': currentUser.id.toString() }
+            }).then(r => r.json()),
+            fetch('/api/v1/deals', {
+                headers: { 'X-Telegram-User-ID': currentUser.id.toString() }
+            }).then(r => r.json())
+        ]);
         
-        const result = await response.json();
-        console.log('[DEBUG] loadMyOrders: Ответ сервера:', result);
+        console.log('[DEBUG] loadMyOrders: Заявки:', ordersResult);
+        console.log('[DEBUG] loadMyOrders: Сделки:', dealsResult);
         
-        if (result.success) {
-            console.log('[DEBUG] loadMyOrders: Успешно, передаю заявки в displayMyOrders:', result.orders);
-            displayMyOrders(result.orders || []);
+        if (ordersResult.success) {
+            const orders = ordersResult.orders || [];
+            const deals = dealsResult.success ? dealsResult.deals || [] : [];
+            
+            // Фильтруем заявки: убираем те, у которых сделки завершены
+            const activeOrders = orders.filter(order => {
+                if (order.status === 'in_deal') {
+                    // Ищем сделку для этой заявки
+                    const deal = deals.find(d => d.order_id === order.id);
+                    if (deal && deal.status === 'completed') {
+                        // Если сделка завершена - не показываем заявку
+                        return false;
+                    }
+                }
+                // Показываем только активные заявки или заявки с активными сделками
+                return order.status === 'active' || order.status === 'has_responses' || order.status === 'in_deal';
+            });
+            
+            console.log('[DEBUG] loadMyOrders: Отфильтровано заявок:', activeOrders.length, 'из', orders.length);
+            displayMyOrders(activeOrders);
         } else {
-            console.error('[ERROR] loadMyOrders: Ошибка от сервера:', result.error);
+            console.error('[ERROR] loadMyOrders: Ошибка от сервера:', ordersResult.error);
             content.innerHTML = '<p class="text-center text-muted">Ошибка загрузки заявок</p>';
         }
     } catch (error) {
@@ -508,17 +529,12 @@ function displayMyOrders(orders) {
     
     console.log('[DEBUG] displayMyOrders: Переходим к группировке заявок...');
     
-    // Группируем заявки по статусу
+    // Группируем заявки по статусу (завершенные уже отфильтрованы)
     const activeOrders = orders.filter(o => o.status === 'active' || o.status === 'has_responses');
-    const inDealOrders = orders.filter(o => o.status === 'matched' || o.status === 'in_progress' || o.status === 'in_deal');
+    const inDealOrders = orders.filter(o => o.status === 'in_deal');
     
     console.log('[DEBUG] displayMyOrders: activeOrders =', activeOrders.length);
-    console.log('[DEBUG] displayMyOrders: inDealOrders =', inDealOrders.length);  
-    const completedOrders = orders.filter(o => o.status === 'completed');
-    const cancelledOrders = orders.filter(o => o.status === 'cancelled');
-    
-    console.log('[DEBUG] displayMyOrders: completedOrders =', completedOrders.length);
-    console.log('[DEBUG] displayMyOrders: cancelledOrders =', cancelledOrders.length);
+    console.log('[DEBUG] displayMyOrders: inDealOrders =', inDealOrders.length);
     console.log('[DEBUG] displayMyOrders: Начинаем формировать HTML...');
     
     let html = `
@@ -532,23 +548,7 @@ function displayMyOrders(orders) {
             </div>
     `;
     
-    // Статистика
-    html += `
-        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 20px;">
-            <div style="text-align: center; padding: 12px; background: var(--tg-theme-secondary-bg-color, #f8f9fa); border-radius: 8px;">
-                <div style="font-size: 18px; font-weight: 600; color: #22c55e;">${activeOrders.length}</div>
-                <div style="font-size: 11px; color: var(--tg-theme-hint-color, #708499);">Активные</div>
-            </div>
-            <div style="text-align: center; padding: 12px; background: var(--tg-theme-secondary-bg-color, #f8f9fa); border-radius: 8px;">
-                <div style="font-size: 18px; font-weight: 600; color: #f59e0b;">${inDealOrders.length}</div>
-                <div style="font-size: 11px; color: var(--tg-theme-hint-color, #708499);">В сделке</div>
-            </div>
-            <div style="text-align: center; padding: 12px; background: var(--tg-theme-secondary-bg-color, #f8f9fa); border-radius: 8px;">
-                <div style="font-size: 18px; font-weight: 600; color: #3b82f6;">${completedOrders.length}</div>
-                <div style="font-size: 11px; color: var(--tg-theme-hint-color, #708499);">Завершено</div>
-            </div>
-        </div>
-    `;
+    // Убираем метрики - они работают некорректно с завершенными сделками
     
     // Активные заявки
     if (activeOrders.length > 0) {
@@ -572,16 +572,7 @@ function displayMyOrders(orders) {
         html += `</div>`;
     }
     
-    // Завершенные заявки
-    if (completedOrders.length > 0) {
-        html += `<div style="margin-bottom: 20px;">
-            <h3 style="font-size: 16px; margin-bottom: 12px; color: #3b82f6;">✅ Завершенные</h3>`;
-        
-        completedOrders.slice(0, 3).forEach(order => { // Показываем только последние 3
-            html += createOrderCard(order, 'completed');
-        });
-        html += `</div>`;
-    }
+    // Завершенные заявки убираем - показываем только актуальные
     
     html += `</div>`;
     
@@ -2285,12 +2276,32 @@ async function loadMyResponses() {
     container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
     
     try {
-        const result = await apiRequest('/api/v1/responses/my', 'GET');
+        // Загружаем отклики и сделки параллельно
+        const [responsesResult, dealsResult] = await Promise.all([
+            apiRequest('/api/v1/responses/my', 'GET'),
+            apiRequest('/api/v1/deals', 'GET')
+        ]);
         
-        if (result.success) {
-            displayMyResponses(result.responses || []);
+        if (responsesResult.success) {
+            const responses = responsesResult.responses || [];
+            const deals = dealsResult.success ? dealsResult.deals || [] : [];
+            
+            // Дополняем отклики информацией о статусе сделки
+            const responsesWithDeals = responses.map(response => {
+                if (response.status === 'accepted') {
+                    // Ищем сделку для этого принятого отклика
+                    const deal = deals.find(d => d.response_id === response.id);
+                    if (deal) {
+                        response.deal_status = deal.status;
+                        response.deal_id = deal.id;
+                    }
+                }
+                return response;
+            });
+            
+            displayMyResponses(responsesWithDeals);
         } else {
-            container.innerHTML = `<div class="error-message">❌ ${result.message}</div>`;
+            container.innerHTML = `<div class="error-message">❌ ${responsesResult.message}</div>`;
         }
     } catch (error) {
         console.error('[ERROR] Ошибка загрузки моих откликов:', error);
@@ -2482,9 +2493,15 @@ function createMyResponseCard(response) {
             
             ${response.status === 'accepted' ? `
                 <div class="response-actions">
-                    <button onclick="goToDeal(${response.id})" class="btn btn-primary">
-                        🤝 Перейти к сделке
-                    </button>
+                    ${response.deal_status === 'completed' ? `
+                        <button disabled class="btn btn-secondary" style="background: #6b7280; cursor: not-allowed;">
+                            ✅ Сделка завершена
+                        </button>
+                    ` : `
+                        <button onclick="goToDeal(${response.id})" class="btn btn-primary">
+                            🤝 Перейти к сделке
+                        </button>
+                    `}
                 </div>
             ` : ''}
         </div>
