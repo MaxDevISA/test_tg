@@ -418,8 +418,8 @@ select.form-select:hover {
 /* ============================================== */
 
 /* 🎵 КНОПКИ В СДЕРЖАННОМ СТИЛЕ SPOTIFY */
-button:not(.btn-danger):not(.btn-secondary):not(.btn-warning):not(.nav-item):not(.response-tab), 
-.btn:not(.btn-danger):not(.btn-secondary):not(.btn-warning), 
+button:not(.btn-danger):not(.btn-secondary):not(.btn-warning):not(.nav-item):not(.response-tab):not(.btn-compact), 
+.btn:not(.btn-danger):not(.btn-secondary):not(.btn-warning):not(.btn-compact), 
 input[type="button"]:not(.btn-danger):not(.btn-secondary):not(.btn-warning), 
 input[type="submit"]:not(.btn-danger):not(.btn-secondary):not(.btn-warning) {
     background: #1DB954 !important;
@@ -432,8 +432,8 @@ input[type="submit"]:not(.btn-danger):not(.btn-secondary):not(.btn-warning) {
 }
 
 /* БЕЗОПАСНЫЕ HOVER ЭФФЕКТЫ БЕЗ TRANSFORM */
-button:hover:not(.btn-danger):not(.btn-secondary):not(.btn-warning):not(.nav-item):not(.response-tab), 
-.btn:hover:not(.btn-danger):not(.btn-secondary):not(.btn-warning), 
+button:hover:not(.btn-danger):not(.btn-secondary):not(.btn-warning):not(.nav-item):not(.response-tab):not(.btn-compact), 
+.btn:hover:not(.btn-danger):not(.btn-secondary):not(.btn-warning):not(.btn-compact), 
 input[type="button"]:hover:not(.btn-danger):not(.btn-secondary):not(.btn-warning), 
 input[type="submit"]:hover:not(.btn-danger):not(.btn-secondary):not(.btn-warning) {
     background: #1ed760 !important;
@@ -570,6 +570,46 @@ input[type="submit"]:hover:not(.btn-danger):not(.btn-secondary):not(.btn-warning
     border-radius: var(--radius-sm);
     text-transform: none;
     letter-spacing: 0;
+}
+
+/* КОМПАКТНЫЕ КНОПКИ ДЛЯ КАРТОЧЕК */
+.btn-compact {
+    padding: 6px 12px !important;
+    font-size: 11px !important;
+    border-radius: 6px !important;
+    text-transform: none !important;
+    letter-spacing: 0 !important;
+    min-height: 28px !important;
+    font-weight: 600 !important;
+    border: none !important;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+/* ЕДИНООБРАЗНЫЕ СТИЛИ ДЛЯ КОМПАКТНЫХ КНОПОК */
+.btn-compact.btn-primary {
+    background: #1DB954 !important;
+    color: #000000 !important;
+}
+
+.btn-compact.btn-secondary {
+    background: rgba(60, 60, 70, 0.8) !important;
+    color: #ffffff !important;
+}
+
+.btn-compact.btn-success {
+    background: #1DB954 !important;
+    color: #000000 !important;
+}
+
+.btn-compact.btn-info {
+    background: #1DB954 !important;
+    color: #000000 !important;
+}
+
+.btn-compact:hover {
+    transform: none !important;
+    box-shadow: 0 2px 8px rgba(29, 185, 84, 0.3) !important;
 }
 
 /* ============================================== */
