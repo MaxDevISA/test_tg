@@ -1078,7 +1078,7 @@ function displayMyProfile(user, stats, reviews) {
                     Создайте первую заявку и начните торговать!
                 </div>
                 <div style="margin-top: 16px;">
-                    <button onclick="document.querySelector('[data-view=\\"orders\\"]').click()" style="background: var(--tg-theme-button-color, #2481cc); color: var(--tg-theme-button-text-color, #ffffff); border: none; border-radius: 8px; padding: 10px 20px; font-size: 14px; cursor: pointer;">
+                    <button onclick="goToOrders()" style="background: var(--tg-theme-button-color, #2481cc); color: var(--tg-theme-button-text-color, #ffffff); border: none; border-radius: 8px; padding: 10px 20px; font-size: 14px; cursor: pointer;">
                         📋 Перейти к заявкам
                     </button>
                 </div>
@@ -2653,6 +2653,21 @@ async function goToDeal(responseId) {
     
     // Переключаемся на таб активных сделок
     switchResponseTab('active-deals');
+}
+
+// Переход к заявкам (рынок)
+function goToOrders() {
+    console.log('[DEBUG] Переход к заявкам (рынок)');
+    
+    // Находим и кликаем на кнопку "Рынок"
+    const ordersTab = document.querySelector('[data-view="orders"]');
+    if (ordersTab) {
+        ordersTab.click();
+        console.log('[DEBUG] Переход к рынку выполнен');
+    } else {
+        console.error('[ERROR] Кнопка рынка не найдена');
+        showAlert('❌ Ошибка перехода к заявкам');
+    }
 }
 
 // Отображение активных сделок
