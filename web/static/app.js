@@ -283,13 +283,13 @@ function displayOrders(orders) {
             
             (!isMyOrder ? 
                 '<div style="display: flex; gap: 8px; margin-top: 12px;">' +
-                    '<button onclick="openUserProfile(' + (order.user_id || 0) + ')" class="btn btn-secondary" style="flex: 1; font-size: 12px;">👤 Профиль</button>' +
-                    '<button onclick="respondToOrder(' + (order.id || 0) + ')" class="btn btn-primary" style="flex: 2; font-size: 12px;">🤝 Откликнуться</button>' +
+                    '<button onclick="openUserProfile(' + (order.user_id || 0) + ')" class="btn btn-small btn-secondary" style="flex: 1;">👤 Профиль</button>' +
+                    '<button onclick="respondToOrder(' + (order.id || 0) + ')" class="btn btn-small btn-primary" style="flex: 2;">🤝 Откликнуться</button>' +
                 '</div>' : 
                 '<div style="display: flex; gap: 8px; margin-top: 12px;">' +
-                    '<div style="background: rgba(43, 228, 126, 0.1); border: 1px solid #2BE47E; border-radius: 4px; padding: 8px 12px; font-size: 12px; color: #2BE47E; flex: 1; text-align: center; font-weight: 700;">📝 Ваша заявка</div>' +
-                    '<button onclick="editOrder(' + (order.id || 0) + ')" class="btn btn-warning" style="flex: 1; font-size: 12px;">✏️ Редактировать</button>' +
-                    '<button onclick="viewOrderResponses(' + (order.id || 0) + ')" class="btn btn-info" style="flex: 1; font-size: 12px;">👀 Отклики (' + (order.response_count || 0) + ')</button>' +
+                    '<div style="background: rgba(43, 228, 126, 0.1); border: 1px solid #2BE47E; border-radius: 4px; padding: 6px 10px; font-size: 12px; color: #2BE47E; flex: 1; text-align: center; font-weight: 700;">📝 Ваша заявка</div>' +
+                    '<button onclick="editOrder(' + (order.id || 0) + ')" class="btn btn-small btn-warning" style="flex: 1;">✏️ Редактировать</button>' +
+                    '<button onclick="viewOrderResponses(' + (order.id || 0) + ')" class="btn btn-small btn-info" style="flex: 1;">👀 Отклики (' + (order.response_count || 0) + ')</button>' +
                 '</div>'
             ) +
         '</div>';
