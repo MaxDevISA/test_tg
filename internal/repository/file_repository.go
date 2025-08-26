@@ -656,7 +656,10 @@ func (r *FileRepository) CreateDeal(deal *model.Deal) error {
 
 	// Устанавливаем ID и временные метки
 	deal.ID = dealID
-	deal.Status = "pending" // Статус "ожидает подтверждения"
+	// Сделка создается уже в процессе, не требует дополнительного подтверждения создания
+	if deal.Status == "" {
+		deal.Status = model.DealStatusInProgress // Статус "в процессе" - можно подтверждать платежи
+	}
 	deal.CreatedAt = time.Now()
 
 	// Добавляем сделку в список

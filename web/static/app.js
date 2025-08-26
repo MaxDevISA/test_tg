@@ -2540,6 +2540,13 @@ function createDealCard(deal) {
     const counterpartyDisplayUsername = isAuthor ? counterpartyUsername : authorUsername;
     const counterpartyTelegramUsername = isAuthor ? deal.counterparty_username : deal.author_username;
     
+    console.log('[DEBUG] Telegram usernames:', {
+        authorUsername: deal.author_username,
+        counterpartyUsername: deal.counterparty_username,
+        counterpartyTelegramUsername: counterpartyTelegramUsername,
+        isAuthor: isAuthor
+    });
+    
     // Статус сделки
     const statusConfig = {
         in_progress: { icon: '⏳', text: 'В процессе', color: '#f59e0b' },
@@ -2567,7 +2574,7 @@ function createDealCard(deal) {
                     ${deal.order_type === 'buy' ? '🟢 Покупка' : '🔴 Продажа'}
                 </span>
                 <div style="display: flex; align-items: center; gap: 8px;">
-                    <span style="font-size: 12px; color: #6b7280;">${userRole}</span>
+                    <span style="font-size: 12px; color: var(--tg-theme-hint-color, #708499);">${userRole}</span>
                     <span style="color: ${status.color}; font-weight: 500; font-size: 14px;">
                         ${status.icon} ${status.text}
                     </span>
@@ -2575,38 +2582,38 @@ function createDealCard(deal) {
             </div>
             
             <div style="margin-bottom: 12px;">
-                <strong style="font-size: 18px;">${deal.amount || '?'} ${deal.cryptocurrency || '?'}</strong> 
-                <span style="color: #6b7280;">за</span>
-                <strong style="font-size: 16px;">${deal.price || '?'} ${deal.fiat_currency || '?'}</strong>
+                <strong style="font-size: 18px; color: var(--tg-theme-text-color, #000);">${deal.amount || '?'} ${deal.cryptocurrency || '?'}</strong> 
+                <span style="color: var(--tg-theme-hint-color, #708499);">за</span>
+                <strong style="font-size: 16px; color: var(--tg-theme-text-color, #000);">${deal.price || '?'} ${deal.fiat_currency || '?'}</strong>
             </div>
             
-            <div style="background: #f1f5f9; padding: 12px; border-radius: 6px; margin-bottom: 12px; font-size: 13px;">
+            <div style="background: var(--tg-theme-secondary-bg-color, #f1f5f9); padding: 12px; border-radius: 6px; margin-bottom: 12px; font-size: 13px;">
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
                     <div>
-                        <div style="color: #64748b; margin-bottom: 4px;">📝 Автор:</div>
-                        <div style="font-weight: 500;">${authorName}</div>
-                        <div style="color: #3b82f6; font-size: 12px;">${authorUsername}</div>
+                        <div style="color: var(--tg-theme-hint-color, #708499); margin-bottom: 4px;">📝 Автор:</div>
+                        <div style="font-weight: 500; color: var(--tg-theme-text-color, #000);">${authorName}</div>
+                        <div style="color: var(--tg-theme-link-color, #3b82f6); font-size: 12px;">${authorUsername}</div>
                     </div>
                     <div>
-                        <div style="color: #64748b; margin-bottom: 4px;">🤝 Откликнулся:</div>
-                        <div style="font-weight: 500;">${counterpartyName}</div>
-                        <div style="color: #3b82f6; font-size: 12px;">${counterpartyUsername}</div>
+                        <div style="color: var(--tg-theme-hint-color, #708499); margin-bottom: 4px;">🤝 Откликнулся:</div>
+                        <div style="font-weight: 500; color: var(--tg-theme-text-color, #000);">${counterpartyName}</div>
+                        <div style="color: var(--tg-theme-link-color, #3b82f6); font-size: 12px;">${counterpartyUsername}</div>
                     </div>
                 </div>
                 
-                <div style="margin-top: 12px; padding-top: 8px; border-top: 1px solid #e2e8f0;">
-                    <div style="color: #64748b; margin-bottom: 4px;">💳 Способ оплаты:</div>
-                    <div style="font-weight: 500;">${(deal.payment_methods || []).join(', ') || 'Не указано'}</div>
+                <div style="margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--tg-theme-section-separator-color, #e2e8f0);">
+                    <div style="color: var(--tg-theme-hint-color, #708499); margin-bottom: 4px;">💳 Способ оплаты:</div>
+                    <div style="font-weight: 500; color: var(--tg-theme-text-color, #000);">${(deal.payment_methods || []).join(', ') || 'Не указано'}</div>
                 </div>
                 
                 <div style="margin-top: 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 12px;">
                     <div>
-                        <span style="color: #64748b;">💰 Курс:</span>
-                        <span style="font-weight: 500;">${deal.price} ${deal.fiat_currency}</span>
+                        <span style="color: var(--tg-theme-hint-color, #708499);">💰 Курс:</span>
+                        <span style="font-weight: 500; color: var(--tg-theme-text-color, #000);">${deal.price} ${deal.fiat_currency}</span>
                     </div>
                     <div>
-                        <span style="color: #64748b;">💵 Сумма:</span>
-                        <span style="font-weight: 500;">${deal.total_amount || (deal.amount * deal.price).toFixed(2)} ${deal.fiat_currency}</span>
+                        <span style="color: var(--tg-theme-hint-color, #708499);">💵 Сумма:</span>
+                        <span style="font-weight: 500; color: var(--tg-theme-text-color, #000);">${deal.total_amount || (deal.amount * deal.price).toFixed(2)} ${deal.fiat_currency}</span>
                     </div>
                 </div>
             </div>
@@ -2617,30 +2624,27 @@ function createDealCard(deal) {
                 </div>
             ` : ''}
             
-            <div style="background: #f8fafc; border-radius: 6px; padding: 8px; margin-bottom: 12px;">
-                <div style="font-size: 12px; color: #64748b; margin-bottom: 6px;">Подтверждения:</div>
+            <div style="background: var(--tg-theme-secondary-bg-color, #f8fafc); border-radius: 6px; padding: 8px; margin-bottom: 12px;">
+                <div style="font-size: 12px; color: var(--tg-theme-hint-color, #708499); margin-bottom: 6px;">Подтверждения:</div>
                 <div style="display: flex; justify-content: space-between;">
                     <div style="display: flex; align-items: center; gap: 4px;">
                         <span>${myConfirmed ? '✅' : '⏳'}</span>
-                        <span style="font-size: 12px;">Вы</span>
+                        <span style="font-size: 12px; color: var(--tg-theme-text-color, #000);">Вы</span>
                     </div>
                     <div style="display: flex; align-items: center; gap: 4px;">
                         <span>${partnerConfirmed ? '✅' : '⏳'}</span>
-                        <span style="font-size: 12px;">Контрагент</span>
+                        <span style="font-size: 12px; color: var(--tg-theme-text-color, #000);">Контрагент</span>
                     </div>
                 </div>
             </div>
             
             <div style="display: flex; gap: 8px;">
                 ${counterpartyTelegramUsername ? `
-                    <button onclick="contactCounterparty('${counterpartyTelegramUsername}')" style="background: #0088cc; color: white; border: none; padding: 8px 12px; border-radius: 4px; font-size: 12px; flex: 1;">
+                    <button onclick="contactCounterparty('${counterpartyTelegramUsername}')" style="background: var(--tg-theme-button-color, #0088cc); color: var(--tg-theme-button-text-color, white); border: none; padding: 8px 12px; border-radius: 4px; font-size: 12px; flex: 1;">
                         💬 Написать
                     </button>
                 ` : ''}
-                <button onclick="viewDealDetails(${deal.id})" style="background: #6c757d; color: white; border: none; padding: 8px 12px; border-radius: 4px; font-size: 12px; flex: 1;">
-                    📋 Детали
-                </button>
-                <button onclick="confirmPayment(${deal.id}, ${isAuthor})" style="background: ${myConfirmed ? '#6c757d' : '#22c55e'}; color: white; border: none; padding: 8px 12px; border-radius: 4px; font-size: 12px; flex: 1;" ${myConfirmed ? 'disabled' : ''}>
+                <button onclick="confirmPayment(${deal.id}, ${isAuthor})" style="background: ${myConfirmed ? 'var(--tg-theme-hint-color, #6c757d)' : 'var(--tg-theme-button-color, #22c55e)'}; color: var(--tg-theme-button-text-color, white); border: none; padding: 8px 12px; border-radius: 4px; font-size: 12px; flex: 1;" ${myConfirmed ? 'disabled' : ''}>
                     ${myConfirmed ? '✅ Подтверждено' : '✅ Подтвердить'}
                 </button>
             </div>
@@ -2687,13 +2691,7 @@ function contactCounterparty(username) {
     }
 }
 
-// Просмотр деталей сделки
-function viewDealDetails(dealId) {
-    console.log('[DEBUG] Просмотр деталей сделки:', dealId);
-    
-    // Пока что показываем базовую информацию
-    showAlert(`📋 Сделка #${dealId}\n\nДетальная информация о сделке будет добавлена в следующем обновлении.`);
-}
+
 
 // Подтверждение платежа/получения в сделке  
 async function confirmPayment(dealId, isAuthor) {
