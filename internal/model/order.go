@@ -105,6 +105,12 @@ type Deal struct {
 	CounterProof     string     `json:"counter_proof" db:"counter_proof"`         // Доказательство перевода от контрагента
 	Notes            string     `json:"notes" db:"notes"`                         // Заметки по сделке
 	DisputeReason    string     `json:"dispute_reason" db:"dispute_reason"`       // Причина спора (если есть)
+	
+	// Дополнительные поля для фронтенда (не сохраняются в БД)
+	AuthorUsername      string `json:"author_username,omitempty"`      // Telegram username автора
+	AuthorName          string `json:"author_name,omitempty"`          // Полное имя автора
+	CounterpartyUsername string `json:"counterparty_username,omitempty"` // Telegram username контрагента  
+	CounterpartyName    string `json:"counterparty_name,omitempty"`    // Полное имя контрагента
 }
 
 // OrderFilter содержит параметры для фильтрации заявок

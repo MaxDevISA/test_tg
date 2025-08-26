@@ -319,11 +319,11 @@ func (s *Service) GetOrders(filter *model.OrderFilter) ([]*model.Order, error) {
 			order.Username = user.Username
 			order.FirstName = user.FirstName
 			order.LastName = user.LastName
-			
-			log.Printf("[DEBUG] Обогащена заявка ID=%d данными пользователя: Name=%s, Username=%s", 
+
+			log.Printf("[DEBUG] Обогащена заявка ID=%d данными пользователя: Name=%s, Username=%s",
 				order.ID, order.UserName, order.Username)
 		} else {
-			log.Printf("[WARN] Не удалось получить данные пользователя ID=%d для заявки ID=%d: %v", 
+			log.Printf("[WARN] Не удалось получить данные пользователя ID=%d для заявки ID=%d: %v",
 				order.UserID, order.ID, err)
 		}
 	}
@@ -599,6 +599,39 @@ func (s *Service) GetUserDeals(userID int64) ([]*model.Deal, error) {
 	if err != nil {
 		log.Printf("[ERROR] Не удалось получить сделки пользователя ID=%d: %v", userID, err)
 		return nil, fmt.Errorf("не удалось получить сделки: %w", err)
+	}
+
+	// Обогащаем сделки данными пользователей для отображения на фронтенде
+	for _, deal := range deals {
+		// Добавляем данные автора заявки
+		if author, err := s.repo.GetUserByID(deal.AuthorID); err == nil {
+			deal.AuthorName = author.FirstName
+			if author.LastName != "" {
+				deal.AuthorName += " " + author.LastName
+			}
+			deal.AuthorUsername = author.Username
+			
+			log.Printf("[DEBUG] Обогащена сделка ID=%d данными автора: Name=%s, Username=%s", 
+				deal.ID, deal.AuthorName, deal.AuthorUsername)
+		} else {
+			log.Printf("[WARN] Не удалось получить данные автора ID=%d для сделки ID=%d: %v", 
+				deal.AuthorID, deal.ID, err)
+		}
+		
+		// Добавляем данные контрагента
+		if counterparty, err := s.repo.GetUserByID(deal.CounterpartyID); err == nil {
+			deal.CounterpartyName = counterparty.FirstName
+			if counterparty.LastName != "" {
+				deal.CounterpartyName += " " + counterparty.LastName
+			}
+			deal.CounterpartyUsername = counterparty.Username
+			
+			log.Printf("[DEBUG] Обогащена сделка ID=%d данными контрагента: Name=%s, Username=%s", 
+				deal.ID, deal.CounterpartyName, deal.CounterpartyUsername)
+		} else {
+			log.Printf("[WARN] Не удалось получить данные контрагента ID=%d для сделки ID=%d: %v", 
+				deal.CounterpartyID, deal.ID, err)
+		}
 	}
 
 	log.Printf("[INFO] Найдено сделок для пользователя ID=%d: %d", userID, len(deals))
