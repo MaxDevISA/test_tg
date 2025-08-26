@@ -217,10 +217,18 @@ function displayOrders(orders) {
         // Проверяем не наша ли это заявка
         const isMyOrder = currentInternalUserId && order.user_id === currentInternalUserId;
         
-        return '<div style="border: 1px solid var(--tg-theme-section-separator-color, #e1e8ed); ' +
-                    'border-radius: 8px; padding: 12px; margin-bottom: 8px; ' +
-                    'background: var(--tg-theme-secondary-bg-color, #f8f9fa);">' +
-            '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">' +
+        // Подсчитываем общую сумму сделки
+        const totalAmount = order.total_amount || (order.amount * order.price);
+        
+        // Определяем отображение автора
+        const authorName = order.user_name || order.author_name || `Пользователь ${order.user_id}`;
+        const authorUsername = order.user_username || order.author_username;
+        const authorDisplay = authorUsername ? 
+            `<span onclick="openTelegramProfile('${authorUsername}')" style="color: var(--tg-theme-link-color, #0088cc); cursor: pointer; text-decoration: underline;">@${authorUsername}</span>` :
+            authorName;
+        
+        return '<div class="order-card">' +
+            '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">' +
                 '<span style="font-weight: 600; color: ' + (order.type === 'buy' ? '#22c55e' : '#ef4444') + ';">' +
                     (order.type === 'buy' ? '🟢 Покупка' : '🔴 Продажа') +
                 '</span>' +
@@ -228,23 +236,44 @@ function displayOrders(orders) {
                     (order.created_at ? new Date(order.created_at).toLocaleString('ru') : 'Дата неизвестна') +
                 '</span>' +
             '</div>' +
-            '<div style="margin-bottom: 8px;">' +
-                '<strong>' + (order.amount || '?') + ' ' + (order.cryptocurrency || '?') + '</strong> за <strong>' + (order.price || '?') + ' ' + (order.fiat_currency || '?') + '</strong>' +
+            
+            '<div style="margin-bottom: 10px;">' +
+                '<div style="font-size: 14px; margin-bottom: 4px;">👤 Автор: ' + authorDisplay + '</div>' +
             '</div>' +
-            '<div style="font-size: 12px; color: var(--tg-theme-hint-color, #708499); margin-bottom: 8px;">' +
-                'Способы оплаты: ' + ((order.payment_methods || []).join(', ') || 'Не указано') +
+            
+            '<div style="background: var(--tg-theme-secondary-bg-color, #f1f5f9); padding: 10px; border-radius: 6px; margin-bottom: 10px;">' +
+                '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px;">' +
+                    '<div>' +
+                        '<span style="color: var(--tg-theme-hint-color, #708499);">📊 Объем:</span><br>' +
+                        '<strong style="color: var(--tg-theme-text-color, #000);">' + (order.amount || '?') + ' ' + (order.cryptocurrency || '?') + '</strong>' +
+                    '</div>' +
+                    '<div>' +
+                        '<span style="color: var(--tg-theme-hint-color, #708499);">💰 Курс:</span><br>' +
+                        '<strong style="color: var(--tg-theme-text-color, #000);">' + (order.price || '?') + ' ' + (order.fiat_currency || '?') + '/1' + (order.cryptocurrency || '?') + '</strong>' +
+                    '</div>' +
+                '</div>' +
+                '<div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--tg-theme-section-separator-color, #e2e8f0); font-size: 13px;">' +
+                    '<span style="color: var(--tg-theme-hint-color, #708499);">💵 Общая сумма:</span> ' +
+                    '<strong style="color: var(--tg-theme-text-color, #000); font-size: 15px;">' + totalAmount.toLocaleString('ru') + ' ' + (order.fiat_currency || '?') + '</strong>' +
+                '</div>' +
             '</div>' +
-            (order.description ? '<div style="font-size: 12px; margin-bottom: 8px;">' + order.description + '</div>' : '') +
+            
+            '<div style="font-size: 12px; color: var(--tg-theme-hint-color, #708499); margin-bottom: 10px;">' +
+                '💳 Способы оплаты: ' + ((order.payment_methods || []).join(', ') || 'Не указано') +
+            '</div>' +
+            
+            (order.description ? '<div style="font-size: 12px; margin-bottom: 10px; color: var(--tg-theme-text-color, #000);">' + order.description + '</div>' : '') +
+            
             (!isMyOrder ? 
                 '<div style="display: flex; gap: 8px; margin-top: 12px;">' +
                     '<button onclick="openUserProfile(' + (order.user_id || 0) + ')" ' +
-                           'style="background: #6c757d; color: white; border: none; padding: 6px 12px; ' +
+                           'style="background: var(--tg-theme-hint-color, #6c757d); color: var(--tg-theme-button-text-color, white); border: none; padding: 8px 12px; ' +
                            'border-radius: 4px; font-size: 12px; flex: 1;">👤 Профиль</button>' +
                     '<button onclick="respondToOrder(' + (order.id || 0) + ')" ' +
-                           'style="background: #22c55e; color: white; border: none; padding: 6px 12px; ' +
+                           'style="background: var(--tg-theme-button-color, #22c55e); color: var(--tg-theme-button-text-color, white); border: none; padding: 8px 12px; ' +
                            'border-radius: 4px; font-size: 12px; flex: 2;">🤝 Откликнуться</button>' +
                 '</div>' : 
-                '<div style="margin-top: 8px; font-size: 12px; color: #007bff;">📝 Это ваша заявка</div>'
+                '<div style="margin-top: 10px; font-size: 12px; color: var(--tg-theme-link-color, #007bff);">📝 Это ваша заявка</div>'
             ) +
         '</div>';
     }).join('');
@@ -2688,6 +2717,25 @@ function contactCounterparty(username) {
         }
     } else {
         showAlert('❌ Не удалось найти username контрагента');
+    }
+}
+
+// Открытие Telegram профиля пользователя (для кликабельного username в заявках)
+function openTelegramProfile(username) {
+    console.log('[DEBUG] Открытие Telegram профиля:', username);
+    
+    if (username) {
+        const telegramUrl = `https://t.me/${username}`;
+        
+        if (tg && tg.openTelegramLink) {
+            // Используем Telegram WebApp API для открытия ссылки
+            tg.openTelegramLink(telegramUrl);
+        } else {
+            // Резервный вариант - открываем в новом окне
+            window.open(telegramUrl, '_blank');
+        }
+    } else {
+        showAlert('❌ Не удалось найти username пользователя');
     }
 }
 
