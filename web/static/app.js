@@ -70,8 +70,9 @@ function initNavigation() {
                 loadOrders();
             } else if (viewName === 'my-orders') {
                 loadMyOrders();
-            } else if (viewName === 'deals') {
-                loadDeals();
+            } else if (viewName === 'responses') {
+                loadResponses();
+                initResponseTabs();
             } else if (viewName === 'profile') {
                 loadProfile();
             }
@@ -1613,20 +1614,19 @@ function displayOrderDetails(order) {
     `;
 }
 
-// Отправка отклика
+// Отправка отклика (обновлено для новой логики)
 async function submitResponse() {
     const modal = document.getElementById('respondModal');
     const orderId = parseInt(modal.dataset.orderId);
     const message = document.getElementById('respondMessage').value.trim();
-    const autoAccept = document.getElementById('respondAutoAccept').checked;
     
     if (!currentUser) {
-        showError('Требуется авторизация');
+        showAlert('❌ Требуется авторизация');
         return;
     }
     
     if (!orderId || orderId === 0) {
-        showError('Неверный ID заявки');
+        showAlert('❌ Неверный ID заявки');
         return;
     }
     
@@ -1637,44 +1637,37 @@ async function submitResponse() {
     submitBtn.textContent = 'Отправка...';
     
     try {
-        console.log('[DEBUG] Отправка отклика на заявку:', { orderId, message, autoAccept });
+        console.log('[DEBUG] Создание отклика на заявку:', { orderId, message });
         
-        // Создаем сделку на основе заявки
-        const dealData = {
+        // Создаем отклик через новый API
+        const result = await apiRequest('/api/v1/responses', 'POST', {
             order_id: orderId,
-            message: message,
-            auto_accept: autoAccept
-        };
-        
-        const response = await fetch('/api/v1/deals', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Telegram-User-ID': currentUser.id.toString()
-            },
-            body: JSON.stringify(dealData)
+            message: message
         });
         
-        const result = await response.json();
-        
-        if (response.ok && result.success) {
-            console.log('[INFO] Сделка создана:', result.deal);
-            showSuccess(`✅ Отклик отправлен! Сделка #${result.deal.id} создана`);
+        if (result.success) {
+            console.log('[INFO] Отклик создан:', result.response);
+            
+            if (tg) {
+                tg.showPopup({
+                    message: 'Отклик отправлен!\n\nВы откликнулись на заявку. Автор заявки рассмотрит ваш отклик и примет решение.'
+                });
+            } else {
+                showAlert('✅ Отклик успешно отправлен! Автор заявки рассмотрит ваш отклик.');
+            }
+            
             closeRespondModal();
             
-            // Обновляем список заявок и сделок
+            // Обновляем список заявок
             loadOrders();
-            if (document.querySelector('.nav-item[onclick*="deals"]').classList.contains('active')) {
-                loadDeals();
-            }
+            
         } else {
-            console.warn('[WARN] Ошибка создания сделки:', result.error);
-            showError(result.error || 'Не удалось создать сделку');
+            showAlert('❌ ' + (result.message || 'Не удалось создать отклик'));
         }
         
     } catch (error) {
-        console.error('[ERROR] Ошибка отправки отклика:', error);
-        showError('Ошибка сети при отправке отклика');
+        console.error('[ERROR] Ошибка создания отклика:', error);
+        showAlert('❌ Ошибка сети при отправке отклика');
     } finally {
         // Восстанавливаем кнопку
         submitBtn.disabled = false;
@@ -1726,12 +1719,7 @@ function createRespondModal() {
                                   placeholder="Например: Готов к сделке, жду контакта"></textarea>
                     </div>
                     
-                    <div class="form-group">
-                        <label style="display: flex; align-items: center; font-size: 14px; cursor: pointer;">
-                            <input type="checkbox" id="respondAutoAccept" checked style="margin-right: 8px;">
-                            Автоматически принять условия
-                        </label>
-                    </div>
+                    <!-- Автоматическое принятие отключено в новой логике откликов -->
                     
                     <div class="modal-footer">
                         <button type="button" onclick="closeRespondModal()" class="btn btn-secondary">
@@ -1920,13 +1908,14 @@ function displayOrderResponses(orderId, responses) {
 
 // Переход к активным сделкам по заявке
 async function viewActiveDeals(orderId) {
-    // Переключаемся на вкладку сделок
-    const dealsTab = document.querySelector('[data-view="deals"]');
-    if (dealsTab) {
-        dealsTab.click();
+    // Переключаемся на вкладку откликов
+    const responsesTab = document.querySelector('[data-view="responses"]');
+    if (responsesTab) {
+        responsesTab.click();
         
-        // Ждем загрузки и подсвечиваем связанные сделки
+        // Переключаемся на вкладку активных сделок
         setTimeout(() => {
+            switchResponseTab('active-deals');
             highlightDealsByOrder(orderId);
         }, 500);
     }
@@ -2105,4 +2094,371 @@ function showInfo(message) {
     `;
     
     document.body.insertAdjacentHTML('beforeend', alertHTML);
+}
+
+// =====================================================
+// ФУНКЦИИ ДЛЯ РАБОТЫ С ОТКЛИКАМИ
+// =====================================================
+
+// Основная функция загрузки раздела откликов
+async function loadResponses() {
+    console.log('[DEBUG] Загрузка раздела откликов');
+    
+    // По умолчанию загружаем мои отклики
+    await loadMyResponses();
+}
+
+// Инициализация табов откликов
+function initResponseTabs() {
+    console.log('[DEBUG] Инициализация табов откликов');
+    
+    const tabs = document.querySelectorAll('.response-tab');
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            const tabName = tab.dataset.tab;
+            switchResponseTab(tabName);
+        });
+    });
+}
+
+// Переключение между табами откликов
+async function switchResponseTab(tabName) {
+    console.log('[DEBUG] Переключение на таб:', tabName);
+    
+    // Обновляем активные табы
+    const tabs = document.querySelectorAll('.response-tab');
+    const contents = document.querySelectorAll('.response-tab-content');
+    
+    tabs.forEach(tab => {
+        if (tab.dataset.tab === tabName) {
+            tab.classList.add('active');
+        } else {
+            tab.classList.remove('active');
+        }
+    });
+    
+    contents.forEach(content => {
+        if (content.id === tabName + '-content') {
+            content.classList.add('active');
+        } else {
+            content.classList.remove('active');
+        }
+    });
+    
+    // Загружаем данные для активного таба
+    switch(tabName) {
+        case 'my-responses':
+            await loadMyResponses();
+            break;
+        case 'responses-to-my':
+            await loadResponsesToMyOrders();
+            break;
+        case 'active-deals':
+            await loadActiveDeals();
+            break;
+    }
+}
+
+// Загрузка моих откликов
+async function loadMyResponses() {
+    console.log('[DEBUG] Загрузка моих откликов');
+    
+    const container = document.getElementById('myResponsesList');
+    container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+    
+    try {
+        const result = await apiRequest('/api/v1/responses/my', 'GET');
+        
+        if (result.success) {
+            displayMyResponses(result.responses || []);
+        } else {
+            container.innerHTML = `<div class="error-message">❌ ${result.message}</div>`;
+        }
+    } catch (error) {
+        console.error('[ERROR] Ошибка загрузки моих откликов:', error);
+        container.innerHTML = '<div class="error-message">❌ Ошибка загрузки откликов</div>';
+    }
+}
+
+// Загрузка откликов на мои заявки
+async function loadResponsesToMyOrders() {
+    console.log('[DEBUG] Загрузка откликов на мои заявки');
+    
+    const container = document.getElementById('responsesToMyList');
+    container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+    
+    try {
+        const result = await apiRequest('/api/v1/responses/to-my', 'GET');
+        
+        if (result.success) {
+            displayResponsesToMyOrders(result.responses || []);
+        } else {
+            container.innerHTML = `<div class="error-message">❌ ${result.message}</div>`;
+        }
+    } catch (error) {
+        console.error('[ERROR] Ошибка загрузки откликов на заявки:', error);
+        container.innerHTML = '<div class="error-message">❌ Ошибка загрузки откликов</div>';
+    }
+}
+
+// Загрузка активных сделок
+async function loadActiveDeals() {
+    console.log('[DEBUG] Загрузка активных сделок');
+    
+    const container = document.getElementById('activeDealsList');
+    container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+    
+    try {
+        const result = await apiRequest('/api/v1/deals', 'GET');
+        
+        if (result.success) {
+            displayActiveDeals(result.deals || []);
+        } else {
+            container.innerHTML = `<div class="error-message">❌ ${result.message}</div>`;
+        }
+    } catch (error) {
+        console.error('[ERROR] Ошибка загрузки активных сделок:', error);
+        container.innerHTML = '<div class="error-message">❌ Ошибка загрузки сделок</div>';
+    }
+}
+
+// Отображение моих откликов
+function displayMyResponses(responses) {
+    console.log('[DEBUG] Отображение моих откликов:', responses.length);
+    
+    const container = document.getElementById('myResponsesList');
+    
+    if (!responses || responses.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">📤</div>
+                <h3>Пока нет откликов</h3>
+                <p>Перейдите в раздел "Рынок" и откликнитесь на интересную заявку</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // Группируем отклики по статусу
+    const waiting = responses.filter(r => r.status === 'waiting');
+    const accepted = responses.filter(r => r.status === 'accepted');
+    const rejected = responses.filter(r => r.status === 'rejected');
+    
+    let html = '';
+    
+    if (waiting.length > 0) {
+        html += `<div class="response-group">
+            <h3 class="group-title">🟡 Ожидают рассмотрения (${waiting.length})</h3>
+            ${waiting.map(response => createMyResponseCard(response)).join('')}
+        </div>`;
+    }
+    
+    if (accepted.length > 0) {
+        html += `<div class="response-group">
+            <h3 class="group-title">🟢 Приняты (${accepted.length})</h3>
+            ${accepted.map(response => createMyResponseCard(response)).join('')}
+        </div>`;
+    }
+    
+    if (rejected.length > 0) {
+        html += `<div class="response-group">
+            <h3 class="group-title">🔴 Отклонены (${rejected.length})</h3>
+            ${rejected.map(response => createMyResponseCard(response)).join('')}
+        </div>`;
+    }
+    
+    container.innerHTML = html;
+}
+
+// Отображение откликов на мои заявки
+function displayResponsesToMyOrders(responses) {
+    console.log('[DEBUG] Отображение откликов на мои заявки:', responses.length);
+    
+    const container = document.getElementById('responsesToMyList');
+    
+    if (!responses || responses.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">📥</div>
+                <h3>Пока нет откликов</h3>
+                <p>Создайте заявку и ждите откликов от других пользователей</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // Группируем отклики по заявкам
+    const responsesByOrder = {};
+    responses.forEach(response => {
+        if (!responsesByOrder[response.order_id]) {
+            responsesByOrder[response.order_id] = [];
+        }
+        responsesByOrder[response.order_id].push(response);
+    });
+    
+    let html = '';
+    Object.entries(responsesByOrder).forEach(([orderId, orderResponses]) => {
+        const waitingResponses = orderResponses.filter(r => r.status === 'waiting');
+        
+        html += `<div class="order-responses-group">
+            <div class="order-info">
+                <h4>📋 Заявка #${orderId}</h4>
+                <span class="response-count">${waitingResponses.length} новых откликов</span>
+            </div>
+            ${orderResponses.map(response => createOrderResponseCard(response)).join('')}
+        </div>`;
+    });
+    
+    container.innerHTML = html;
+}
+
+// Создание карточки моего отклика
+function createMyResponseCard(response) {
+    const statusConfig = {
+        waiting: { icon: '🟡', text: 'Ожидает', color: '#f59e0b' },
+        accepted: { icon: '🟢', text: 'Принят', color: '#22c55e' },
+        rejected: { icon: '🔴', text: 'Отклонен', color: '#ef4444' }
+    };
+    
+    const status = statusConfig[response.status] || statusConfig.waiting;
+    const createdDate = new Date(response.created_at).toLocaleString('ru-RU');
+    
+    return `
+        <div class="response-card my-response">
+            <div class="response-header">
+                <div class="response-status" style="color: ${status.color}">
+                    ${status.icon} ${status.text}
+                </div>
+                <div class="response-date">${createdDate}</div>
+            </div>
+            
+            <div class="response-order-info">
+                <div class="order-title">Заявка #${response.order_id}</div>
+                <!-- Здесь можно добавить детали заявки -->
+            </div>
+            
+            ${response.message ? `
+                <div class="response-message">
+                    <strong>💬 Ваше сообщение:</strong>
+                    <p>${response.message}</p>
+                </div>
+            ` : ''}
+            
+            ${response.status === 'accepted' ? `
+                <div class="response-actions">
+                    <button onclick="goToDeal(${response.id})" class="btn btn-primary">
+                        🤝 Перейти к сделке
+                    </button>
+                </div>
+            ` : ''}
+        </div>
+    `;
+}
+
+// Создание карточки отклика на мою заявку
+function createOrderResponseCard(response) {
+    const statusConfig = {
+        waiting: { icon: '🟡', text: 'Ожидает', color: '#f59e0b' },
+        accepted: { icon: '🟢', text: 'Принят', color: '#22c55e' },
+        rejected: { icon: '🔴', text: 'Отклонен', color: '#ef4444' }
+    };
+    
+    const status = statusConfig[response.status] || statusConfig.waiting;
+    const createdDate = new Date(response.created_at).toLocaleString('ru-RU');
+    
+    return `
+        <div class="response-card order-response">
+            <div class="response-header">
+                <div class="response-user">👤 Пользователь #${response.user_id}</div>
+                <div class="response-status" style="color: ${status.color}">
+                    ${status.icon} ${status.text}
+                </div>
+            </div>
+            
+            <div class="response-date">${createdDate}</div>
+            
+            ${response.message ? `
+                <div class="response-message">
+                    <strong>💬 Сообщение:</strong>
+                    <p>${response.message}</p>
+                </div>
+            ` : ''}
+            
+            ${response.status === 'waiting' ? `
+                <div class="response-actions">
+                    <button onclick="acceptResponse(${response.id})" class="btn btn-success">
+                        ✅ Принять
+                    </button>
+                    <button onclick="rejectResponse(${response.id})" class="btn btn-danger">
+                        ❌ Отклонить
+                    </button>
+                </div>
+            ` : ''}
+        </div>
+    `;
+}
+
+// Принятие отклика
+async function acceptResponse(responseId) {
+    console.log('[DEBUG] Принятие отклика:', responseId);
+    
+    try {
+        const result = await apiRequest(`/api/v1/responses/${responseId}/accept`, 'POST');
+        
+        if (result.success) {
+            showAlert('✅ Отклик принят! Создана сделка.');
+            // Перезагружаем отклики на мои заявки
+            await loadResponsesToMyOrders();
+            // Также загружаем активные сделки
+            await loadActiveDeals();
+        } else {
+            showAlert('❌ ' + (result.message || 'Ошибка при принятии отклика'));
+        }
+    } catch (error) {
+        console.error('[ERROR] Ошибка принятия отклика:', error);
+        showAlert('❌ Ошибка при принятии отклика');
+    }
+}
+
+// Отклонение отклика
+async function rejectResponse(responseId) {
+    console.log('[DEBUG] Отклонение отклика:', responseId);
+    
+    try {
+        const result = await apiRequest(`/api/v1/responses/${responseId}/reject`, 'POST');
+        
+        if (result.success) {
+            showAlert('❌ Отклик отклонен');
+            // Перезагружаем отклики на мои заявки
+            await loadResponsesToMyOrders();
+        } else {
+            showAlert('❌ ' + (result.message || 'Ошибка при отклонении отклика'));
+        }
+    } catch (error) {
+        console.error('[ERROR] Ошибка отклонения отклика:', error);
+        showAlert('❌ Ошибка при отклонении отклика');
+    }
+}
+
+// Переход к сделке
+async function goToDeal(responseId) {
+    console.log('[DEBUG] Переход к сделке по отклику:', responseId);
+    
+    // Переключаемся на таб активных сделок
+    switchResponseTab('active-deals');
+}
+
+// Отображение активных сделок (заглушка, будет доработано)
+function displayActiveDeals(deals) {
+    console.log('[DEBUG] Отображение активных сделок:', deals.length);
+    
+    const container = document.getElementById('activeDealsList');
+    
+    container.innerHTML = `
+        <div class="empty-state">
+            <div class="empty-icon">⏰</div>
+            <h3>Функция в разработке</h3>
+            <p>Активные сделки с таймером будут добавлены в следующем обновлении</p>
+        </div>
+    `;
 }

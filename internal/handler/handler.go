@@ -52,6 +52,13 @@ func (h *Handler) RegisterRoutes(router *mux.Router) {
 	api.HandleFunc("/deals/{id}", h.handleGetDeal).Methods("GET")              // Получить сделку по ID
 	api.HandleFunc("/deals/{id}/confirm", h.handleConfirmDeal).Methods("POST") // Подтвердить сделку
 
+	// Система откликов
+	api.HandleFunc("/responses", h.handleCreateResponse).Methods("POST")              // Создать отклик на заявку
+	api.HandleFunc("/responses/my", h.handleGetMyResponses).Methods("GET")            // Получить мои отклики
+	api.HandleFunc("/responses/to-my", h.handleGetResponsesToMyOrders).Methods("GET") // Получить отклики на мои заявки
+	api.HandleFunc("/responses/{id}/accept", h.handleAcceptResponse).Methods("POST")  // Принять отклик
+	api.HandleFunc("/responses/{id}/reject", h.handleRejectResponse).Methods("POST")  // Отклонить отклик
+
 	// Система отзывов и рейтингов
 	api.HandleFunc("/reviews", h.handleGetReviews).Methods("GET")                // Получить отзывы пользователя
 	api.HandleFunc("/reviews", h.handleCreateReview).Methods("POST")             // Оставить отзыв
@@ -398,7 +405,7 @@ func (h *Handler) handleGetDeals(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleCreateDeal обрабатывает создание новой сделки (отклик на заявку)
+// handleCreateDeal обрабатывает создание нового отклика на заявку (в новой логике)
 func (h *Handler) handleCreateDeal(w http.ResponseWriter, r *http.Request) {
 	log.Println("[INFO] Обработка запроса создания сделки")
 
@@ -444,19 +451,24 @@ func (h *Handler) handleCreateDeal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Создаем сделку через сервис
-	deal, err := h.service.CreateDealFromOrder(user.ID, createDealRequest.OrderID, createDealRequest.Message, createDealRequest.AutoAccept)
+	// Создаем отклик через новую систему
+	responseData := &model.CreateResponseRequest{
+		OrderID: createDealRequest.OrderID,
+		Message: createDealRequest.Message,
+	}
+
+	response, err := h.service.CreateResponse(user.ID, responseData)
 	if err != nil {
-		log.Printf("[WARN] Ошибка создания сделки: %v", err)
+		log.Printf("[WARN] Ошибка создания отклика: %v", err)
 		h.sendErrorResponse(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	log.Printf("[INFO] Создана новая сделка: ID=%d", deal.ID)
+	log.Printf("[INFO] Создан новый отклик: ID=%d", response.ID)
 	h.sendJSONResponse(w, map[string]interface{}{
-		"success": true,
-		"deal":    deal,
-		"message": "Сделка успешно создана",
+		"success":  true,
+		"response": response,
+		"message":  "Отклик успешно создан",
 	})
 }
 
@@ -826,4 +838,280 @@ func (h *Handler) sendErrorResponse(w http.ResponseWriter, message string, statu
 	if err := json.NewEncoder(w).Encode(errorResponse); err != nil {
 		log.Printf("[ERROR] Ошибка кодирования JSON ошибки: %v", err)
 	}
+}
+
+// =====================================================
+// ОБРАБОТЧИКИ ДЛЯ ОТКЛИКОВ
+// =====================================================
+
+// handleCreateResponse создает новый отклик на заявку
+func (h *Handler) handleCreateResponse(w http.ResponseWriter, r *http.Request) {
+	log.Printf("[INFO] %s %s - Создание отклика", r.Method, r.URL.Path)
+
+	// Получаем данные пользователя
+	// Извлекаем пользователя из заголовка Telegram
+	telegramUserIDStr := r.Header.Get("X-Telegram-User-ID")
+	if telegramUserIDStr == "" {
+		log.Printf("[ERROR] Отсутствует заголовок X-Telegram-User-ID")
+		http.Error(w, "Не авторизован", http.StatusUnauthorized)
+		return
+	}
+
+	telegramUserID, err := strconv.ParseInt(telegramUserIDStr, 10, 64)
+	if err != nil {
+		log.Printf("[ERROR] Неверный формат Telegram User ID: %s", telegramUserIDStr)
+		http.Error(w, "Неверный формат пользователя", http.StatusBadRequest)
+		return
+	}
+
+	// Получаем пользователя по Telegram ID
+	user, err := h.service.GetUserByTelegramID(telegramUserID)
+	if err != nil {
+		log.Printf("[ERROR] Ошибка получения пользователя: %v", err)
+		http.Error(w, "Не авторизован", http.StatusUnauthorized)
+		return
+	}
+
+	// Декодируем запрос
+	var requestData model.CreateResponseRequest
+	if err := json.NewDecoder(r.Body).Decode(&requestData); err != nil {
+		log.Printf("[ERROR] Некорректный JSON в запросе создания отклика: %v", err)
+		http.Error(w, "Некорректный формат данных", http.StatusBadRequest)
+		return
+	}
+
+	// Создаем отклик через сервис
+	response, err := h.service.CreateResponse(user.ID, &requestData)
+	if err != nil {
+		log.Printf("[ERROR] Ошибка создания отклика: %v", err)
+		h.sendJSONResponse(w, map[string]interface{}{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+
+	// Успешный ответ
+	h.sendJSONResponse(w, map[string]interface{}{
+		"success":  true,
+		"message":  "Отклик успешно создан",
+		"response": response,
+	})
+
+	log.Printf("[INFO] Отклик создан: ID=%d, UserID=%d, OrderID=%d",
+		response.ID, user.ID, requestData.OrderID)
+}
+
+// handleGetMyResponses получает отклики пользователя
+func (h *Handler) handleGetMyResponses(w http.ResponseWriter, r *http.Request) {
+	log.Printf("[INFO] %s %s - Получение моих откликов", r.Method, r.URL.Path)
+
+	// Получаем данные пользователя
+	// Извлекаем пользователя из заголовка Telegram
+	telegramUserIDStr := r.Header.Get("X-Telegram-User-ID")
+	if telegramUserIDStr == "" {
+		log.Printf("[ERROR] Отсутствует заголовок X-Telegram-User-ID")
+		http.Error(w, "Не авторизован", http.StatusUnauthorized)
+		return
+	}
+
+	telegramUserID, err := strconv.ParseInt(telegramUserIDStr, 10, 64)
+	if err != nil {
+		log.Printf("[ERROR] Неверный формат Telegram User ID: %s", telegramUserIDStr)
+		http.Error(w, "Неверный формат пользователя", http.StatusBadRequest)
+		return
+	}
+
+	// Получаем пользователя по Telegram ID
+	user, err := h.service.GetUserByTelegramID(telegramUserID)
+	if err != nil {
+		log.Printf("[ERROR] Ошибка получения пользователя: %v", err)
+		http.Error(w, "Не авторизован", http.StatusUnauthorized)
+		return
+	}
+
+	// Получаем отклики через сервис
+	responses, err := h.service.GetMyResponses(user.ID)
+	if err != nil {
+		log.Printf("[ERROR] Ошибка получения откликов: %v", err)
+		h.sendJSONResponse(w, map[string]interface{}{
+			"success": false,
+			"message": "Не удалось загрузить отклики",
+		})
+		return
+	}
+
+	// Успешный ответ
+	h.sendJSONResponse(w, map[string]interface{}{
+		"success":   true,
+		"responses": responses,
+		"count":     len(responses),
+	})
+
+	log.Printf("[INFO] Возвращено откликов пользователя ID=%d: %d", user.ID, len(responses))
+}
+
+// handleGetResponsesToMyOrders получает отклики на заявки пользователя
+func (h *Handler) handleGetResponsesToMyOrders(w http.ResponseWriter, r *http.Request) {
+	log.Printf("[INFO] %s %s - Получение откликов на мои заявки", r.Method, r.URL.Path)
+
+	// Получаем данные пользователя
+	// Извлекаем пользователя из заголовка Telegram
+	telegramUserIDStr := r.Header.Get("X-Telegram-User-ID")
+	if telegramUserIDStr == "" {
+		log.Printf("[ERROR] Отсутствует заголовок X-Telegram-User-ID")
+		http.Error(w, "Не авторизован", http.StatusUnauthorized)
+		return
+	}
+
+	telegramUserID, err := strconv.ParseInt(telegramUserIDStr, 10, 64)
+	if err != nil {
+		log.Printf("[ERROR] Неверный формат Telegram User ID: %s", telegramUserIDStr)
+		http.Error(w, "Неверный формат пользователя", http.StatusBadRequest)
+		return
+	}
+
+	// Получаем пользователя по Telegram ID
+	user, err := h.service.GetUserByTelegramID(telegramUserID)
+	if err != nil {
+		log.Printf("[ERROR] Ошибка получения пользователя: %v", err)
+		http.Error(w, "Не авторизован", http.StatusUnauthorized)
+		return
+	}
+
+	// Получаем отклики через сервис
+	responses, err := h.service.GetResponsesToMyOrders(user.ID)
+	if err != nil {
+		log.Printf("[ERROR] Ошибка получения откликов на заявки: %v", err)
+		h.sendJSONResponse(w, map[string]interface{}{
+			"success": false,
+			"message": "Не удалось загрузить отклики",
+		})
+		return
+	}
+
+	// Успешный ответ
+	h.sendJSONResponse(w, map[string]interface{}{
+		"success":   true,
+		"responses": responses,
+		"count":     len(responses),
+	})
+
+	log.Printf("[INFO] Возвращено откликов на заявки автора ID=%d: %d", user.ID, len(responses))
+}
+
+// handleAcceptResponse принимает отклик
+func (h *Handler) handleAcceptResponse(w http.ResponseWriter, r *http.Request) {
+	log.Printf("[INFO] %s %s - Принятие отклика", r.Method, r.URL.Path)
+
+	// Получаем данные пользователя
+	// Извлекаем пользователя из заголовка Telegram
+	telegramUserIDStr := r.Header.Get("X-Telegram-User-ID")
+	if telegramUserIDStr == "" {
+		log.Printf("[ERROR] Отсутствует заголовок X-Telegram-User-ID")
+		http.Error(w, "Не авторизован", http.StatusUnauthorized)
+		return
+	}
+
+	telegramUserID, err := strconv.ParseInt(telegramUserIDStr, 10, 64)
+	if err != nil {
+		log.Printf("[ERROR] Неверный формат Telegram User ID: %s", telegramUserIDStr)
+		http.Error(w, "Неверный формат пользователя", http.StatusBadRequest)
+		return
+	}
+
+	// Получаем пользователя по Telegram ID
+	user, err := h.service.GetUserByTelegramID(telegramUserID)
+	if err != nil {
+		log.Printf("[ERROR] Ошибка получения пользователя: %v", err)
+		http.Error(w, "Не авторизован", http.StatusUnauthorized)
+		return
+	}
+
+	// Получаем ID отклика из URL
+	vars := mux.Vars(r)
+	responseIDStr := vars["id"]
+	responseID, err := strconv.ParseInt(responseIDStr, 10, 64)
+	if err != nil {
+		log.Printf("[ERROR] Неверный ID отклика: %s", responseIDStr)
+		http.Error(w, "Неверный ID отклика", http.StatusBadRequest)
+		return
+	}
+
+	// Принимаем отклик через сервис
+	deal, err := h.service.AcceptResponse(responseID, user.ID)
+	if err != nil {
+		log.Printf("[ERROR] Ошибка принятия отклика: %v", err)
+		h.sendJSONResponse(w, map[string]interface{}{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+
+	// Успешный ответ
+	h.sendJSONResponse(w, map[string]interface{}{
+		"success": true,
+		"message": "Отклик принят, создана сделка",
+		"deal":    deal,
+	})
+
+	log.Printf("[INFO] Отклик принят: ResponseID=%d, DealID=%d", responseID, deal.ID)
+}
+
+// handleRejectResponse отклоняет отклик
+func (h *Handler) handleRejectResponse(w http.ResponseWriter, r *http.Request) {
+	log.Printf("[INFO] %s %s - Отклонение отклика", r.Method, r.URL.Path)
+
+	// Получаем данные пользователя
+	// Извлекаем пользователя из заголовка Telegram
+	telegramUserIDStr := r.Header.Get("X-Telegram-User-ID")
+	if telegramUserIDStr == "" {
+		log.Printf("[ERROR] Отсутствует заголовок X-Telegram-User-ID")
+		http.Error(w, "Не авторизован", http.StatusUnauthorized)
+		return
+	}
+
+	telegramUserID, err := strconv.ParseInt(telegramUserIDStr, 10, 64)
+	if err != nil {
+		log.Printf("[ERROR] Неверный формат Telegram User ID: %s", telegramUserIDStr)
+		http.Error(w, "Неверный формат пользователя", http.StatusBadRequest)
+		return
+	}
+
+	// Получаем пользователя по Telegram ID
+	user, err := h.service.GetUserByTelegramID(telegramUserID)
+	if err != nil {
+		log.Printf("[ERROR] Ошибка получения пользователя: %v", err)
+		http.Error(w, "Не авторизован", http.StatusUnauthorized)
+		return
+	}
+
+	// Получаем ID отклика из URL
+	vars := mux.Vars(r)
+	responseIDStr := vars["id"]
+	responseID, err := strconv.ParseInt(responseIDStr, 10, 64)
+	if err != nil {
+		log.Printf("[ERROR] Неверный ID отклика: %s", responseIDStr)
+		http.Error(w, "Неверный ID отклика", http.StatusBadRequest)
+		return
+	}
+
+	// Отклоняем отклик через сервис
+	if err := h.service.RejectResponse(responseID, user.ID, "Отклонен автором"); err != nil {
+		log.Printf("[ERROR] Ошибка отклонения отклика: %v", err)
+		h.sendJSONResponse(w, map[string]interface{}{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+
+	// Успешный ответ
+	h.sendJSONResponse(w, map[string]interface{}{
+		"success": true,
+		"message": "Отклик отклонен",
+	})
+
+	log.Printf("[INFO] Отклик отклонен: ResponseID=%d", responseID)
 }

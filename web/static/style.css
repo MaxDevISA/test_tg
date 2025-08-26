@@ -503,3 +503,294 @@ body {
         margin-bottom: 8px;
     }
 }
+
+/* =====================================================
+ * СТИЛИ ДЛЯ СИСТЕМЫ ОТКЛИКОВ  
+ * ===================================================== */
+
+/* Табы откликов */
+.response-tabs {
+    display: flex;
+    background: var(--tg-theme-secondary-bg-color, #f1f3f4);
+    border-radius: 8px;
+    padding: 4px;
+    margin-bottom: 16px;
+    overflow-x: auto;
+}
+
+.response-tab {
+    flex: 1;
+    min-width: 80px;
+    padding: 8px 12px;
+    border: none;
+    background: transparent;
+    color: var(--tg-theme-hint-color, #708499);
+    font-size: 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+}
+
+.response-tab.active {
+    background: var(--tg-theme-bg-color, #ffffff);
+    color: var(--tg-theme-link-color, #2481cc);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.response-tab:hover:not(.active) {
+    background: rgba(36, 129, 204, 0.1);
+}
+
+.tab-icon {
+    font-size: 14px;
+}
+
+.tab-text {
+    font-size: 10px;
+    font-weight: 500;
+}
+
+/* Контент табов */
+.response-content {
+    position: relative;
+}
+
+.response-tab-content {
+    display: none;
+}
+
+.response-tab-content.active {
+    display: block;
+}
+
+/* Заголовки разделов */
+.section-header {
+    text-align: center;
+    margin-bottom: 20px;
+    padding: 16px;
+    background: var(--tg-theme-secondary-bg-color, #f8f9fa);
+    border-radius: 12px;
+}
+
+.section-header h2 {
+    font-size: 18px;
+    margin-bottom: 8px;
+    color: var(--tg-theme-text-color, #000000);
+}
+
+.section-description {
+    font-size: 13px;
+    color: var(--tg-theme-hint-color, #708499);
+    margin: 0;
+}
+
+/* Пустые состояния */
+.empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--tg-theme-hint-color, #708499);
+}
+
+.empty-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    opacity: 0.6;
+}
+
+.empty-state h3 {
+    font-size: 16px;
+    margin-bottom: 8px;
+    color: var(--tg-theme-text-color, #000000);
+}
+
+.empty-state p {
+    font-size: 14px;
+    line-height: 1.4;
+    margin: 0;
+}
+
+/* Группы откликов */
+.response-group {
+    margin-bottom: 24px;
+}
+
+.group-title {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--tg-theme-section-separator-color, #e1e8ed);
+}
+
+.order-responses-group {
+    margin-bottom: 20px;
+    border: 1px solid var(--tg-theme-section-separator-color, #e1e8ed);
+    border-radius: 12px;
+    padding: 16px;
+    background: var(--tg-theme-bg-color, #ffffff);
+}
+
+.order-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--tg-theme-section-separator-color, #e1e8ed);
+}
+
+.order-info h4 {
+    font-size: 14px;
+    color: var(--tg-theme-text-color, #000000);
+    margin: 0;
+}
+
+.response-count {
+    font-size: 12px;
+    color: var(--tg-theme-link-color, #2481cc);
+    background: rgba(36, 129, 204, 0.1);
+    padding: 4px 8px;
+    border-radius: 12px;
+}
+
+/* Карточки откликов */
+.response-card {
+    border: 1px solid var(--tg-theme-section-separator-color, #e1e8ed);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 12px;
+    background: var(--tg-theme-bg-color, #ffffff);
+    transition: all 0.2s;
+}
+
+.response-card:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.response-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 12px;
+}
+
+.response-user {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--tg-theme-text-color, #000000);
+}
+
+.response-status {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 8px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.response-date {
+    font-size: 11px;
+    color: var(--tg-theme-hint-color, #708499);
+    margin-bottom: 8px;
+}
+
+.response-order-info {
+    margin-bottom: 12px;
+}
+
+.order-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--tg-theme-link-color, #2481cc);
+}
+
+.response-message {
+    margin-bottom: 12px;
+    padding: 12px;
+    background: var(--tg-theme-secondary-bg-color, #f8f9fa);
+    border-radius: 8px;
+    border-left: 3px solid var(--tg-theme-link-color, #2481cc);
+}
+
+.response-message strong {
+    font-size: 12px;
+    color: var(--tg-theme-hint-color, #708499);
+    display: block;
+    margin-bottom: 4px;
+}
+
+.response-message p {
+    font-size: 14px;
+    color: var(--tg-theme-text-color, #000000);
+    margin: 0;
+    line-height: 1.4;
+}
+
+/* Действия с откликами */
+.response-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.btn-success {
+    background: #22c55e;
+    color: #ffffff;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex: 1;
+}
+
+.btn-success:hover {
+    background: #16a34a;
+}
+
+.btn-danger {
+    background: #ef4444;
+    color: #ffffff;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    flex: 1;
+}
+
+.btn-danger:hover {
+    background: #dc2626;
+}
+
+/* Адаптивность для табов */
+@media (max-width: 360px) {
+    .response-tab {
+        padding: 6px 8px;
+        min-width: 70px;
+    }
+    
+    .tab-text {
+        font-size: 9px;
+    }
+    
+    .tab-icon {
+        font-size: 12px;
+    }
+    
+    .response-actions {
+        flex-direction: column;
+    }
+    
+    .btn-success,
+    .btn-danger {
+        flex: none;
+    }
+}

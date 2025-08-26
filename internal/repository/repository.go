@@ -204,7 +204,7 @@ func (r *Repository) CreateOrder(order *model.Order) error {
 		order.PaymentMethods, // Gorilla/mux автоматически преобразует []string в JSONB
 		order.Description,
 		order.ExpiresAt,
-		order.AutoMatch,
+		false, // AutoMatch больше не используется в новой логике откликов
 	).Scan(
 		&order.ID,
 		&order.CreatedAt,
@@ -325,11 +325,10 @@ func (r *Repository) GetOrdersByFilter(filter *model.OrderFilter) ([]*model.Orde
 			&order.CreatedAt,
 			&order.UpdatedAt,
 			&order.ExpiresAt,
-			&order.MatchedUserID,
-			&order.MatchedAt,
 			&order.CompletedAt,
 			&order.IsActive,
-			&order.AutoMatch,
+			&order.ResponseCount,
+			&order.AcceptedResponseID,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("не удалось сканировать заявку: %w", err)
@@ -399,16 +398,16 @@ func (r *Repository) CreateDeal(deal *model.Deal) error {
 	// Выполняем запрос и получаем ID и время создания
 	err := r.db.QueryRow(
 		query,
-		deal.BuyOrderID,
-		deal.SellOrderID,
-		deal.BuyerID,
-		deal.SellerID,
+		deal.ResponseID,
+		deal.OrderID,
+		deal.AuthorID,
+		deal.CounterpartyID,
 		deal.Cryptocurrency,
 		deal.FiatCurrency,
 		deal.Amount,
 		deal.Price,
 		deal.TotalAmount,
-		deal.PaymentMethod,
+		deal.PaymentMethods, // Теперь это массив строк
 		deal.Status,
 	).Scan(&deal.ID, &deal.CreatedAt)
 
@@ -416,8 +415,8 @@ func (r *Repository) CreateDeal(deal *model.Deal) error {
 		return fmt.Errorf("не удалось создать сделку: %w", err)
 	}
 
-	log.Printf("[INFO] Создана новая сделка: ID=%d, BuyerID=%d, SellerID=%d, Amount=%.8f %s",
-		deal.ID, deal.BuyerID, deal.SellerID, deal.Amount, deal.Cryptocurrency)
+	log.Printf("[INFO] Создана новая сделка: ID=%d, AuthorID=%d, CounterpartyID=%d, Amount=%.8f %s",
+		deal.ID, deal.AuthorID, deal.CounterpartyID, deal.Amount, deal.Cryptocurrency)
 
 	return nil
 }
@@ -447,22 +446,22 @@ func (r *Repository) GetDealsByUserID(userID int64) ([]*model.Deal, error) {
 		deal := &model.Deal{}
 		err := rows.Scan(
 			&deal.ID,
-			&deal.BuyOrderID,
-			&deal.SellOrderID,
-			&deal.BuyerID,
-			&deal.SellerID,
+			&deal.ResponseID,
+			&deal.OrderID,
+			&deal.AuthorID,
+			&deal.CounterpartyID,
 			&deal.Cryptocurrency,
 			&deal.FiatCurrency,
 			&deal.Amount,
 			&deal.Price,
 			&deal.TotalAmount,
-			&deal.PaymentMethod,
+			&deal.PaymentMethods,
 			&deal.Status,
 			&deal.CreatedAt,
 			&deal.CompletedAt,
-			&deal.BuyerConfirmed,
-			&deal.SellerConfirmed,
-			&deal.PaymentProof,
+			&deal.AuthorConfirmed,
+			&deal.CounterConfirmed,
+			&deal.AuthorProof,
 			&deal.Notes,
 		)
 		if err != nil {
@@ -490,22 +489,22 @@ func (r *Repository) GetDealByID(dealID int64) (*model.Deal, error) {
 	// Выполняем запрос и сканируем результат
 	err := r.db.QueryRow(query, dealID).Scan(
 		&deal.ID,
-		&deal.BuyOrderID,
-		&deal.SellOrderID,
-		&deal.BuyerID,
-		&deal.SellerID,
+		&deal.ResponseID,
+		&deal.OrderID,
+		&deal.AuthorID,
+		&deal.CounterpartyID,
 		&deal.Cryptocurrency,
 		&deal.FiatCurrency,
 		&deal.Amount,
 		&deal.Price,
 		&deal.TotalAmount,
-		&deal.PaymentMethod,
+		&deal.PaymentMethods,
 		&deal.Status,
 		&deal.CreatedAt,
 		&deal.CompletedAt,
-		&deal.BuyerConfirmed,
-		&deal.SellerConfirmed,
-		&deal.PaymentProof,
+		&deal.AuthorConfirmed,
+		&deal.CounterConfirmed,
+		&deal.AuthorProof,
 		&deal.Notes,
 	)
 
@@ -729,11 +728,10 @@ func (r *Repository) GetMatchingOrders(order *model.Order) ([]*model.Order, erro
 			&matchingOrder.CreatedAt,
 			&matchingOrder.UpdatedAt,
 			&matchingOrder.ExpiresAt,
-			&matchingOrder.MatchedUserID,
-			&matchingOrder.MatchedAt,
 			&matchingOrder.CompletedAt,
 			&matchingOrder.IsActive,
-			&matchingOrder.AutoMatch,
+			&matchingOrder.ResponseCount,
+			&matchingOrder.AcceptedResponseID,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("не удалось сканировать подходящую заявку: %w", err)

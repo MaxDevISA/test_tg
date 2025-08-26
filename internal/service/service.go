@@ -277,10 +277,8 @@ func (s *Service) CreateOrder(userID int64, orderData *model.Order) (*model.Orde
 		return nil, fmt.Errorf("не удалось создать заявку: %w", err)
 	}
 
-	// Пытаемся автоматически сопоставить заявку если включено автосопоставление
-	if orderData.AutoMatch {
-		go s.tryAutoMatchOrder(orderData) // Запускаем в отдельной горутине для неблокирующего выполнения
-	}
+	// Автоматическое сопоставление больше не используется
+	// В новой логике пользователи создают отклики, а авторы их принимают
 
 	log.Printf("[INFO] Успешно создана заявка: ID=%d, UserID=%d, Type=%s",
 		orderData.ID, userID, orderData.Type)
@@ -493,14 +491,8 @@ func (s *Service) tryAutoMatchOrder(order *model.Order) {
 		return
 	}
 
-	// Создаем сделку
-	deal, err := s.createDealFromOrders(order, matchingOrder)
-	if err != nil {
-		log.Printf("[ERROR] Не удалось создать сделку для заявок ID=%d и ID=%d: %v", order.ID, matchingOrder.ID, err)
-		return
-	}
-
-	log.Printf("[INFO] Автоматическое сопоставление успешно: создана сделка ID=%d", deal.ID)
+	// Автосопоставление отключено в новой логике откликов
+	log.Printf("[INFO] Автосопоставление отключено, используйте систему откликов")
 
 	// TODO: Отправить уведомления участникам через Telegram бота
 	// s.notifyUsersAboutDeal(deal)
@@ -571,70 +563,8 @@ func (s *Service) hasCommonPaymentMethods(order1, order2 *model.Order) bool {
 	return false
 }
 
-// createDealFromOrders создает сделку на основе двух сопоставленных заявок
-func (s *Service) createDealFromOrders(order1, order2 *model.Order) (*model.Deal, error) {
-	var buyOrder, sellOrder *model.Order
-
-	// Определяем какая заявка на покупку, а какая на продажу
-	if order1.Type == model.OrderTypeBuy {
-		buyOrder = order1
-		sellOrder = order2
-	} else {
-		buyOrder = order2
-		sellOrder = order1
-	}
-
-	// Определяем параметры сделки
-	// Количество: минимум из двух заявок
-	dealAmount := buyOrder.Amount
-	if sellOrder.Amount < dealAmount {
-		dealAmount = sellOrder.Amount
-	}
-
-	// Цена: используем цену продавца (обычно более выгодная для покупателя)
-	dealPrice := sellOrder.Price
-
-	// Общая сумма
-	totalAmount := dealAmount * dealPrice
-
-	// Способ оплаты: берем первый общий метод
-	var paymentMethod model.PaymentMethod
-	for _, method := range buyOrder.PaymentMethods {
-		for _, method2 := range sellOrder.PaymentMethods {
-			if method == method2 {
-				paymentMethod = model.PaymentMethod(method)
-				break
-			}
-		}
-		if paymentMethod != "" {
-			break
-		}
-	}
-
-	// Создаем объект сделки
-	deal := &model.Deal{
-		BuyOrderID:      buyOrder.ID,
-		SellOrderID:     sellOrder.ID,
-		BuyerID:         buyOrder.UserID,
-		SellerID:        sellOrder.UserID,
-		Cryptocurrency:  buyOrder.Cryptocurrency,
-		FiatCurrency:    buyOrder.FiatCurrency,
-		Amount:          dealAmount,
-		Price:           dealPrice,
-		TotalAmount:     totalAmount,
-		PaymentMethod:   paymentMethod,
-		Status:          "pending", // Статус ожидания подтверждения
-		BuyerConfirmed:  false,
-		SellerConfirmed: false,
-	}
-
-	// Сохраняем сделку в базу данных
-	if err := s.repo.CreateDeal(deal); err != nil {
-		return nil, fmt.Errorf("не удалось создать сделку в базе данных: %w", err)
-	}
-
-	return deal, nil
-}
+// УДАЛЕНО: createDealFromOrders - устаревший метод автосопоставления
+// В новой логике откликов автоматическое сопоставление не используется
 
 // =====================================================
 // УПРАВЛЕНИЕ СДЕЛКАМИ
@@ -665,7 +595,7 @@ func (s *Service) GetDeal(dealID, userID int64) (*model.Deal, error) {
 	}
 
 	// Проверяем что пользователь участвует в сделке
-	if deal.BuyerID != userID && deal.SellerID != userID {
+	if deal.AuthorID != userID && deal.CounterpartyID != userID {
 		log.Printf("[WARN] Пользователь ID=%d пытается получить доступ к чужой сделке ID=%d", userID, dealID)
 		return nil, fmt.Errorf("доступ запрещен: вы не участвуете в данной сделке")
 	}
@@ -684,13 +614,13 @@ func (s *Service) ConfirmDeal(dealID, userID int64, paymentProof string) error {
 	}
 
 	// Проверяем что сделка в подходящем статусе
-	if deal.Status != "pending" && deal.Status != "payment_sent" {
+	if deal.Status != model.DealStatusInProgress && deal.Status != model.DealStatusWaitingConfirmation {
 		return fmt.Errorf("сделка в статусе '%s' не может быть подтверждена", deal.Status)
 	}
 
-	// Определяем тип подтверждения
+	// В новой логике доказательства могут предоставлять обе стороны
 	var isPaymentProof bool
-	if userID == deal.SellerID && paymentProof != "" {
+	if paymentProof != "" {
 		isPaymentProof = true
 	}
 
@@ -1004,65 +934,192 @@ func (s *Service) validateReviewData(review *model.CreateReviewRequest) error {
 	return nil
 }
 
-// CreateDealFromOrder создает сделку на основе заявки (отклик)
-func (s *Service) CreateDealFromOrder(userID, orderID int64, message string, autoAccept bool) (*model.Deal, error) {
-	log.Printf("[INFO] Создание сделки пользователем ID=%d на заявку ID=%d", userID, orderID)
+// УДАЛЕНО: CreateDealFromOrder - устаревший метод
+// В новой логике сделки создаются только через AcceptResponse после принятия отклика автором заявки
 
-	// Получаем заявку для создания сделки
-	order, err := s.GetOrder(orderID)
+// =====================================================
+// МЕТОДЫ ДЛЯ РАБОТЫ С ОТКЛИКАМИ
+// =====================================================
+
+// CreateResponse создает новый отклик на заявку
+func (s *Service) CreateResponse(userID int64, responseData *model.CreateResponseRequest) (*model.Response, error) {
+	log.Printf("[INFO] Создание отклика пользователем ID=%d на заявку ID=%d", userID, responseData.OrderID)
+
+	// Проверяем что заявка существует и активна
+	order, err := s.GetOrder(responseData.OrderID)
 	if err != nil {
-		log.Printf("[ERROR] Заявка ID=%d не найдена: %v", orderID, err)
+		log.Printf("[ERROR] Заявка не найдена: %v", err)
 		return nil, fmt.Errorf("заявка не найдена")
 	}
 
-	// Проверяем что пользователь не откликается на свою же заявку
+	// Проверяем что это не своя заявка
 	if order.UserID == userID {
-		log.Printf("[WARN] Пользователь ID=%d пытается откликнуться на свою заявку ID=%d", userID, orderID)
-		return nil, fmt.Errorf("нельзя откликнуться на собственную заявку")
+		log.Printf("[WARN] Пользователь ID=%d пытается откликнуться на свою заявку", userID)
+		return nil, fmt.Errorf("нельзя откликаться на собственную заявку")
 	}
 
-	// Проверяем что заявка активна
+	// Проверяем статус заявки
 	if order.Status != model.OrderStatusActive {
-		log.Printf("[WARN] Заявка ID=%d неактивна, статус: %s", orderID, order.Status)
-		return nil, fmt.Errorf("заявка недоступна для отклика")
+		log.Printf("[WARN] Заявка ID=%d имеет статус %s, нельзя откликаться", responseData.OrderID, order.Status)
+		return nil, fmt.Errorf("заявка недоступна для откликов")
+	}
+
+	// Проверяем что заявка не истекла
+	if time.Now().After(order.ExpiresAt) {
+		log.Printf("[WARN] Заявка ID=%d истекла", responseData.OrderID)
+		return nil, fmt.Errorf("срок действия заявки истек")
+	}
+
+	// Создаем отклик
+	response := &model.Response{
+		OrderID: responseData.OrderID,
+		UserID:  userID,
+		Message: responseData.Message,
+	}
+
+	// Сохраняем отклик в репозитории
+	if err := s.repo.CreateResponse(response); err != nil {
+		log.Printf("[ERROR] Не удалось создать отклик: %v", err)
+		return nil, fmt.Errorf("не удалось создать отклик: %w", err)
+	}
+
+	log.Printf("[INFO] Отклик создан успешно: ID=%d", response.ID)
+	return response, nil
+}
+
+// GetMyResponses получает отклики пользователя (которые он оставлял)
+func (s *Service) GetMyResponses(userID int64) ([]*model.Response, error) {
+	log.Printf("[INFO] Получение откликов пользователя ID=%d", userID)
+
+	responses, err := s.repo.GetResponsesFromUser(userID)
+	if err != nil {
+		log.Printf("[ERROR] Не удалось получить отклики пользователя: %v", err)
+		return nil, fmt.Errorf("не удалось получить отклики: %w", err)
+	}
+
+	log.Printf("[INFO] Найдено откликов пользователя ID=%d: %d", userID, len(responses))
+	return responses, nil
+}
+
+// GetResponsesToMyOrders получает отклики на заявки пользователя (которые ему оставляли)
+func (s *Service) GetResponsesToMyOrders(authorID int64) ([]*model.Response, error) {
+	log.Printf("[INFO] Получение откликов на заявки автора ID=%d", authorID)
+
+	responses, err := s.repo.GetResponsesForAuthor(authorID)
+	if err != nil {
+		log.Printf("[ERROR] Не удалось получить отклики на заявки: %v", err)
+		return nil, fmt.Errorf("не удалось получить отклики: %w", err)
+	}
+
+	log.Printf("[INFO] Найдено откликов на заявки автора ID=%d: %d", authorID, len(responses))
+	return responses, nil
+}
+
+// AcceptResponse принимает отклик и создает сделку
+func (s *Service) AcceptResponse(responseID, authorID int64) (*model.Deal, error) {
+	log.Printf("[INFO] Принятие отклика ID=%d автором ID=%d", responseID, authorID)
+
+	// Получаем отклик через фильтр
+	filter := &model.ResponseFilter{Limit: 100}
+	responses, err := s.repo.GetResponsesByFilter(filter)
+	if err != nil {
+		return nil, fmt.Errorf("не удалось получить отклик: %w", err)
+	}
+
+	var response *model.Response
+	for _, r := range responses {
+		if r.ID == responseID {
+			response = r
+			break
+		}
+	}
+
+	if response == nil {
+		return nil, fmt.Errorf("отклик не найден")
+	}
+
+	// Получаем заявку
+	order, err := s.GetOrder(response.OrderID)
+	if err != nil {
+		return nil, fmt.Errorf("заявка не найдена: %w", err)
+	}
+
+	// Проверяем что автор заявки принимает отклик
+	if order.UserID != authorID {
+		return nil, fmt.Errorf("только автор заявки может принимать отклики")
+	}
+
+	// Проверяем статус отклика
+	if response.Status != model.ResponseStatusWaiting {
+		return nil, fmt.Errorf("отклик уже был рассмотрен")
+	}
+
+	// Принимаем отклик
+	if err := s.repo.UpdateResponseStatus(responseID, model.ResponseStatusAccepted); err != nil {
+		return nil, fmt.Errorf("не удалось принять отклик: %w", err)
 	}
 
 	// Создаем сделку
 	deal := &model.Deal{
-		BuyOrderID:      orderID, // Используем заявку как основу
-		SellOrderID:     0,       // Пока не используется
-		BuyerID:         0,       // Определим ниже
-		SellerID:        0,       // Определим ниже
-		Cryptocurrency:  order.Cryptocurrency,
-		FiatCurrency:    order.FiatCurrency,
-		Amount:          order.Amount,
-		Price:           order.Price,
-		TotalAmount:     order.TotalAmount,
-		PaymentMethod:   "", // Пока пусто
-		Status:          "pending",
-		CreatedAt:       time.Now(),
-		BuyerConfirmed:  false,
-		SellerConfirmed: false,
-		Notes:           message,
+		ResponseID:     responseID,
+		OrderID:        order.ID,
+		AuthorID:       authorID,
+		CounterpartyID: response.UserID,
+		Cryptocurrency: order.Cryptocurrency,
+		FiatCurrency:   order.FiatCurrency,
+		Amount:         order.Amount,
+		Price:          order.Price,
+		TotalAmount:    order.TotalAmount,
+		PaymentMethods: order.PaymentMethods,
+		OrderType:      order.Type,
+		Status:         model.DealStatusInProgress,
+		ExpiresAt:      time.Now().Add(1 * time.Hour), // Таймер 1 час
 	}
 
-	// Определяем кто покупатель, а кто продавец
-	if order.Type == model.OrderTypeBuy {
-		// Заявка на покупку - автор заявки покупатель, откликнувшийся продавец
-		deal.BuyerID = order.UserID
-		deal.SellerID = userID
-	} else {
-		// Заявка на продажу - автор заявки продавец, откликнувшийся покупатель
-		deal.BuyerID = userID
-		deal.SellerID = order.UserID
-	}
-
-	// Сохраняем сделку
 	if err := s.repo.CreateDeal(deal); err != nil {
-		log.Printf("[ERROR] Ошибка создания сделки: %v", err)
-		return nil, fmt.Errorf("не удалось создать сделку")
+		return nil, fmt.Errorf("не удалось создать сделку: %w", err)
 	}
 
-	log.Printf("[INFO] Сделка создана: ID=%d, Покупатель=%d, Продавец=%d", deal.ID, deal.BuyerID, deal.SellerID)
+	// Обновляем статус заявки на "в сделке"
+	if err := s.repo.UpdateOrderStatus(order.ID, model.OrderStatusInDeal); err != nil {
+		log.Printf("[WARN] Не удалось обновить статус заявки: %v", err)
+	}
+
+	// Отклоняем все остальные отклики на эту заявку
+	s.rejectOtherResponses(order.ID, responseID)
+
+	log.Printf("[INFO] Отклик принят, создана сделка ID=%d", deal.ID)
 	return deal, nil
+}
+
+// RejectResponse отклоняет отклик
+func (s *Service) RejectResponse(responseID, authorID int64, reason string) error {
+	log.Printf("[INFO] Отклонение отклика ID=%d автором ID=%d", responseID, authorID)
+
+	// Здесь должна быть проверка что автор имеет право отклонить отклик
+	// (аналогично AcceptResponse)
+
+	if err := s.repo.UpdateResponseStatus(responseID, model.ResponseStatusRejected); err != nil {
+		return fmt.Errorf("не удалось отклонить отклик: %w", err)
+	}
+
+	log.Printf("[INFO] Отклик ID=%d отклонен", responseID)
+	return nil
+}
+
+// rejectOtherResponses отклоняет все остальные отклики на заявку кроме принятого
+func (s *Service) rejectOtherResponses(orderID, acceptedResponseID int64) {
+	responses, err := s.repo.GetResponsesForOrder(orderID)
+	if err != nil {
+		log.Printf("[WARN] Не удалось получить отклики для отклонения: %v", err)
+		return
+	}
+
+	for _, response := range responses {
+		if response.ID != acceptedResponseID && response.Status == model.ResponseStatusWaiting {
+			if err := s.repo.UpdateResponseStatus(response.ID, model.ResponseStatusRejected); err != nil {
+				log.Printf("[WARN] Не удалось отклонить отклик ID=%d: %v", response.ID, err)
+			}
+		}
+	}
 }

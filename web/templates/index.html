@@ -18,7 +18,7 @@
     <div class="navigation">
         <button class="nav-item active" data-view="orders">📋 Рынок</button>
         <button class="nav-item" data-view="my-orders">📝 Заявки</button>
-        <button class="nav-item" data-view="deals">🤝 Сделки</button>
+        <button class="nav-item" data-view="responses">📨 Отклики</button>
         <button class="nav-item" data-view="profile">👤 Профиль</button>
     </div>
 
@@ -59,9 +59,63 @@
             <!-- Контент будет загружен через JavaScript -->
         </div>
 
-        <!-- Раздел "Сделки" -->
-        <div id="dealsView" class="view hidden">
-            <!-- Контент будет загружен через JavaScript -->
+        <!-- Раздел "Отклики" -->
+        <div id="responsesView" class="view hidden">
+            <div class="response-tabs">
+                <button class="response-tab active" data-tab="my-responses">
+                    <span class="tab-icon">📤</span>
+                    <span class="tab-text">Мои отклики</span>
+                </button>
+                <button class="response-tab" data-tab="responses-to-my">
+                    <span class="tab-icon">📥</span>
+                    <span class="tab-text">На мои заявки</span>
+                </button>
+                <button class="response-tab" data-tab="active-deals">
+                    <span class="tab-icon">⏰</span>
+                    <span class="tab-text">Активные сделки</span>
+                </button>
+            </div>
+
+            <div class="response-content">
+                <!-- Мои отклики -->
+                <div id="my-responses-content" class="response-tab-content active">
+                    <div class="section-header">
+                        <h2>📤 Мои отклики</h2>
+                        <p class="section-description">Отклики, которые вы оставляли на заявки других пользователей</p>
+                    </div>
+                    <div id="myResponsesList">
+                        <div class="loading">
+                            <div class="spinner"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Отклики на мои заявки -->
+                <div id="responses-to-my-content" class="response-tab-content">
+                    <div class="section-header">
+                        <h2>📥 Отклики на мои заявки</h2>
+                        <p class="section-description">Пользователи, которые хотят торговать с вами</p>
+                    </div>
+                    <div id="responsesToMyList">
+                        <div class="loading">
+                            <div class="spinner"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Активные сделки -->
+                <div id="active-deals-content" class="response-tab-content">
+                    <div class="section-header">
+                        <h2>⏰ Активные сделки</h2>
+                        <p class="section-description">Сделки с таймером обратного отсчета</p>
+                    </div>
+                    <div id="activeDealsList">
+                        <div class="loading">
+                            <div class="spinner"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Раздел "Профиль" -->
@@ -140,12 +194,7 @@
                     <textarea class="form-textarea" name="description" rows="3" maxlength="200"></textarea>
                 </div>
                 
-                <div class="form-group">
-                    <label>
-                        <input type="checkbox" name="auto_match" checked> 
-                        Автоматическое сопоставление
-                    </label>
-                </div>
+                <!-- Автоматическое сопоставление отключено в новой логике откликов -->
                 
                 <button type="submit" class="btn btn-primary">Создать заявку</button>
             </form>

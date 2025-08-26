@@ -28,6 +28,14 @@ type RepositoryInterface interface {
 	GetDealByID(dealID int64) (*model.Deal, error)
 	ConfirmDeal(dealID int64, userID int64, isPaymentProof bool, paymentProof string) error
 
+	// Методы для работы с откликами
+	CreateResponse(response *model.Response) error
+	GetResponsesByFilter(filter *model.ResponseFilter) ([]*model.Response, error)
+	UpdateResponseStatus(responseID int64, status model.ResponseStatus) error
+	GetResponsesForOrder(orderID int64) ([]*model.Response, error)
+	GetResponsesFromUser(userID int64) ([]*model.Response, error)
+	GetResponsesForAuthor(authorID int64) ([]*model.Response, error)
+
 	// Методы для работы с отзывами и рейтингами
 	CreateReview(review *model.Review) error
 	GetReviewsByUserID(userID int64, limit, offset int) ([]*model.Review, error)

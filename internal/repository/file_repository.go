@@ -47,11 +47,12 @@ func (r *FileRepository) initializeFiles() error {
 	files := map[string]interface{}{
 		"users.json":          []model.User{},
 		"orders.json":         []model.Order{},
+		"responses.json":      []model.Response{}, // Новый файл для откликов
 		"deals.json":          []model.Deal{},
 		"reviews.json":        []model.Review{},
 		"ratings.json":        []model.Rating{},
 		"review_reports.json": []model.ReviewReport{},
-		"counters.json":       map[string]int64{"users": 0, "orders": 0, "deals": 0, "reviews": 0, "reports": 0},
+		"counters.json":       map[string]int64{"users": 0, "orders": 0, "responses": 0, "deals": 0, "reviews": 0, "reports": 0},
 	}
 
 	// Создаем файлы если они не существуют
@@ -509,7 +510,6 @@ func (r *FileRepository) GetMatchingOrders(order *model.Order) ([]*model.Order, 
 			candidateOrder.FiatCurrency == order.FiatCurrency && // Та же фиатная валюта
 			candidateOrder.Status == model.OrderStatusActive && // Активная заявка
 			candidateOrder.IsActive && // Не отключена
-			candidateOrder.AutoMatch && // Разрешено автосопоставление
 			candidateOrder.UserID != order.UserID && // Не наша заявка
 			candidateOrder.ExpiresAt.After(currentTime) { // Не истекла
 
@@ -606,9 +606,7 @@ func (r *FileRepository) MatchOrders(orderID1, orderID2 int64) error {
 	// Обновляем первую заявку
 	for i := range orders {
 		if orders[i].ID == orderID1 {
-			orders[i].Status = model.OrderStatusMatched
-			orders[i].MatchedUserID = &order2.UserID
-			orders[i].MatchedAt = &now
+			orders[i].Status = model.OrderStatusInDeal
 			orders[i].UpdatedAt = now
 			break
 		}
@@ -617,9 +615,7 @@ func (r *FileRepository) MatchOrders(orderID1, orderID2 int64) error {
 	// Обновляем вторую заявку
 	for i := range orders {
 		if orders[i].ID == orderID2 {
-			orders[i].Status = model.OrderStatusMatched
-			orders[i].MatchedUserID = &order1.UserID
-			orders[i].MatchedAt = &now
+			orders[i].Status = model.OrderStatusInDeal
 			orders[i].UpdatedAt = now
 			break
 		}
@@ -643,8 +639,8 @@ func (r *FileRepository) CreateDeal(deal *model.Deal) error {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
-	log.Printf("[INFO] Создание сделки: Buyer ID=%d, Seller ID=%d, Amount=%.8f %s",
-		deal.BuyerID, deal.SellerID, deal.Amount, deal.Cryptocurrency)
+	log.Printf("[INFO] Создание сделки: Author ID=%d, Counterparty ID=%d, Amount=%.8f %s",
+		deal.AuthorID, deal.CounterpartyID, deal.Amount, deal.Cryptocurrency)
 
 	// Загружаем существующие сделки
 	var deals []model.Deal
@@ -692,7 +688,7 @@ func (r *FileRepository) GetDealsByUserID(userID int64) ([]*model.Deal, error) {
 	var userDeals []*model.Deal
 	for _, deal := range deals {
 		// Пользователь участвует в сделке если он покупатель или продавец
-		if deal.BuyerID == userID || deal.SellerID == userID {
+		if deal.AuthorID == userID || deal.CounterpartyID == userID {
 			dealCopy := deal
 			userDeals = append(userDeals, &dealCopy)
 		}
@@ -897,21 +893,21 @@ func (r *FileRepository) CheckCanReview(dealID, fromUserID, toUserID int64) (boo
 	}
 
 	// 2. Проверяем что пользователь участвовал в сделке
-	if deal.BuyerID != fromUserID && deal.SellerID != fromUserID {
+	if deal.AuthorID != fromUserID && deal.CounterpartyID != fromUserID {
 		log.Printf("[WARN] Пользователь ID=%d не участвовал в сделке ID=%d", fromUserID, dealID)
 		return false, fmt.Errorf("вы не участвовали в данной сделке")
 	}
 
 	// 3. Проверяем что отзыв оставляется корректному участнику
-	if deal.BuyerID == fromUserID && deal.SellerID != toUserID {
+	if deal.AuthorID == fromUserID && deal.CounterpartyID != toUserID {
 		return false, fmt.Errorf("неверный получатель отзыва")
 	}
-	if deal.SellerID == fromUserID && deal.BuyerID != toUserID {
+	if deal.CounterpartyID == fromUserID && deal.AuthorID != toUserID {
 		return false, fmt.Errorf("неверный получатель отзыва")
 	}
 
 	// 4. Проверяем что сделка завершена
-	if deal.Status != "completed" {
+	if deal.Status != model.DealStatusCompleted {
 		log.Printf("[WARN] Сделка ID=%d не завершена (статус: %s)", dealID, deal.Status)
 		return false, fmt.Errorf("отзыв можно оставить только по завершенным сделкам")
 	}
@@ -1021,6 +1017,317 @@ func (r *FileRepository) GetUserReviewStats(userID int64) (*model.ReviewStats, e
 	log.Printf("[INFO] Статистика отзывов пользователя ID=%d: %.2f рейтинг, %d отзывов",
 		userID, stats.AverageRating, stats.TotalReviews)
 	return stats, nil
+}
+
+// =====================================================
+// МЕТОДЫ ДЛЯ РАБОТЫ С ОТКЛИКАМИ
+// =====================================================
+
+// CreateResponse создает новый отклик на заявку
+func (r *FileRepository) CreateResponse(response *model.Response) error {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	log.Printf("[INFO] Создание нового отклика на заявку ID=%d от пользователя ID=%d",
+		response.OrderID, response.UserID)
+
+	// Читаем текущие отклики
+	var responses []model.Response
+	if err := r.loadFromFile("responses.json", &responses); err != nil {
+		return fmt.Errorf("не удалось загрузить отклики: %w", err)
+	}
+
+	// Проверяем что пользователь не откликался уже на эту заявку
+	for _, existingResponse := range responses {
+		if existingResponse.OrderID == response.OrderID && existingResponse.UserID == response.UserID {
+			return fmt.Errorf("вы уже откликались на эту заявку")
+		}
+	}
+
+	// Генерируем ID для отклика
+	counters := r.getCounters()
+	counters["responses"]++
+	response.ID = counters["responses"]
+
+	// Устанавливаем временные метки
+	now := time.Now()
+	response.CreatedAt = now
+	response.UpdatedAt = now
+	response.Status = model.ResponseStatusWaiting
+
+	// Добавляем отклик
+	responses = append(responses, *response)
+
+	// Сохраняем отклики
+	if err := r.saveToFile("responses.json", responses); err != nil {
+		return fmt.Errorf("не удалось сохранить отклики: %w", err)
+	}
+
+	// Обновляем счетчики
+	if err := r.saveCounters(counters); err != nil {
+		log.Printf("[WARN] Не удалось обновить счетчики: %v", err)
+	}
+
+	// Обновляем счетчик откликов в заявке
+	if err := r.updateOrderResponseCount(response.OrderID, 1); err != nil {
+		log.Printf("[WARN] Не удалось обновить счетчик откликов в заявке: %v", err)
+	}
+
+	log.Printf("[INFO] Отклик успешно создан: ID=%d", response.ID)
+	return nil
+}
+
+// GetResponsesByFilter получает отклики с фильтрацией
+func (r *FileRepository) GetResponsesByFilter(filter *model.ResponseFilter) ([]*model.Response, error) {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+
+	log.Printf("[INFO] Получение откликов с фильтром: %+v", filter)
+
+	// Читаем все отклики
+	var allResponses []model.Response
+	if err := r.loadFromFile("responses.json", &allResponses); err != nil {
+		return nil, fmt.Errorf("не удалось загрузить отклики: %w", err)
+	}
+
+	var responses []*model.Response
+
+	// Применяем фильтры
+	for i := range allResponses {
+		response := &allResponses[i]
+
+		// Фильтр по заявке
+		if filter.OrderID != nil && response.OrderID != *filter.OrderID {
+			continue
+		}
+
+		// Фильтр по пользователю (кто откликнулся)
+		if filter.UserID != nil && response.UserID != *filter.UserID {
+			continue
+		}
+
+		// Фильтр по автору заявки (для кого отклики)
+		if filter.AuthorID != nil {
+			// Нужно получить заявку чтобы проверить автора
+			order, err := r.getOrderByID(response.OrderID)
+			if err != nil || order.UserID != *filter.AuthorID {
+				continue
+			}
+		}
+
+		// Фильтр по статусу
+		if filter.Status != nil && response.Status != *filter.Status {
+			continue
+		}
+
+		// Фильтр по дате создания
+		if filter.CreatedAfter != nil && response.CreatedAt.Before(*filter.CreatedAfter) {
+			continue
+		}
+
+		if filter.CreatedBefore != nil && response.CreatedAt.After(*filter.CreatedBefore) {
+			continue
+		}
+
+		responses = append(responses, response)
+	}
+
+	// Сортировка
+	if filter.SortBy != "" {
+		r.sortResponses(responses, filter.SortBy, filter.SortOrder)
+	}
+
+	// Применяем лимит и офсет
+	total := len(responses)
+	if filter.Offset > 0 && filter.Offset < total {
+		responses = responses[filter.Offset:]
+	}
+
+	if filter.Limit > 0 && filter.Limit < len(responses) {
+		responses = responses[:filter.Limit]
+	}
+
+	log.Printf("[INFO] Возвращено откликов: %d из %d", len(responses), total)
+	return responses, nil
+}
+
+// UpdateResponseStatus обновляет статус отклика
+func (r *FileRepository) UpdateResponseStatus(responseID int64, status model.ResponseStatus) error {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	log.Printf("[INFO] Обновление статуса отклика ID=%d на %s", responseID, status)
+
+	// Читаем отклики
+	var responses []model.Response
+	if err := r.loadFromFile("responses.json", &responses); err != nil {
+		return fmt.Errorf("не удалось загрузить отклики: %w", err)
+	}
+
+	// Находим и обновляем отклик
+	found := false
+	now := time.Now()
+
+	for i := range responses {
+		if responses[i].ID == responseID {
+			responses[i].Status = status
+			responses[i].UpdatedAt = now
+			if status != model.ResponseStatusWaiting {
+				responses[i].ReviewedAt = &now
+			}
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return fmt.Errorf("отклик с ID=%d не найден", responseID)
+	}
+
+	// Сохраняем обновленные отклики
+	if err := r.saveToFile("responses.json", responses); err != nil {
+		return fmt.Errorf("не удалось сохранить отклики: %w", err)
+	}
+
+	log.Printf("[INFO] Статус отклика ID=%d успешно обновлен", responseID)
+	return nil
+}
+
+// GetResponsesForOrder получает все отклики для заявки
+func (r *FileRepository) GetResponsesForOrder(orderID int64) ([]*model.Response, error) {
+	filter := &model.ResponseFilter{
+		OrderID:   &orderID,
+		SortBy:    "created_at",
+		SortOrder: "desc",
+	}
+	return r.GetResponsesByFilter(filter)
+}
+
+// GetResponsesFromUser получает все отклики от пользователя
+func (r *FileRepository) GetResponsesFromUser(userID int64) ([]*model.Response, error) {
+	filter := &model.ResponseFilter{
+		UserID:    &userID,
+		SortBy:    "created_at",
+		SortOrder: "desc",
+	}
+	return r.GetResponsesByFilter(filter)
+}
+
+// GetResponsesForAuthor получает все отклики на заявки автора
+func (r *FileRepository) GetResponsesForAuthor(authorID int64) ([]*model.Response, error) {
+	filter := &model.ResponseFilter{
+		AuthorID:  &authorID,
+		SortBy:    "created_at",
+		SortOrder: "desc",
+	}
+	return r.GetResponsesByFilter(filter)
+}
+
+// getOrderByID внутренний метод получения заявки по ID (без блокировки мьютекса)
+func (r *FileRepository) getOrderByID(orderID int64) (*model.Order, error) {
+	var orders []model.Order
+	if err := r.loadFromFile("orders.json", &orders); err != nil {
+		return nil, fmt.Errorf("не удалось загрузить заявки: %w", err)
+	}
+
+	for i := range orders {
+		if orders[i].ID == orderID {
+			return &orders[i], nil
+		}
+	}
+
+	return nil, fmt.Errorf("заявка с ID=%d не найдена", orderID)
+}
+
+// updateOrderResponseCount обновляет счетчик откликов в заявке
+func (r *FileRepository) updateOrderResponseCount(orderID int64, delta int) error {
+	var orders []model.Order
+	if err := r.loadFromFile("orders.json", &orders); err != nil {
+		return fmt.Errorf("не удалось загрузить заявки: %w", err)
+	}
+
+	found := false
+	for i := range orders {
+		if orders[i].ID == orderID {
+			orders[i].ResponseCount += delta
+			if orders[i].ResponseCount < 0 {
+				orders[i].ResponseCount = 0
+			}
+
+			// Обновляем статус заявки в зависимости от количества откликов
+			if orders[i].ResponseCount > 0 && orders[i].Status == model.OrderStatusActive {
+				orders[i].Status = model.OrderStatusHasResponses
+			} else if orders[i].ResponseCount == 0 && orders[i].Status == model.OrderStatusHasResponses {
+				orders[i].Status = model.OrderStatusActive
+			}
+
+			orders[i].UpdatedAt = time.Now()
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return fmt.Errorf("заявка с ID=%d не найдена", orderID)
+	}
+
+	return r.saveToFile("orders.json", orders)
+}
+
+// sortResponses сортирует отклики по указанному полю
+func (r *FileRepository) sortResponses(responses []*model.Response, sortBy, sortOrder string) {
+	less := func(i, j int) bool {
+		switch sortBy {
+		case "created_at":
+			if sortOrder == "desc" {
+				return responses[i].CreatedAt.After(responses[j].CreatedAt)
+			}
+			return responses[i].CreatedAt.Before(responses[j].CreatedAt)
+		case "updated_at":
+			if sortOrder == "desc" {
+				return responses[i].UpdatedAt.After(responses[j].UpdatedAt)
+			}
+			return responses[i].UpdatedAt.Before(responses[j].UpdatedAt)
+		default:
+			// По умолчанию сортируем по ID
+			if sortOrder == "desc" {
+				return responses[i].ID > responses[j].ID
+			}
+			return responses[i].ID < responses[j].ID
+		}
+	}
+
+	// Простая сортировка пузырьком (для небольших массивов это нормально)
+	n := len(responses)
+	for i := 0; i < n-1; i++ {
+		for j := 0; j < n-i-1; j++ {
+			if less(j+1, j) {
+				responses[j], responses[j+1] = responses[j+1], responses[j]
+			}
+		}
+	}
+}
+
+// getCounters читает счетчики из файла
+func (r *FileRepository) getCounters() map[string]int64 {
+	var counters map[string]int64
+	if err := r.loadFromFile("counters.json", &counters); err != nil {
+		// Если файл не существует, создаем с нулевыми значениями
+		counters = map[string]int64{
+			"users":     0,
+			"orders":    0,
+			"responses": 0,
+			"deals":     0,
+			"reviews":   0,
+			"reports":   0,
+		}
+	}
+	return counters
+}
+
+// saveCounters сохраняет счетчики в файл
+func (r *FileRepository) saveCounters(counters map[string]int64) error {
+	return r.saveToFile("counters.json", counters)
 }
 
 // getDealByIDInternal внутренний метод получения сделки (без блокировки мьютекса)
