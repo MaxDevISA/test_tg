@@ -1754,6 +1754,9 @@ async function submitResponse() {
             
             closeRespondModal();
             
+            // Переходим на страницу "Мои отклики"
+            goToMyResponses();
+            
             // Обновляем список заявок
             loadOrders();
             
@@ -2614,6 +2617,10 @@ async function acceptResponse(responseId) {
         
         if (result.success) {
             showAlert('✅ Отклик принят! Создана сделка.');
+            
+            // Переходим на страницу сделок
+            goToDeals();
+            
             // Перезагружаем отклики на мои заявки
             await loadResponsesToMyOrders();
             // Также загружаем активные сделки
@@ -2667,6 +2674,50 @@ function goToOrders() {
     } else {
         console.error('[ERROR] Кнопка рынка не найдена');
         showAlert('❌ Ошибка перехода к заявкам');
+    }
+}
+
+// Переход к моим откликам
+function goToMyResponses() {
+    console.log('[DEBUG] Переход к моим откликам');
+    
+    // Находим и кликаем на кнопку "Отклики"
+    const responsesTab = document.querySelector('[data-view="responses"]');
+    if (responsesTab) {
+        responsesTab.click();
+        
+        // Небольшая задержка, чтобы раздел успел загрузиться
+        setTimeout(() => {
+            // Используем существующую функцию переключения табов
+            switchResponseTab('my-responses');
+            console.log('[DEBUG] Переход к моим откликам выполнен');
+        }, 100);
+        
+    } else {
+        console.error('[ERROR] Кнопка откликов не найдена');
+        showAlert('❌ Ошибка перехода к откликам');
+    }
+}
+
+// Переход к сделкам
+function goToDeals() {
+    console.log('[DEBUG] Переход к сделкам');
+    
+    // Находим и кликаем на кнопку "Отклики"
+    const responsesTab = document.querySelector('[data-view="responses"]');
+    if (responsesTab) {
+        responsesTab.click();
+        
+        // Небольшая задержка, чтобы раздел успел загрузиться
+        setTimeout(() => {
+            // Переключаемся на таб "Сделки"
+            switchResponseTab('active-deals');
+            console.log('[DEBUG] Переход к сделкам выполнен');
+        }, 100);
+        
+    } else {
+        console.error('[ERROR] Кнопка откликов не найдена');
+        showAlert('❌ Ошибка перехода к сделкам');
     }
 }
 
