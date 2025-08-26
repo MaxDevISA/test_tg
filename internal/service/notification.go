@@ -19,17 +19,33 @@ type NotificationService struct {
 	httpClient    *http.Client                                           // HTTP клиент для запросов к Telegram Bot API
 	templates     map[model.NotificationType]*model.NotificationTemplate // Шаблоны уведомлений
 	webAppURL     string                                                 // URL веб-приложения для создания кнопок
+	groupChatID   string                                                 // ID группового чата для публикации заявок (необязательно)
+	groupTopicID  string                                                 // ID темы в групповом чате (необязательно)
 }
 
 // NewNotificationService создает новый экземпляр сервиса уведомлений
 func NewNotificationService(telegramToken, webAppURL string) *NotificationService {
+	return NewNotificationServiceWithGroup(telegramToken, webAppURL, "", "")
+}
+
+// NewNotificationServiceWithGroup создает новый экземпляр сервиса уведомлений с поддержкой групповых уведомлений
+func NewNotificationServiceWithGroup(telegramToken, webAppURL, groupChatID, groupTopicID string) *NotificationService {
 	log.Println("[INFO] Инициализация сервиса уведомлений")
+
+	if groupChatID != "" {
+		log.Printf("[INFO] Групповые уведомления включены для чата: %s", groupChatID)
+		if groupTopicID != "" {
+			log.Printf("[INFO] Групповые уведомления будут отправляться в тему: %s", groupTopicID)
+		}
+	}
 
 	service := &NotificationService{
 		telegramToken: telegramToken,
 		httpClient:    &http.Client{Timeout: 10 * time.Second}, // HTTP клиент с таймаутом 10 сек
 		templates:     make(map[model.NotificationType]*model.NotificationTemplate),
 		webAppURL:     webAppURL,
+		groupChatID:   groupChatID,
+		groupTopicID:  groupTopicID,
 	}
 
 	// Инициализируем шаблоны уведомлений
@@ -41,6 +57,14 @@ func NewNotificationService(telegramToken, webAppURL string) *NotificationServic
 // initTemplates инициализирует шаблоны уведомлений для разных типов событий
 func (ns *NotificationService) initTemplates() {
 	log.Println("[INFO] Инициализация шаблонов уведомлений")
+
+	// Шаблон для создания новой заявки (групповое уведомление)
+	ns.templates[model.NotificationTypeOrderCreated] = &model.NotificationTemplate{
+		Type:        model.NotificationTypeOrderCreated,
+		Title:       "📋 Новая заявка на бирже",
+		Message:     "Пользователь %s создал новую заявку:\n\n💰 %s %s %s\n💎 Объем: %.8f %s\n💵 Курс: %.2f %s за 1 %s\n💸 Общая сумма: %.2f %s\n\n🚀 Откликайтесь быстрее!",
+		Description: "Групповое уведомление о создании новой заявки",
+	}
 
 	// Шаблон для нового отклика на заявку
 	ns.templates[model.NotificationTypeNewResponse] = &model.NotificationTemplate{
@@ -164,6 +188,73 @@ func (ns *NotificationService) SendNotification(notification *model.Notification
 
 	log.Printf("[INFO] Уведомление успешно отправлено пользователю TelegramID=%d", userTelegramID)
 	return nil
+}
+
+// SendGroupNotification отправляет групповое уведомление в Telegram чат
+func (ns *NotificationService) SendGroupNotification(notificationType model.NotificationType, messageText string, order *model.Order) error {
+	// Проверяем что групповые уведомления настроены
+	if ns.groupChatID == "" {
+		log.Println("[DEBUG] Групповые уведомления не настроены, пропускаем отправку")
+		return nil
+	}
+
+	log.Printf("[INFO] Отправка группового уведомления типа %s в чат %s", notificationType, ns.groupChatID)
+
+	// Парсим ID чата (может быть отрицательным для групп)
+	var chatID int64
+	if _, err := fmt.Sscanf(ns.groupChatID, "%d", &chatID); err != nil {
+		log.Printf("[ERROR] Невалидный ID группового чата: %s", ns.groupChatID)
+		return fmt.Errorf("невалидный ID группового чата: %w", err)
+	}
+
+	// Создаем сообщение для группового чата
+	message := &model.TelegramMessage{
+		ChatID:                chatID,
+		Text:                  messageText,
+		ParseMode:             "HTML",
+		DisableWebPagePreview: true,
+	}
+
+	// Добавляем ID темы если указан
+	if ns.groupTopicID != "" {
+		var topicID int64
+		if _, err := fmt.Sscanf(ns.groupTopicID, "%d", &topicID); err != nil {
+			log.Printf("[WARN] Невалидный ID темы: %s, отправляем в общий чат", ns.groupTopicID)
+		} else {
+			message.MessageThreadID = &topicID
+			log.Printf("[DEBUG] Уведомление будет отправлено в тему ID=%d", topicID)
+		}
+	}
+
+	// Создаем inline кнопку для перехода в приложение
+	if order != nil {
+		message.ReplyMarkup = ns.createGroupInlineKeyboard(order)
+	}
+
+	// Отправляем сообщение через Telegram Bot API
+	if err := ns.sendTelegramMessage(message); err != nil {
+		log.Printf("[ERROR] Не удалось отправить групповое уведомление: %v", err)
+		return fmt.Errorf("ошибка отправки группового уведомления: %w", err)
+	}
+
+	log.Printf("[INFO] Групповое уведомление успешно отправлено в чат %s", ns.groupChatID)
+	return nil
+}
+
+// createGroupInlineKeyboard создает inline клавиатуру для групповых уведомлений
+func (ns *NotificationService) createGroupInlineKeyboard(order *model.Order) *model.TelegramInlineKeyboard {
+	// Создаем кнопку "Открыть приложение" которая ведет на главную страницу с хешем #orders
+	appButton := model.TelegramInlineKeyboardButton{
+		Text:   "🚀 Открыть приложение",
+		WebApp: &model.TelegramWebAppInfo{URL: fmt.Sprintf("%s/#orders", ns.webAppURL)},
+	}
+
+	// Возвращаем клавиатуру с одной кнопкой
+	return &model.TelegramInlineKeyboard{
+		InlineKeyboard: [][]model.TelegramInlineKeyboardButton{
+			{appButton}, // Первый ряд с кнопкой приложения
+		},
+	}
 }
 
 // formatNotificationMessage форматирует текст уведомления для Telegram
@@ -290,7 +381,7 @@ func (ns *NotificationService) sendTelegramMessage(message *model.TelegramMessag
 			log.Printf("[ERROR] Ответ Telegram API: %+v", errorResponse)
 		}
 
-		return fmt.Errorf("Telegram API вернул ошибку: код %d", resp.StatusCode)
+		return fmt.Errorf("telegram API вернул ошибку: код %d", resp.StatusCode)
 	}
 
 	// Парсим успешный ответ
@@ -304,7 +395,7 @@ func (ns *NotificationService) sendTelegramMessage(message *model.TelegramMessag
 	if ok, exists := response["ok"]; exists {
 		if okBool, isBool := ok.(bool); isBool && !okBool {
 			log.Printf("[ERROR] Telegram API вернул ok=false: %+v", response)
-			return fmt.Errorf("Telegram API не смог обработать сообщение")
+			return fmt.Errorf("telegram API не смог обработать сообщение")
 		}
 	}
 

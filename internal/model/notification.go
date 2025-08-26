@@ -8,6 +8,9 @@ import (
 type NotificationType string
 
 const (
+	// Уведомления по заявкам
+	NotificationTypeOrderCreated NotificationType = "order_created" // Создана новая заявка (групповое уведомление)
+
 	// Уведомления по откликам
 	NotificationTypeNewResponse      NotificationType = "new_response"      // Новый отклик на заявку
 	NotificationTypeResponseAccepted NotificationType = "response_accepted" // Отклик принят
@@ -64,6 +67,7 @@ type NotificationTemplate struct {
 // TelegramMessage представляет структуру для отправки сообщения в Telegram
 type TelegramMessage struct {
 	ChatID                int64                   `json:"chat_id"`                            // ID чата получателя
+	MessageThreadID       *int64                  `json:"message_thread_id,omitempty"`        // ID темы в супергруппе (для Topics)
 	Text                  string                  `json:"text"`                               // Текст сообщения
 	ParseMode             string                  `json:"parse_mode,omitempty"`               // Режим парсинга (HTML, Markdown)
 	DisableWebPagePreview bool                    `json:"disable_web_page_preview,omitempty"` // Отключить превью ссылок

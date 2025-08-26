@@ -33,6 +33,8 @@ type Service struct {
 	repo                repository.RepositoryInterface // Интерфейс репозитория для работы с данными
 	telegramToken       string                         // Токен Telegram бота для авторизации
 	chatID              string                         // ID закрытого чата для проверки членства
+	groupChatID         string                         // ID группового чата для публикации заявок (необязательно)
+	groupTopicID        string                         // ID темы в групповом чате (необязательно)
 	httpClient          *http.Client                   // HTTP клиент для запросов к Telegram Bot API
 	notificationService *NotificationService           // Сервис уведомлений для отправки сообщений в Telegram
 }
@@ -48,15 +50,23 @@ func NewService(repo repository.RepositoryInterface, telegramToken, chatID strin
 // NewServiceWithWebApp создает новый экземпляр сервиса с URL веб-приложения
 // Принимает интерфейс репозитория, токен бота, ID чата и URL веб-приложения
 func NewServiceWithWebApp(repo repository.RepositoryInterface, telegramToken, chatID, webAppURL string) *Service {
+	return NewServiceWithGroup(repo, telegramToken, chatID, webAppURL, "", "")
+}
+
+// NewServiceWithGroup создает новый экземпляр сервиса с поддержкой групповых уведомлений
+// Принимает все параметры включая настройки группового чата
+func NewServiceWithGroup(repo repository.RepositoryInterface, telegramToken, chatID, webAppURL, groupChatID, groupTopicID string) *Service {
 	log.Println("[INFO] Инициализация сервиса бизнес-логики")
 
-	// Инициализируем сервис уведомлений с переданным URL
-	notificationService := NewNotificationService(telegramToken, webAppURL)
+	// Инициализируем сервис уведомлений с переданными параметрами
+	notificationService := NewNotificationServiceWithGroup(telegramToken, webAppURL, groupChatID, groupTopicID)
 
 	return &Service{
 		repo:                repo,
 		telegramToken:       telegramToken,
 		chatID:              chatID,
+		groupChatID:         groupChatID,
+		groupTopicID:        groupTopicID,
 		httpClient:          &http.Client{Timeout: 10 * time.Second}, // HTTP клиент с таймаутом 10 сек
 		notificationService: notificationService,
 	}
@@ -297,6 +307,9 @@ func (s *Service) CreateOrder(userID int64, orderData *model.Order) (*model.Orde
 
 	log.Printf("[INFO] Успешно создана заявка: ID=%d, UserID=%d, Type=%s",
 		orderData.ID, userID, orderData.Type)
+
+	// Отправляем групповое уведомление о новой заявке
+	go s.sendOrderCreatedGroupNotification(orderData, user)
 
 	return orderData, nil
 }
@@ -1798,4 +1811,59 @@ func (s *Service) sendDealCompletedNotification(deal *model.Deal, recipient *mod
 	}
 
 	log.Printf("[INFO] Уведомление о завершении сделки отправлено пользователю TelegramID=%d", recipient.TelegramID)
+}
+
+// sendOrderCreatedGroupNotification отправляет групповое уведомление о создании новой заявки
+func (s *Service) sendOrderCreatedGroupNotification(order *model.Order, user *model.User) {
+	log.Printf("[INFO] Отправка группового уведомления о создании заявки ID=%d", order.ID)
+
+	// Формируем имя пользователя
+	userName := user.FirstName
+	if user.LastName != "" {
+		userName += " " + user.LastName
+	}
+
+	// Добавляем username если есть
+	if user.Username != "" {
+		userName += " (@" + user.Username + ")"
+	}
+
+	// Определяем тип операции
+	var operationType string
+	switch order.Type {
+	case "buy":
+		operationType = "ПОКУПКА"
+	case "sell":
+		operationType = "ПРОДАЖА"
+	default:
+		operationType = strings.ToUpper(string(order.Type))
+	}
+
+	// Формируем текст уведомления по шаблону
+	message := fmt.Sprintf(
+		"Пользователь <b>%s</b> создал новую заявку:\n\n💰 <b>%s %s %s</b>\n💎 Объем: <b>%.8f %s</b>\n💵 Курс: <b>%.2f %s</b> за 1 %s\n💸 Общая сумма: <b>%.2f %s</b>\n\n🚀 <i>Откликайтесь быстрее!</i>",
+		userName,
+		operationType,
+		order.Cryptocurrency,
+		order.FiatCurrency,
+		order.Amount,
+		order.Cryptocurrency,
+		order.Price,
+		order.FiatCurrency,
+		order.Cryptocurrency,
+		order.TotalAmount,
+		order.FiatCurrency,
+	)
+
+	// Отправляем групповое уведомление
+	if err := s.notificationService.SendGroupNotification(
+		model.NotificationTypeOrderCreated,
+		message,
+		order,
+	); err != nil {
+		log.Printf("[ERROR] Не удалось отправить групповое уведомление о создании заявки: %v", err)
+		return
+	}
+
+	log.Printf("[INFO] Групповое уведомление о создании заявки отправлено")
 }
