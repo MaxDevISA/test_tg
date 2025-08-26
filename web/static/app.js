@@ -169,7 +169,7 @@ async function loadOrders() {
     
     try {
         // Добавляем фильтр status=active чтобы показывались только активные заявки
-        const response = await fetch('/api/v1/orders?status=active');
+        const response = await fetch('/api/v1/orders'); // Получаем все заявки, фильтруем на фронтенде
         const result = await response.json();
         
         // Отладочная информация
@@ -195,13 +195,21 @@ function displayOrders(orders) {
     // Отладочная информация
     console.log('[DEBUG] Отображение заявок:', orders);
     
-    if (orders.length === 0) {
-        console.log('[DEBUG] Массив заявок пуст');
+    // Фильтруем только заявки, доступные для откликов на рынке
+    const marketOrders = orders.filter(order => {
+        // Показываем заявки со статусами: active (без откликов) и has_responses (есть отклики, но автор еще не выбрал)
+        return order.status === 'active' || order.status === 'has_responses';
+    });
+    
+    console.log('[DEBUG] Заявки после фильтрации для рынка:', marketOrders);
+    
+    if (marketOrders.length === 0) {
+        console.log('[DEBUG] Нет заявок доступных на рынке');
         content.innerHTML = '<p class="text-center text-muted">Заявок пока нет</p>';
         return;
     }
     
-    const ordersHTML = orders.map((order, index) => {
+    const ordersHTML = marketOrders.map((order, index) => {
         console.log(`[DEBUG] Обработка заявки ${index}:`, order);
         
         // Проверяем критические поля
@@ -501,8 +509,8 @@ function displayMyOrders(orders) {
     console.log('[DEBUG] displayMyOrders: Переходим к группировке заявок...');
     
     // Группируем заявки по статусу
-    const activeOrders = orders.filter(o => o.status === 'active');
-    const inDealOrders = orders.filter(o => o.status === 'matched' || o.status === 'in_progress');
+    const activeOrders = orders.filter(o => o.status === 'active' || o.status === 'has_responses');
+    const inDealOrders = orders.filter(o => o.status === 'matched' || o.status === 'in_progress' || o.status === 'in_deal');
     
     console.log('[DEBUG] displayMyOrders: activeOrders =', activeOrders.length);
     console.log('[DEBUG] displayMyOrders: inDealOrders =', inDealOrders.length);  
