@@ -78,9 +78,15 @@ type TelegramInlineKeyboard struct {
 
 // TelegramInlineKeyboardButton представляет кнопку inline клавиатуры
 type TelegramInlineKeyboardButton struct {
-	Text         string `json:"text"`                    // Текст кнопки
-	URL          string `json:"url,omitempty"`           // Ссылка для перехода
-	CallbackData string `json:"callback_data,omitempty"` // Данные для callback
+	Text         string              `json:"text"`                    // Текст кнопки
+	URL          string              `json:"url,omitempty"`           // Ссылка для перехода (открывается в браузере)
+	WebApp       *TelegramWebAppInfo `json:"web_app,omitempty"`       // WebApp для открытия в Telegram
+	CallbackData string              `json:"callback_data,omitempty"` // Данные для callback
+}
+
+// TelegramWebAppInfo представляет информацию о веб-приложении Telegram
+type TelegramWebAppInfo struct {
+	URL string `json:"url"` // URL веб-приложения для открытия в Telegram
 }
 
 // NotificationQueue представляет очередь уведомлений для отправки

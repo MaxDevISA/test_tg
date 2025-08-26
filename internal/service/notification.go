@@ -192,10 +192,10 @@ func (ns *NotificationService) createInlineKeyboard(notification *model.Notifica
 		// Кнопки для автора заявки: "Посмотреть отклики", "Перейти в приложение"
 		buttons = [][]model.TelegramInlineKeyboardButton{
 			{
-				{Text: "📋 Посмотреть отклики", URL: fmt.Sprintf("%s/responses", ns.webAppURL)},
+				{Text: "📋 Посмотреть отклики", WebApp: &model.TelegramWebAppInfo{URL: fmt.Sprintf("%s/responses", ns.webAppURL)}},
 			},
 			{
-				{Text: "🚀 Открыть приложение", URL: ns.webAppURL},
+				{Text: "🚀 Открыть приложение", WebApp: &model.TelegramWebAppInfo{URL: ns.webAppURL}},
 			},
 		}
 
@@ -203,11 +203,11 @@ func (ns *NotificationService) createInlineKeyboard(notification *model.Notifica
 		// Кнопки для участника: "Перейти к сделке", "Мои сделки"
 		buttons = [][]model.TelegramInlineKeyboardButton{
 			{
-				{Text: "🤝 Перейти к сделке", URL: fmt.Sprintf("%s/deals/%d", ns.webAppURL,
-					ns.safeDerefInt64(notification.DealID))},
+				{Text: "🤝 Перейти к сделке", WebApp: &model.TelegramWebAppInfo{URL: fmt.Sprintf("%s/deals/%d", ns.webAppURL,
+					ns.safeDerefInt64(notification.DealID))}},
 			},
 			{
-				{Text: "📊 Мои сделки", URL: fmt.Sprintf("%s/deals", ns.webAppURL)},
+				{Text: "📊 Мои сделки", WebApp: &model.TelegramWebAppInfo{URL: fmt.Sprintf("%s/deals", ns.webAppURL)}},
 			},
 		}
 
@@ -215,10 +215,10 @@ func (ns *NotificationService) createInlineKeyboard(notification *model.Notifica
 		// Кнопки для отклоненного участника: "Найти другие заявки"
 		buttons = [][]model.TelegramInlineKeyboardButton{
 			{
-				{Text: "🔍 Найти другие заявки", URL: fmt.Sprintf("%s/orders", ns.webAppURL)},
+				{Text: "🔍 Найти другие заявки", WebApp: &model.TelegramWebAppInfo{URL: fmt.Sprintf("%s/orders", ns.webAppURL)}},
 			},
 			{
-				{Text: "🚀 Открыть приложение", URL: ns.webAppURL},
+				{Text: "🚀 Открыть приложение", WebApp: &model.TelegramWebAppInfo{URL: ns.webAppURL}},
 			},
 		}
 
@@ -226,16 +226,16 @@ func (ns *NotificationService) createInlineKeyboard(notification *model.Notifica
 		// Кнопки для сделки: "Перейти к сделке", "Оставить отзыв"
 		buttons = [][]model.TelegramInlineKeyboardButton{
 			{
-				{Text: "🤝 Перейти к сделке", URL: fmt.Sprintf("%s/deals/%d", ns.webAppURL,
-					ns.safeDerefInt64(notification.DealID))},
+				{Text: "🤝 Перейти к сделке", WebApp: &model.TelegramWebAppInfo{URL: fmt.Sprintf("%s/deals/%d", ns.webAppURL,
+					ns.safeDerefInt64(notification.DealID))}},
 			},
 		}
 
 		// Добавляем кнопку отзыва только для завершенных сделок
 		if notification.Type == model.NotificationTypeDealCompleted {
 			buttons = append(buttons, []model.TelegramInlineKeyboardButton{
-				{Text: "⭐ Оставить отзыв", URL: fmt.Sprintf("%s/reviews/create?deal=%d",
-					ns.webAppURL, ns.safeDerefInt64(notification.DealID))},
+				{Text: "⭐ Оставить отзыв", WebApp: &model.TelegramWebAppInfo{URL: fmt.Sprintf("%s/reviews/create?deal=%d",
+					ns.webAppURL, ns.safeDerefInt64(notification.DealID))}},
 			})
 		}
 
@@ -243,7 +243,7 @@ func (ns *NotificationService) createInlineKeyboard(notification *model.Notifica
 		// Универсальная кнопка для всех остальных типов
 		buttons = [][]model.TelegramInlineKeyboardButton{
 			{
-				{Text: "🚀 Открыть приложение", URL: ns.webAppURL},
+				{Text: "🚀 Открыть приложение", WebApp: &model.TelegramWebAppInfo{URL: ns.webAppURL}},
 			},
 		}
 	}
