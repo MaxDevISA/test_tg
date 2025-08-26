@@ -1096,3 +1096,50 @@ func (r *Repository) HealthCheck() error {
 	}
 	return nil
 }
+
+// ConfirmDealWithRole обновляет статус сделки с указанием роли пользователя (PostgreSQL)
+func (r *Repository) ConfirmDealWithRole(dealID int64, userID int64, isAuthor bool, paymentProof string) error {
+	log.Printf("[INFO] Подтверждение сделки ID=%d пользователем ID=%d (isAuthor=%v)", dealID, userID, isAuthor)
+
+	query := `
+		UPDATE deals 
+		SET 
+			author_confirmed = CASE WHEN $2 = true THEN true ELSE author_confirmed END,
+			author_proof = CASE WHEN $2 = true THEN $3 ELSE author_proof END,
+			counter_confirmed = CASE WHEN $2 = false THEN true ELSE counter_confirmed END,
+			counter_proof = CASE WHEN $2 = false THEN $3 ELSE counter_proof END,
+			status = CASE 
+				WHEN (
+					($2 = true AND counter_confirmed = true) OR 
+					($2 = false AND author_confirmed = true)
+				) THEN 'completed' 
+				ELSE status 
+			END,
+			completed_at = CASE 
+				WHEN (
+					($2 = true AND counter_confirmed = true) OR 
+					($2 = false AND author_confirmed = true)
+				) THEN NOW() 
+				ELSE completed_at 
+			END
+		WHERE id = $1`
+
+	result, err := r.db.Exec(query, dealID, isAuthor, paymentProof)
+	if err != nil {
+		return fmt.Errorf("не удалось подтвердить сделку: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("не удалось получить количество обновленных записей: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("сделка с ID=%d не найдена", dealID)
+	}
+
+	log.Printf("[INFO] Сделка ID=%d подтверждена пользователем ID=%d как %s", dealID, userID,
+		map[bool]string{true: "автор", false: "контрагент"}[isAuthor])
+
+	return nil
+}
