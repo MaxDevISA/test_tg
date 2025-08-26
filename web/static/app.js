@@ -2499,17 +2499,116 @@ async function goToDeal(responseId) {
     switchResponseTab('active-deals');
 }
 
-// Отображение активных сделок (заглушка, будет доработано)
+// Отображение активных сделок
 function displayActiveDeals(deals) {
-    console.log('[DEBUG] Отображение активных сделок:', deals.length);
+    console.log('[DEBUG] Отображение активных сделок:', deals.length, deals);
     
     const container = document.getElementById('activeDealsList');
     
-    container.innerHTML = `
-        <div class="empty-state">
-            <div class="empty-icon">⏰</div>
-            <h3>Функция в разработке</h3>
-            <p>Активные сделки с таймером будут добавлены в следующем обновлении</p>
+    if (!deals || deals.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">⏰</div>
+                <div class="empty-title">Активных сделок пока нет</div>
+                <div class="empty-subtitle">Когда вы примете отклик или ваш отклик будет принят,<br>здесь появятся активные сделки</div>
+            </div>
+        `;
+        return;
+    }
+    
+    // Отображаем реальные сделки
+    const dealsHTML = deals.map(deal => createDealCard(deal)).join('');
+    container.innerHTML = dealsHTML;
+}
+
+// Создание карточки активной сделки
+function createDealCard(deal) {
+    console.log('[DEBUG] Создание карточки сделки:', deal);
+    
+    // Определяем роль пользователя в сделке
+    const isAuthor = currentInternalUserId === deal.author_id;
+    const userRole = isAuthor ? 'Автор' : 'Контрагент';
+    const counterpartyName = isAuthor ? 
+        (deal.counterparty_name || `Пользователь ${deal.counterparty_id}`) : 
+        (deal.author_name || `Пользователь ${deal.author_id}`);
+    
+    // Статус сделки
+    const statusConfig = {
+        in_progress: { icon: '⏳', text: 'В процессе', color: '#f59e0b' },
+        waiting_payment: { icon: '💰', text: 'Ожидание оплаты', color: '#3b82f6' },
+        completed: { icon: '✅', text: 'Завершена', color: '#22c55e' },
+        cancelled: { icon: '❌', text: 'Отменена', color: '#ef4444' },
+        expired: { icon: '⏰', text: 'Истекла', color: '#6b7280' }
+    };
+    
+    const status = statusConfig[deal.status] || statusConfig.in_progress;
+    
+    // Оставшееся время
+    const timeLeft = deal.expires_at ? calculateTimeLeft(deal.expires_at) : null;
+    
+    return `
+        <div class="deal-card" style="border: 1px solid #e1e8ed; border-radius: 8px; padding: 16px; margin-bottom: 16px; background: #f8f9fa;">
+            <div class="deal-header" style="display: flex; justify-content: space-between; margin-bottom: 12px;">
+                <div class="deal-info">
+                    <div class="deal-type ${deal.order_type === 'buy' ? 'buy' : 'sell'}" style="color: ${deal.order_type === 'buy' ? '#22c55e' : '#ef4444'}; font-weight: 600;">
+                        ${deal.order_type === 'buy' ? '🟢 Покупка' : '🔴 Продажа'}
+                    </div>
+                    <div class="deal-role" style="font-size: 12px; color: #6b7280;">${userRole}</div>
+                </div>
+                <div class="deal-status" style="color: ${status.color}; font-weight: 500;">
+                    ${status.icon} ${status.text}
+                </div>
+            </div>
+            
+            <div class="deal-amount" style="margin-bottom: 12px; font-size: 16px;">
+                <strong>${deal.amount || '?'} ${deal.cryptocurrency || '?'}</strong> за <strong>${deal.price || '?'} ${deal.fiat_currency || '?'}</strong>
+            </div>
+            
+            <div class="deal-details" style="font-size: 12px; color: #6b7280; margin-bottom: 12px;">
+                <div class="deal-counterparty">👤 ${counterpartyName}</div>
+                <div class="deal-payment">💳 ${(deal.payment_methods || []).join(', ') || 'Не указано'}</div>
+                ${timeLeft ? `<div class="deal-timer">⏰ ${timeLeft}</div>` : ''}
+            </div>
+            
+            <div class="deal-actions" style="display: flex; gap: 8px;">
+                <button onclick="viewDealDetails(${deal.id})" class="btn" style="background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 4px; font-size: 12px; flex: 1;">
+                    📋 Детали сделки
+                </button>
+                <button onclick="confirmPayment(${deal.id})" class="btn" style="background: #22c55e; color: white; border: none; padding: 8px 16px; border-radius: 4px; font-size: 12px; flex: 1;">
+                    ✅ Подтвердить
+                </button>
+            </div>
         </div>
     `;
+}
+
+// Вычисление оставшегося времени
+function calculateTimeLeft(expiresAt) {
+    const now = new Date();
+    const expires = new Date(expiresAt);
+    const diff = expires.getTime() - now.getTime();
+    
+    if (diff <= 0) {
+        return 'Истекло';
+    }
+    
+    const minutes = Math.floor(diff / 60000);
+    const seconds = Math.floor((diff % 60000) / 1000);
+    
+    if (minutes > 0) {
+        return `${minutes}м ${seconds}с`;
+    } else {
+        return `${seconds}с`;
+    }
+}
+
+// Заглушки для функций управления сделками (будут доработаны)
+function viewDealDetails(dealId) {
+    console.log('[DEBUG] Просмотр деталей сделки:', dealId);
+    showAlert('📋 Детали сделки будут добавлены в следующем обновлении');
+}
+
+function confirmPayment(dealId) {
+    console.log('[DEBUG] Подтверждение платежа для сделки:', dealId);
+    showAlert('✅ Подтверждение платежа будет добавлено в следующем обновлении');
 }
