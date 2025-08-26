@@ -241,7 +241,7 @@ function displayOrders(orders) {
         });
         
         const authorDisplay = authorUsername ? 
-            `<span onclick="openTelegramProfile('${authorUsername}')" style="color: var(--tg-theme-link-color, #0088cc); cursor: pointer; text-decoration: underline; font-weight: 500;">@${authorUsername}</span>` :
+            `<span onclick="openTelegramProfile('${authorUsername}')" style="color: var(--tg-theme-link-color, #2BE47E); cursor: pointer; text-decoration: underline; font-weight: 500;">@${authorUsername}</span>` :
             `<span style="color: var(--tg-theme-text-color, #000); font-weight: 500;">${authorName}</span>`;
         
         return '<div class="order-card">' +
@@ -291,12 +291,12 @@ function displayOrders(orders) {
                            'border-radius: 4px; font-size: 12px; flex: 2;">🤝 Откликнуться</button>' +
                 '</div>' : 
                 '<div style="display: flex; gap: 8px; margin-top: 12px;">' +
-                    '<div style="background: var(--tg-theme-secondary-bg-color, #e8f4fd); border: 1px solid var(--tg-theme-link-color, #007bff); border-radius: 4px; padding: 8px 12px; font-size: 12px; color: var(--tg-theme-link-color, #007bff); flex: 1; text-align: center; font-weight: 500;">📝 Ваша заявка</div>' +
+                    '<div style="background: rgba(43, 228, 126, 0.1); border: 1px solid #2BE47E; border-radius: 4px; padding: 8px 12px; font-size: 12px; color: #2BE47E; flex: 1; text-align: center; font-weight: 700;">📝 Ваша заявка</div>' +
                     '<button onclick="editOrder(' + (order.id || 0) + ')" ' +
                            'style="background: var(--tg-theme-button-color, #f59e0b); color: var(--tg-theme-button-text-color, white); border: none; padding: 8px 12px; ' +
                            'border-radius: 4px; font-size: 12px; flex: 1;">✏️ Редактировать</button>' +
                     '<button onclick="viewOrderResponses(' + (order.id || 0) + ')" ' +
-                           'style="background: var(--tg-theme-button-color, #3b82f6); color: var(--tg-theme-button-text-color, white); border: none; padding: 8px 12px; ' +
+                           'style="background: var(--tg-theme-button-color, #2BE47E); color: black; border: none; padding: 8px 12px; ' +
                            'border-radius: 4px; font-size: 12px; flex: 1;">👀 Отклики (' + (order.response_count || 0) + ')</button>' +
                 '</div>'
             ) +
@@ -513,7 +513,7 @@ function displayMyOrders(orders) {
                     Создайте первую заявку на покупку или продажу криптовалюты!
                 </p>
                 <button class="btn btn-primary" id="createFirstOrderBtn" 
-                        style="background: var(--tg-theme-button-color, #2481cc); color: var(--tg-theme-button-text-color, #ffffff); border: none; border-radius: 8px; padding: 12px 24px; font-size: 14px; cursor: pointer;">
+                        style="background: var(--tg-theme-button-color, #2BE47E); color: black; border: none; border-radius: 8px; padding: 12px 24px; font-size: 14px; cursor: pointer; font-weight: 700;">
                     🚀 Создать заявку
                 </button>
             </div>
@@ -586,7 +586,7 @@ function createOrderCard(order, category) {
         active: '#22c55e',
         matched: '#f59e0b', 
         in_progress: '#f59e0b',
-        completed: '#3b82f6',
+        completed: '#2BE47E',
         cancelled: '#6b7280'
     };
     
@@ -889,7 +889,7 @@ function displayProfileWithReviews(user, reviews, stats) {
             <!-- Статистика -->
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px;">
                 <div style="text-align: center; padding: 12px; border: 1px solid var(--tg-theme-section-separator-color, #e1e8ed); border-radius: 8px;">
-                    <div style="font-size: 18px; font-weight: 600; color: var(--tg-theme-link-color, #2481cc);">
+                    <div style="font-size: 18px; font-weight: 600; color: var(--tg-theme-link-color, #2BE47E);">
                         ${user.total_deals || 0}
                     </div>
                     <div style="font-size: 11px; color: var(--tg-theme-hint-color, #708499);">
@@ -1011,8 +1011,8 @@ function displayMyProfile(user, stats, reviews) {
                 <!-- Аватар -->
                 <div style="margin-bottom: 16px;">
                     ${avatarUrl ? 
-                        `<img src="${avatarUrl}" style="width: 80px; height: 80px; border-radius: 50%; border: 3px solid var(--tg-theme-link-color, #2481cc);" alt="Аватар">` :
-                        `<div style="width: 80px; height: 80px; border-radius: 50%; background: var(--tg-theme-link-color, #2481cc); display: flex; align-items: center; justify-content: center; margin: 0 auto; font-size: 32px; color: white;">
+                        `<img src="${avatarUrl}" style="width: 80px; height: 80px; border-radius: 50%; border: 3px solid var(--tg-theme-link-color, #2BE47E);" alt="Аватар">` :
+                        `<div style="width: 80px; height: 80px; border-radius: 50%; background: var(--tg-theme-link-color, #2BE47E); display: flex; align-items: center; justify-content: center; margin: 0 auto; font-size: 32px; color: white;">
                             ${user.first_name ? user.first_name[0].toUpperCase() : '👤'}
                         </div>`
                     }
@@ -1050,11 +1050,11 @@ function displayMyProfile(user, stats, reviews) {
                     <div class="profile-stat-label">Активных заявок</div>
                 </div>
                 <div class="profile-stat-card">
-                    <div class="profile-stat-number" style="color: #3b82f6;">${stats?.total_orders || 0}</div>
+                    <div class="profile-stat-number" style="color: #2BE47E;">${stats?.total_orders || 0}</div>
                     <div class="profile-stat-label">Всего заявок</div>
                 </div>
                 <div class="profile-stat-card">
-                    <div class="profile-stat-number" style="color: #8b5cf6;">
+                    <div class="profile-stat-number" style="color: #2BE47E;">
                         ${stats?.success_rate ? stats.success_rate.toFixed(0) + '%' : '0%'}
                     </div>
                     <div class="profile-stat-label">Успешность</div>
@@ -1070,7 +1070,7 @@ function displayMyProfile(user, stats, reviews) {
                     Создайте первую заявку и начните торговать!
                 </div>
                 <div style="margin-top: 16px;">
-                    <button onclick="goToOrders()" style="background: var(--tg-theme-button-color, #2481cc); color: var(--tg-theme-button-text-color, #ffffff); border: none; border-radius: 8px; padding: 10px 20px; font-size: 14px; cursor: pointer;">
+                    <button onclick="goToOrders()" style="background: var(--tg-theme-button-color, #2BE47E); color: black; border: none; border-radius: 8px; padding: 10px 20px; font-size: 14px; cursor: pointer; font-weight: 700;">
                         📋 Перейти к заявкам
                     </button>
                 </div>
@@ -1531,7 +1531,7 @@ function displayUserProfileModal(profileData, reviews) {
         <div class="text-center" style="margin-bottom: 20px;">
             <div style="font-size: 18px; font-weight: 600; margin-bottom: 8px; color: var(--tg-theme-text-color, #000000);">
                 ${user.username ? 
-                    `<a href="https://t.me/${user.username}" target="_blank" style="color: var(--tg-theme-link-color, #2481cc); text-decoration: none;">
+                    `<a href="https://t.me/${user.username}" target="_blank" style="color: var(--tg-theme-link-color, #2BE47E); text-decoration: none;">
                         ${userDisplayName}
                     </a>` : 
                     userDisplayName
@@ -2191,7 +2191,7 @@ function showInfo(message) {
                     border-radius: 12px; padding: 20px; z-index: 10000; min-width: 280px; text-align: center;">
             <div style="font-size: 32px; margin-bottom: 12px;">ℹ️</div>
             <div style="font-size: 14px; margin-bottom: 16px;">${message}</div>
-            <button onclick="this.parentElement.remove()" style="background: var(--tg-theme-button-color, #2481cc); color: var(--tg-theme-button-text-color, #ffffff); border: none; border-radius: 6px; padding: 8px 16px; cursor: pointer;">
+            <button onclick="this.parentElement.remove()" style="background: var(--tg-theme-button-color, #2BE47E); color: black; border: none; border-radius: 6px; padding: 8px 16px; cursor: pointer; font-weight: 700;">
                 Понятно
             </button>
         </div>
@@ -2519,7 +2519,7 @@ function createMyResponseCard(response) {
                 <h4 class="order-title">📋 Заявка #${response.order_id} - ${response.order_type === 'buy' ? '🟢 Покупка' : '🔴 Продажа'}</h4>
                 <div style="font-size: 13px; color: var(--tg-theme-hint-color, #708499); margin-top: 4px;">
                     👤 Автор: ${response.author_username ? 
-                        `<span onclick="openTelegramProfile('${response.author_username}')" style="color: var(--tg-theme-link-color, #0088cc); cursor: pointer; text-decoration: underline; font-weight: 500;">@${response.author_username}</span>` :
+                        `<span onclick="openTelegramProfile('${response.author_username}')" style="color: var(--tg-theme-link-color, #2BE47E); cursor: pointer; text-decoration: underline; font-weight: 500;">@${response.author_username}</span>` :
                         `<span style="color: var(--tg-theme-text-color, #000); font-weight: 500;">${response.author_name || 'Неизвестен'}</span>`
                     }
                 </div>
@@ -2567,7 +2567,7 @@ function createOrderResponseCard(response) {
         <div class="response-card order-response">
             <div class="response-header">
                 <div class="response-user">👤 ${response.username ? 
-                    `<span onclick="openTelegramProfile('${response.username}')" style="color: var(--tg-theme-link-color, #0088cc); cursor: pointer; text-decoration: underline; font-weight: 500;">@${response.username}</span>` :
+                    `<span onclick="openTelegramProfile('${response.username}')" style="color: var(--tg-theme-link-color, #2BE47E); cursor: pointer; text-decoration: underline; font-weight: 500;">@${response.username}</span>` :
                     `<span style="color: var(--tg-theme-text-color, #000); font-weight: 500;">${response.user_name || `Пользователь #${response.user_id}`}</span>`
                 }</div>
                 <div class="response-status" style="color: ${status.color}">
@@ -2764,7 +2764,7 @@ function createDealCard(deal) {
     // Статус сделки
     const statusConfig = {
         in_progress: { icon: '⏳', text: 'В процессе', color: '#f59e0b' },
-        waiting_payment: { icon: '💰', text: 'Ожидание оплаты', color: '#3b82f6' },
+        waiting_payment: { icon: '💰', text: 'Ожидание оплаты', color: '#2BE47E' },
         completed: { icon: '✅', text: 'Завершена', color: '#22c55e' },
         cancelled: { icon: '❌', text: 'Отменена', color: '#ef4444' },
         expired: { icon: '⏰', text: 'Истекла', color: '#6b7280' }
@@ -2804,12 +2804,12 @@ function createDealCard(deal) {
                     <div>
                         <div style="color: var(--tg-theme-hint-color, #708499); margin-bottom: 4px;">📝 Автор:</div>
                         <div style="font-weight: 500; color: var(--tg-theme-text-color, #000);">${authorName}</div>
-                        <div style="color: var(--tg-theme-link-color, #3b82f6); font-size: 12px;">${authorUsername}</div>
+                        <div style="color: var(--tg-theme-link-color, #2BE47E); font-size: 12px;">${authorUsername}</div>
                     </div>
                     <div>
                         <div style="color: var(--tg-theme-hint-color, #708499); margin-bottom: 4px;">🤝 Откликнулся:</div>
                         <div style="font-weight: 500; color: var(--tg-theme-text-color, #000);">${counterpartyName}</div>
-                        <div style="color: var(--tg-theme-link-color, #3b82f6); font-size: 12px;">${counterpartyUsername}</div>
+                        <div style="color: var(--tg-theme-link-color, #2BE47E); font-size: 12px;">${counterpartyUsername}</div>
                     </div>
                 </div>
                 
@@ -2848,7 +2848,7 @@ function createDealCard(deal) {
             
             <div style="display: flex; gap: 8px;">
                 ${counterpartyTelegramUsername ? `
-                    <button onclick="contactCounterparty('${counterpartyTelegramUsername}')" style="background: var(--tg-theme-button-color, #0088cc); color: var(--tg-theme-button-text-color, white); border: none; padding: 8px 12px; border-radius: 4px; font-size: 12px; flex: 1;">
+                    <button onclick="contactCounterparty('${counterpartyTelegramUsername}')" style="background: var(--tg-theme-button-color, #2BE47E); color: black; border: none; padding: 8px 12px; border-radius: 4px; font-size: 12px; flex: 1; font-weight: 700;">
                         💬 Написать
                     </button>
                 ` : ''}
