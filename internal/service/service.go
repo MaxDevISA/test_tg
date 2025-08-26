@@ -717,7 +717,7 @@ func (s *Service) ConfirmDealWithRole(dealID, userID int64, isAuthor bool, payme
 		return fmt.Errorf("не удалось подтвердить сделку: %w", err)
 	}
 
-	log.Printf("[INFO] Сделка ID=%d подтверждена пользователем ID=%d как %s", dealID, userID, 
+	log.Printf("[INFO] Сделка ID=%d подтверждена пользователем ID=%d как %s", dealID, userID,
 		map[bool]string{true: "автор", false: "контрагент"}[isAuthor])
 	return nil
 }

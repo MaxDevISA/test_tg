@@ -755,7 +755,7 @@ func (r *FileRepository) ConfirmDealWithRole(dealID int64, userID int64, isAutho
 	for i := range deals {
 		if deals[i].ID == dealID {
 			dealFound = true
-			
+
 			if isAuthor {
 				deals[i].AuthorConfirmed = true
 				deals[i].AuthorProof = paymentProof
