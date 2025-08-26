@@ -589,27 +589,27 @@ function createOrderCard(order, category) {
     switch (category) {
         case 'active':
             actions = `
-                <div style="display: flex; gap: 8px; margin-top: 12px;">
-                    <button onclick="editOrder(${order.id})" class="btn-small btn-secondary">
-                        ✏️ Редактировать
+                <div style="display: flex; gap: 6px; margin-top: 12px;">
+                    <button onclick="editOrder(${order.id})" class="btn btn-compact btn-success" style="flex: 1;">
+                        Редактировать
                     </button>
-                    <button onclick="viewOrderResponses(${order.id})" class="btn-small btn-info">
-                        👀 Отклики
+                    <button onclick="viewOrderResponses(${order.id})" class="btn btn-compact btn-info" style="flex: 1;">
+                        Отклики
                     </button>
-                    <button onclick="cancelOrder(${order.id})" class="btn-small btn-danger">
-                        ❌ Удалить
+                    <button onclick="cancelOrder(${order.id})" class="btn btn-compact btn-danger" style="flex: 1;">
+                        Удалить
                     </button>
                 </div>
             `;
             break;
         case 'in_deal':
             actions = `
-                <div style="display: flex; gap: 8px; margin-top: 12px;">
-                    <button onclick="viewActiveDeals(${order.id})" class="btn-small btn-primary">
-                        🤝 Перейти к сделке
+                <div style="display: flex; gap: 6px; margin-top: 12px;">
+                    <button onclick="viewActiveDeals(${order.id})" class="btn btn-compact btn-primary" style="flex: 1;">
+                        Перейти к сделке
                     </button>
-                    <button onclick="viewOrderResponses(${order.id})" class="btn-small btn-info">
-                        👀 Все отклики
+                    <button onclick="viewOrderResponses(${order.id})" class="btn btn-compact btn-info" style="flex: 1;">
+                        Все отклики
                     </button>
                 </div>
             `;
@@ -617,8 +617,8 @@ function createOrderCard(order, category) {
         case 'completed':
             actions = `
                 <div style="margin-top: 12px;">
-                    <button onclick="viewOrderHistory(${order.id})" class="btn-small btn-secondary">
-                        📊 История
+                    <button onclick="viewOrderHistory(${order.id})" class="btn btn-compact btn-secondary" style="width: 100%;">
+                        История
                     </button>
                 </div>
             `;

@@ -455,7 +455,7 @@ input[type="submit"]:hover:not(.btn-danger):not(.btn-secondary):not(.btn-warning
     box-shadow: var(--shadow-card-hover);
 }
 
-.btn-secondary, .btn-warning {
+.btn-secondary, .btn-warning, .btn-danger {
     background: revert !important;
     color: revert !important;
 }
@@ -607,9 +607,19 @@ input[type="submit"]:hover:not(.btn-danger):not(.btn-secondary):not(.btn-warning
     color: #000000 !important;
 }
 
+.btn-compact.btn-danger {
+    background: #ef4444 !important;
+    color: #ffffff !important;
+}
+
 .btn-compact:hover {
     transform: none !important;
     box-shadow: 0 2px 8px rgba(29, 185, 84, 0.3) !important;
+}
+
+.btn-compact.btn-danger:hover {
+    background: #dc2626 !important;
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3) !important;
 }
 
 /* ============================================== */
