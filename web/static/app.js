@@ -2396,9 +2396,19 @@ function displayResponsesToMyOrders(responses) {
     Object.entries(responsesByOrder).forEach(([orderId, orderResponses]) => {
         const waitingResponses = orderResponses.filter(r => r.status === 'waiting');
         
+        // Берём первый отклик для получения информации о заявке
+        const firstResponse = orderResponses[0];
+        const orderTypeText = firstResponse.order_type === 'buy' ? '🟢 Покупка' : '🔴 Продажа';
+        const totalAmount = firstResponse.total_amount || (firstResponse.amount * firstResponse.price);
+        
         html += `<div class="order-responses-group">
             <div class="order-info">
-                <h4>📋 Заявка #${orderId}</h4>
+                <h4>📋 Заявка #${orderId} - ${orderTypeText}</h4>
+                ${firstResponse.cryptocurrency ? `
+                    <div style="font-size: 12px; color: var(--tg-theme-hint-color, #708499); margin-top: 4px;">
+                        💰 ${firstResponse.amount || '?'} ${firstResponse.cryptocurrency || '?'} за ${firstResponse.price || '?'} ${firstResponse.fiat_currency || '?'} = ${totalAmount.toLocaleString('ru')} ${firstResponse.fiat_currency || '?'}
+                    </div>
+                ` : ''}
                 <span class="response-count">${waitingResponses.length} новых откликов</span>
             </div>
             ${orderResponses.map(response => createOrderResponseCard(response)).join('')}
@@ -2484,12 +2494,14 @@ function createOrderResponseCard(response) {
             
             <div class="response-date">${createdDate}</div>
             
-            ${response.message ? `
-                <div class="response-message">
-                    <strong>💬 Сообщение:</strong>
-                    <p>${response.message}</p>
-                </div>
-            ` : ''}
+            <div style="font-size: 12px; color: var(--tg-theme-hint-color, #708499); margin: 8px 0;">
+                📋 ${response.order_type === 'buy' ? '🟢 Покупка' : '🔴 Продажа'} ${response.cryptocurrency || '?'} - ${response.amount || '?'} ${response.cryptocurrency || '?'} за ${response.price || '?'} ${response.fiat_currency || '?'} = ${(response.total_amount || (response.amount * response.price)).toLocaleString('ru')} ${response.fiat_currency || '?'}
+            </div>
+            
+            <div class="response-message">
+                <strong>💬 Сообщение:</strong>
+                <p>${response.message || 'Без сообщения'}</p>
+            </div>
             
             ${response.status === 'waiting' ? `
                 <div class="response-actions">
