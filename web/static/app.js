@@ -221,11 +221,22 @@ function displayOrders(orders) {
         const totalAmount = order.total_amount || (order.amount * order.price);
         
         // Определяем отображение автора
-        const authorName = order.user_name || order.author_name || `Пользователь ${order.user_id}`;
-        const authorUsername = order.user_username || order.author_username;
+        const authorName = order.user_name || order.author_name || order.first_name || `Пользователь ${order.user_id}`;
+        const authorUsername = order.user_username || order.author_username || order.username; 
+        console.log('[DEBUG] Данные автора заявки:', { 
+            authorName, 
+            authorUsername, 
+            user_name: order.user_name,
+            author_name: order.author_name, 
+            first_name: order.first_name,
+            user_username: order.user_username,
+            author_username: order.author_username,
+            username: order.username 
+        });
+        
         const authorDisplay = authorUsername ? 
-            `<span onclick="openTelegramProfile('${authorUsername}')" style="color: var(--tg-theme-link-color, #0088cc); cursor: pointer; text-decoration: underline;">@${authorUsername}</span>` :
-            authorName;
+            `<span onclick="openTelegramProfile('${authorUsername}')" style="color: var(--tg-theme-link-color, #0088cc); cursor: pointer; text-decoration: underline; font-weight: 500;">@${authorUsername}</span>` :
+            `<span style="color: var(--tg-theme-text-color, #000); font-weight: 500;">${authorName}</span>`;
         
         return '<div class="order-card">' +
             '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">' +
@@ -249,7 +260,7 @@ function displayOrders(orders) {
                     '</div>' +
                     '<div>' +
                         '<span style="color: var(--tg-theme-hint-color, #708499);">💰 Курс:</span><br>' +
-                        '<strong style="color: var(--tg-theme-text-color, #000);">' + (order.price || '?') + ' ' + (order.fiat_currency || '?') + '/1' + (order.cryptocurrency || '?') + '</strong>' +
+                        '<strong style="color: var(--tg-theme-text-color, #000);">' + (order.price || '?') + ' ' + (order.fiat_currency || '?') + ' за 1' + (order.cryptocurrency || '?') + '</strong>' +
                     '</div>' +
                 '</div>' +
                 '<div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--tg-theme-section-separator-color, #e2e8f0); font-size: 13px;">' +
@@ -273,7 +284,15 @@ function displayOrders(orders) {
                            'style="background: var(--tg-theme-button-color, #22c55e); color: var(--tg-theme-button-text-color, white); border: none; padding: 8px 12px; ' +
                            'border-radius: 4px; font-size: 12px; flex: 2;">🤝 Откликнуться</button>' +
                 '</div>' : 
-                '<div style="margin-top: 10px; font-size: 12px; color: var(--tg-theme-link-color, #007bff);">📝 Это ваша заявка</div>'
+                '<div style="display: flex; gap: 8px; margin-top: 12px;">' +
+                    '<div style="background: var(--tg-theme-secondary-bg-color, #e8f4fd); border: 1px solid var(--tg-theme-link-color, #007bff); border-radius: 4px; padding: 8px 12px; font-size: 12px; color: var(--tg-theme-link-color, #007bff); flex: 1; text-align: center; font-weight: 500;">📝 Ваша заявка</div>' +
+                    '<button onclick="editOrder(' + (order.id || 0) + ')" ' +
+                           'style="background: var(--tg-theme-button-color, #f59e0b); color: var(--tg-theme-button-text-color, white); border: none; padding: 8px 12px; ' +
+                           'border-radius: 4px; font-size: 12px; flex: 1;">✏️ Редактировать</button>' +
+                    '<button onclick="viewOrderResponses(' + (order.id || 0) + ')" ' +
+                           'style="background: var(--tg-theme-button-color, #3b82f6); color: var(--tg-theme-button-text-color, white); border: none; padding: 8px 12px; ' +
+                           'border-radius: 4px; font-size: 12px; flex: 1;">👀 Отклики (' + (order.response_count || 0) + ')</button>' +
+                '</div>'
             ) +
         '</div>';
     }).join('');
@@ -2736,6 +2755,24 @@ function openTelegramProfile(username) {
         }
     } else {
         showAlert('❌ Не удалось найти username пользователя');
+    }
+}
+
+// Просмотр откликов на заявку
+function viewOrderResponses(orderId) {
+    console.log('[DEBUG] Просмотр откликов на заявку:', orderId);
+    
+    // Переключаемся на раздел откликов и таб "На мои заявки"
+    const responsesTab = document.querySelector('[data-view="responses"]');
+    if (responsesTab) {
+        responsesTab.click(); // Переходим в раздел "Отклики"
+        
+        // Небольшая задержка, чтобы раздел успел загрузиться
+        setTimeout(() => {
+            switchResponseTab('responses-to-my'); // Переключаемся на таб "На мои заявки"
+        }, 100);
+    } else {
+        showAlert('❌ Не удалось перейти к откликам');
     }
 }
 
