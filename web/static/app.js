@@ -508,7 +508,6 @@ function displayMyOrders(orders) {
         content.innerHTML = `
             <div style="text-align: center; padding: 40px 20px;">
                 <div style="font-size: 48px; margin-bottom: 16px;">📋</div>
-                <h3 style="margin-bottom: 12px; color: var(--tg-theme-text-color, #000000);">Мои заявки</h3>
                 <p style="color: var(--tg-theme-hint-color, #708499); margin-bottom: 20px; line-height: 1.4;">
                     У вас пока нет заявок.<br/>
                     Создайте первую заявку на покупку или продажу криптовалюты!
@@ -539,13 +538,6 @@ function displayMyOrders(orders) {
     
     let html = `
         <div style="padding: 20px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h2 style="margin: 0; color: var(--tg-theme-text-color, #000000);">📋 Мои заявки</h2>
-                <button class="btn btn-primary" onclick="document.getElementById('createOrderModal').classList.add('show')" 
-                        style="background: var(--tg-theme-button-color, #2481cc); color: var(--tg-theme-button-text-color, #ffffff); border: none; border-radius: 6px; padding: 8px 16px; font-size: 12px;">
-                    ➕ Создать
-                </button>
-            </div>
     `;
     
     // Убираем метрики - они работают некорректно с завершенными сделками
