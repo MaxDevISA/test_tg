@@ -307,6 +307,27 @@ func (s *Service) GetOrders(filter *model.OrderFilter) ([]*model.Order, error) {
 		return nil, fmt.Errorf("не удалось получить заявки: %w", err)
 	}
 
+	// Обогащаем заявки данными пользователей для отображения на фронтенде
+	for _, order := range orders {
+		if user, err := s.repo.GetUserByID(order.UserID); err == nil {
+			// Добавляем данные пользователя к заявке (создаем дополнительные поля)
+			// Эти поля не входят в основную модель Order, но нужны для фронтенда
+			order.UserName = user.FirstName
+			if user.LastName != "" {
+				order.UserName += " " + user.LastName
+			}
+			order.Username = user.Username
+			order.FirstName = user.FirstName
+			order.LastName = user.LastName
+			
+			log.Printf("[DEBUG] Обогащена заявка ID=%d данными пользователя: Name=%s, Username=%s", 
+				order.ID, order.UserName, order.Username)
+		} else {
+			log.Printf("[WARN] Не удалось получить данные пользователя ID=%d для заявки ID=%d: %v", 
+				order.UserID, order.ID, err)
+		}
+	}
+
 	log.Printf("[INFO] Найдено заявок: %d", len(orders))
 	return orders, nil
 }

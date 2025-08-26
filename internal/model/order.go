@@ -60,6 +60,12 @@ type Order struct {
 	IsActive           bool        `json:"is_active" db:"is_active"`                       // Активна ли заявка
 	ResponseCount      int         `json:"response_count" db:"response_count"`             // Количество откликов на заявку
 	AcceptedResponseID *int64      `json:"accepted_response_id" db:"accepted_response_id"` // ID принятого отклика (если есть)
+	
+	// Дополнительные поля для фронтенда (не сохраняются в БД)
+	UserName   string `json:"user_name,omitempty"`   // Полное имя пользователя 
+	Username   string `json:"username,omitempty"`    // Telegram username
+	FirstName  string `json:"first_name,omitempty"`  // Имя пользователя
+	LastName   string `json:"last_name,omitempty"`   // Фамилия пользователя
 }
 
 // DealStatus определяет статус сделки в новой логике

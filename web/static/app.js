@@ -221,16 +221,13 @@ function displayOrders(orders) {
         const totalAmount = order.total_amount || (order.amount * order.price);
         
         // Определяем отображение автора
-        const authorName = order.user_name || order.author_name || order.first_name || `Пользователь ${order.user_id}`;
-        const authorUsername = order.user_username || order.author_username || order.username; 
+        const authorName = order.user_name || order.first_name || `Пользователь ${order.user_id}`;
+        const authorUsername = order.username; 
         console.log('[DEBUG] Данные автора заявки:', { 
             authorName, 
             authorUsername, 
             user_name: order.user_name,
-            author_name: order.author_name, 
             first_name: order.first_name,
-            user_username: order.user_username,
-            author_username: order.author_username,
             username: order.username 
         });
         
@@ -252,7 +249,7 @@ function displayOrders(orders) {
                 '<div style="font-size: 14px; margin-bottom: 4px;">👤 Автор: ' + authorDisplay + '</div>' +
             '</div>' +
             
-            '<div style="background: var(--tg-theme-secondary-bg-color, #f1f5f9); padding: 10px; border-radius: 6px; margin-bottom: 10px;">' +
+            '<div style="background: var(--tg-theme-secondary-bg-color, rgba(255,255,255,0.1)); border: 1px solid var(--tg-theme-section-separator-color, rgba(255,255,255,0.2)); padding: 10px; border-radius: 6px; margin-bottom: 10px;">' +
                 '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px;">' +
                     '<div>' +
                         '<span style="color: var(--tg-theme-hint-color, #708499);">📊 Объем:</span><br>' +
