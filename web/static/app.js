@@ -269,6 +269,44 @@ function showError(message) {
     }
 }
 
+// Универсальная функция для показа уведомлений
+function showAlert(message) {
+    if (tg) {
+        tg.showAlert(message);
+    } else {
+        alert(message);
+    }
+}
+
+// Универсальная функция для HTTP запросов
+async function apiRequest(url, method = 'GET', data = null) {
+    const options = {
+        method: method,
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    };
+    
+    // Добавляем Telegram User ID в заголовки для авторизации
+    if (currentUser && currentUser.id) {
+        options.headers['X-Telegram-User-ID'] = currentUser.id.toString();
+    }
+    
+    // Добавляем данные для POST/PUT запросов
+    if (data && (method === 'POST' || method === 'PUT')) {
+        options.body = JSON.stringify(data);
+    }
+    
+    try {
+        const response = await fetch(url, options);
+        const result = await response.json();
+        return result;
+    } catch (error) {
+        console.error('[ERROR] Ошибка HTTP запроса:', error);
+        throw error;
+    }
+}
+
 // Авторизация пользователя через Telegram WebApp
 async function authenticateUser() {
     if (!currentUser) {
