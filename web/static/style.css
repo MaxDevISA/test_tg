@@ -87,10 +87,13 @@ body {
     color: var(--text-primary);
     font-size: 14px;
     line-height: 1.6;
-    overflow-x: hidden; /* УБИРАЕМ ТОЛЬКО ГОРИЗОНТАЛЬНЫЙ СКРОЛЛ */
+    /* ПОЛНОСТЬЮ УБИРАЕМ ВСЕ СКРОЛЛБАРЫ */
+    overflow: hidden !important;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     min-height: 100vh;
+    width: 100vw;
+    max-width: 100vw;
 }
 
 /* ============================================== */
@@ -163,14 +166,14 @@ body {
     min-width: 80px;
     padding: 12px 16px;
     border: none;
-    background: transparent;
-    color: rgba(255, 255, 255, 0.6);
+    background: transparent !important; /* ПРОЗРАЧНЫЙ ФОН ДЛЯ НЕАКТИВНЫХ */
+    color: rgba(255, 255, 255, 0.4); /* БОЛЕЕ БЛЕКЛЫЙ ЦВЕТ */
     font-size: 12px;
     font-weight: 400;
     cursor: pointer;
     white-space: nowrap;
     transition: all 0.3s ease;
-    border-radius: 8px;
+    border-radius: 4px !important; /* МЕНЬШЕЕ ЗАКРУГЛЕНИЕ */
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -178,7 +181,6 @@ body {
     gap: 4px;
     text-align: center;
     position: relative;
-    /* Убираем все лишние декорации */
     border-bottom: 3px solid transparent;
 }
 
@@ -188,13 +190,13 @@ body {
     /* Убираем translateY чтобы не было скролла */
 }
 
-/* АКТИВНЫЙ ПУНКТ - ТОЛЬКО БЕЛЫЙ ТЕКСТ И ПОДЧЕРКИВАНИЕ */
+/* АКТИВНЫЙ ПУНКТ - ЧЕТКИЙ КОНТРАСТ */
 .nav-item.active {
-    background: transparent !important; /* Никакого зеленого фона! */
-    color: #ffffff !important; /* Белый текст */
-    font-weight: 600 !important;
-    border-bottom: 3px solid #1DB954 !important; /* Только зеленое подчеркивание */
-    border-radius: 8px 8px 0 0 !important;
+    background: rgba(29, 185, 84, 0.8) !important; /* ЗЕЛЕНЫЙ ФОН ДЛЯ АКТИВНОГО */
+    color: #000000 !important; /* ЧЕРНЫЙ ТЕКСТ НА ЗЕЛЕНОМ ФОНЕ */
+    font-weight: 700 !important; /* ЖИРНЕЕ */
+    border-bottom: none !important; /* Убираем подчеркивание, есть фон */
+    border-radius: 4px !important; /* МЕНЬШЕЕ ЗАКРУГЛЕНИЕ */
 }
 
 .tab-icon {
@@ -587,52 +589,56 @@ input[type="submit"]:hover:not(.btn-danger):not(.btn-secondary):not(.btn-warning
 /* КАРТОЧКИ ЗАЯВОК И КОНТЕНТА (ГЛАВНАЯ ПРОБЛЕМА РЕШЕНА) */
 /* ============================================== */
 
-/* 🎵 КАРТОЧКИ В МИНИМАЛИСТИЧНОМ СТИЛЕ SPOTIFY */
+/* ТЕМНЫЕ КАРТОЧКИ ПОД ОСНОВНОЙ ДИЗАЙН */
 .order-card, .response-card, .deal-card {
-    background: rgba(24, 24, 24, 0.6);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 8px;
+    background: rgba(18, 18, 18, 0.9) !important; /* БОЛЕЕ ТЕМНЫЙ ФОН */
+    border: 1px solid rgba(255, 255, 255, 0.1) !important; /* БОЛЕЕ ВИДИМАЯ ОБВОДКА */
+    border-radius: 6px; /* МЕНЬШЕЕ ЗАКРУГЛЕНИЕ */
     padding: 16px;
     margin-bottom: 12px; 
-    /* Простая тень */
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-    transition: all 0.2s ease;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6) !important; /* БОЛЕЕ ГЛУБОКАЯ ТЕНЬ */
+    transition: all 0.3s ease;
     position: relative;
     color: var(--text-primary);
+    /* Убираем любые светлые фоны */
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
 }
 
 .order-card:hover, .response-card:hover, .deal-card:hover {
-    background: rgba(32, 32, 32, 0.8);
-    border-color: rgba(29, 185, 84, 0.4);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    background: rgba(22, 22, 22, 0.95) !important; /* БОЛЕЕ ТЕМНЫЙ HOVER */
+    border-color: rgba(29, 185, 84, 0.6) !important; /* ЯРЧЕ ЗЕЛЕНАЯ ОБВОДКА */
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.7), 0 0 20px rgba(29, 185, 84, 0.2) !important;
+    transform: translateY(-1px); /* ЛЕГКИЙ ПОДЪЕМ */
 }
 
-/* ТОНКИЙ ЗЕЛЕНЫЙ АКЦЕНТ */
+/* БОЛЕЕ ЯРКИЙ ЗЕЛЕНЫЙ АКЦЕНТ */
 .order-card::before, .response-card::before, .deal-card::before {
     content: '';
     position: absolute;
     top: 0;
     left: 0;
     right: 0;
-    height: 2px;
-    background: #1DB954;
-    border-radius: 8px 8px 0 0;
+    height: 3px; /* ЧУТЬ ТОЛЩЕ */
+    background: linear-gradient(90deg, #1DB954, #1ed760) !important; /* ГРАДИЕНТ */
+    border-radius: 6px 6px 0 0; /* СООТВЕТСТВУЕТ ЗАКРУГЛЕНИЯМ КАРТОЧКИ */
+    box-shadow: 0 0 8px rgba(29, 185, 84, 0.4); /* ЛЕГКОЕ СВЕЧЕНИЕ */
 }
 
-/* ЗАГОЛОВОК КАРТОЧКИ */
+/* ЗАГОЛОВОК КАРТОЧКИ - ЧЕТКИЙ КОНТРАСТ */
 .order-header, .response-header, .deal-header {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
     margin-bottom: var(--space-lg);
     padding-bottom: var(--space-md);
-    border-bottom: 1px solid var(--border-secondary);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.15) !important; /* БОЛЕЕ ВИДИМАЯ ГРАНИЦА */
 }
 
 .order-user, .response-user, .deal-user {
     font-size: 16px;
     font-weight: 700;
-    color: var(--text-primary);
+    color: #ffffff !important; /* ЧЕТКИЙ БЕЛЫЙ ТЕКСТ */
     display: flex;
     align-items: center;
     gap: var(--space-sm);
@@ -665,7 +671,7 @@ input[type="submit"]:hover:not(.btn-danger):not(.btn-secondary):not(.btn-warning
     flex: 1;
 }
 
-/* СОДЕРЖИМОЕ КАРТОЧКИ */
+/* СОДЕРЖИМОЕ КАРТОЧКИ - ЧЕТКАЯ ЧИТАЕМОСТЬ */
 .order-details, .response-details, .deal-details {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -682,7 +688,7 @@ input[type="submit"]:hover:not(.btn-danger):not(.btn-secondary):not(.btn-warning
 .order-detail-label, .response-detail-label, .deal-detail-label {
     font-size: 12px;
     font-weight: 600;
-    color: var(--text-muted);
+    color: rgba(255, 255, 255, 0.6) !important; /* БОЛЕЕ ВИДИМЫЕ ЛЕЙБЛЫ */
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
@@ -690,7 +696,7 @@ input[type="submit"]:hover:not(.btn-danger):not(.btn-secondary):not(.btn-warning
 .order-detail-value, .response-detail-value, .deal-detail-value {
     font-size: 16px;
     font-weight: 700;
-    color: var(--text-primary);
+    color: #ffffff !important; /* ЧЕТКИЕ БЕЛЫЕ ЗНАЧЕНИЯ */
 }
 
 /* ============================================== */
@@ -914,17 +920,17 @@ input[type="submit"]:hover:not(.btn-danger):not(.btn-secondary):not(.btn-warning
     border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
-/* ЧИСТЫЕ ВКЛАДКИ БЕЗ ЗЕЛЕНЫХ ФОНОВ */
+/* ПРОЗРАЧНЫЕ ВКЛАДКИ С МЕНЬШИМИ ЗАКРУГЛЕНИЯМИ */
 .response-tab {
     flex: 1;
     min-width: 100px;
     padding: 10px 16px;
     border: none;
-    background: transparent;
-    color: rgba(255, 255, 255, 0.6);
+    background: transparent !important; /* ПРОЗРАЧНЫЙ ФОН */
+    color: rgba(255, 255, 255, 0.4); /* БОЛЕЕ БЛЕКЛЫЙ ЦВЕТ */
     font-size: 12px;
     font-weight: 400;
-    border-radius: 8px;
+    border-radius: 4px !important; /* МЕНЬШЕЕ ЗАКРУГЛЕНИЕ */
     cursor: pointer;
     transition: all 0.3s ease;
     display: flex;
@@ -934,17 +940,16 @@ input[type="submit"]:hover:not(.btn-danger):not(.btn-secondary):not(.btn-warning
     white-space: nowrap;
     text-transform: none;
     letter-spacing: 0;
-    /* Добавляем прозрачную нижнюю границу для анимации */
     border-bottom: 2px solid transparent;
     position: relative;
 }
 
-/* АКТИВНАЯ ВКЛАДКА - ТОЛЬКО ПОДЧЕРКИВАНИЕ */
+/* АКТИВНАЯ ВКЛАДКА - ЗЕЛЕНЫЙ ФОН КАК В НАВИГАЦИИ */
 .response-tab.active {
-    background: transparent !important; /* Никакого зеленого фона! */
-    color: #ffffff !important; /* Белый текст */
-    font-weight: 600 !important;
-    border-bottom: 2px solid #1DB954 !important; /* Только зеленое подчеркивание */
+    background: rgba(29, 185, 84, 0.8) !important; /* ЗЕЛЕНЫЙ ФОН ДЛЯ АКТИВНОЙ */
+    color: #000000 !important; /* ЧЕРНЫЙ ТЕКСТ НА ЗЕЛЕНОМ ФОНЕ */
+    font-weight: 700 !important; /* ЖИРНЕЕ */
+    border-bottom: none !important; /* Убираем подчеркивание, есть фон */
 }
 
 /* Простой hover без зеленого фона и без translateY */
@@ -1487,22 +1492,41 @@ select:focus-visible {
     outline: none;
 }
 
-/* Глобальная полоса прокрутки для всего приложения */
-html::-webkit-scrollbar {
-    width: 8px;
+/* ПОЛНОСТЬЮ УБИРАЕМ ВСЕ СКРОЛЛБАРЫ ВО ВСЕМ ПРИЛОЖЕНИИ */
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+*::-webkit-scrollbar {
+    width: 0px !important;
+    height: 0px !important;
+    background: transparent !important;
+    display: none !important;
 }
 
-html::-webkit-scrollbar-track {
-    background: var(--bg-secondary);
+html::-webkit-scrollbar-track,
+body::-webkit-scrollbar-track,
+*::-webkit-scrollbar-track {
+    background: transparent !important;
+    display: none !important;
 }
 
-html::-webkit-scrollbar-thumb {
-    background: var(--accent-green);
-    border-radius: 4px;
+html::-webkit-scrollbar-thumb,
+body::-webkit-scrollbar-thumb,
+*::-webkit-scrollbar-thumb {
+    background: transparent !important;
+    display: none !important;
 }
 
-html::-webkit-scrollbar-thumb:hover {
-    background: var(--accent-green-hover);
+html::-webkit-scrollbar-thumb:hover,
+body::-webkit-scrollbar-thumb:hover,
+*::-webkit-scrollbar-thumb:hover {
+    background: transparent !important;
+    display: none !important;
+}
+
+/* Firefox и IE глобально */
+html, body, * {
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
 }
 
 /* Анимации появления карточек с задержкой */
