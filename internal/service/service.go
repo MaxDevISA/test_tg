@@ -610,14 +610,14 @@ func (s *Service) GetUserDeals(userID int64) ([]*model.Deal, error) {
 				deal.AuthorName += " " + author.LastName
 			}
 			deal.AuthorUsername = author.Username
-			
-			log.Printf("[DEBUG] Обогащена сделка ID=%d данными автора: Name=%s, Username=%s", 
+
+			log.Printf("[DEBUG] Обогащена сделка ID=%d данными автора: Name=%s, Username=%s",
 				deal.ID, deal.AuthorName, deal.AuthorUsername)
 		} else {
-			log.Printf("[WARN] Не удалось получить данные автора ID=%d для сделки ID=%d: %v", 
+			log.Printf("[WARN] Не удалось получить данные автора ID=%d для сделки ID=%d: %v",
 				deal.AuthorID, deal.ID, err)
 		}
-		
+
 		// Добавляем данные контрагента
 		if counterparty, err := s.repo.GetUserByID(deal.CounterpartyID); err == nil {
 			deal.CounterpartyName = counterparty.FirstName
@@ -625,11 +625,11 @@ func (s *Service) GetUserDeals(userID int64) ([]*model.Deal, error) {
 				deal.CounterpartyName += " " + counterparty.LastName
 			}
 			deal.CounterpartyUsername = counterparty.Username
-			
-			log.Printf("[DEBUG] Обогащена сделка ID=%d данными контрагента: Name=%s, Username=%s", 
+
+			log.Printf("[DEBUG] Обогащена сделка ID=%d данными контрагента: Name=%s, Username=%s",
 				deal.ID, deal.CounterpartyName, deal.CounterpartyUsername)
 		} else {
-			log.Printf("[WARN] Не удалось получить данные контрагента ID=%d для сделки ID=%d: %v", 
+			log.Printf("[WARN] Не удалось получить данные контрагента ID=%d для сделки ID=%d: %v",
 				deal.CounterpartyID, deal.ID, err)
 		}
 	}
@@ -1051,6 +1051,42 @@ func (s *Service) GetMyResponses(userID int64) ([]*model.Response, error) {
 		return nil, fmt.Errorf("не удалось получить отклики: %w", err)
 	}
 
+	// Обогащаем отклики данными пользователей и заявок
+	for _, response := range responses {
+		// Добавляем данные откликнувшегося пользователя
+		if user, err := s.repo.GetUserByID(response.UserID); err == nil {
+			response.UserName = user.FirstName
+			if user.LastName != "" {
+				response.UserName += " " + user.LastName
+			}
+			response.Username = user.Username
+		}
+
+		// Получаем данные заявки и её автора
+		if order, err := s.GetOrder(response.OrderID); err == nil {
+			response.OrderType = string(order.Type)
+			response.Cryptocurrency = order.Cryptocurrency
+			response.FiatCurrency = order.FiatCurrency
+			response.Amount = order.Amount
+			response.Price = order.Price
+			response.TotalAmount = order.TotalAmount
+
+			// Добавляем данные автора заявки
+			if author, err := s.repo.GetUserByID(order.UserID); err == nil {
+				response.AuthorName = author.FirstName
+				if author.LastName != "" {
+					response.AuthorName += " " + author.LastName
+				}
+				response.AuthorUsername = author.Username
+				
+				log.Printf("[DEBUG] Обогащен отклик ID=%d: User=%s(@%s) -> Author=%s(@%s), Order=%s %s", 
+					response.ID, response.UserName, response.Username, 
+					response.AuthorName, response.AuthorUsername,
+					response.OrderType, response.Cryptocurrency)
+			}
+		}
+	}
+
 	log.Printf("[INFO] Найдено откликов пользователя ID=%d: %d", userID, len(responses))
 	return responses, nil
 }
@@ -1063,6 +1099,42 @@ func (s *Service) GetResponsesToMyOrders(authorID int64) ([]*model.Response, err
 	if err != nil {
 		log.Printf("[ERROR] Не удалось получить отклики на заявки: %v", err)
 		return nil, fmt.Errorf("не удалось получить отклики: %w", err)
+	}
+
+	// Обогащаем отклики данными пользователей и заявок
+	for _, response := range responses {
+		// Добавляем данные откликнувшегося пользователя
+		if user, err := s.repo.GetUserByID(response.UserID); err == nil {
+			response.UserName = user.FirstName
+			if user.LastName != "" {
+				response.UserName += " " + user.LastName
+			}
+			response.Username = user.Username
+		}
+
+		// Получаем данные заявки и её автора (это сам authorID)
+		if order, err := s.GetOrder(response.OrderID); err == nil {
+			response.OrderType = string(order.Type)
+			response.Cryptocurrency = order.Cryptocurrency
+			response.FiatCurrency = order.FiatCurrency
+			response.Amount = order.Amount
+			response.Price = order.Price
+			response.TotalAmount = order.TotalAmount
+
+			// Добавляем данные автора заявки (сам authorID)
+			if author, err := s.repo.GetUserByID(authorID); err == nil {
+				response.AuthorName = author.FirstName
+				if author.LastName != "" {
+					response.AuthorName += " " + author.LastName
+				}
+				response.AuthorUsername = author.Username
+				
+				log.Printf("[DEBUG] Обогащен отклик на заявку ID=%d: %s(@%s) -> Author=%s(@%s), Order=%s %s", 
+					response.ID, response.UserName, response.Username,
+					response.AuthorName, response.AuthorUsername,
+					response.OrderType, response.Cryptocurrency)
+			}
+		}
 	}
 
 	log.Printf("[INFO] Найдено откликов на заявки автора ID=%d: %d", authorID, len(responses))

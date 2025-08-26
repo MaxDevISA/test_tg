@@ -2429,16 +2429,24 @@ function createMyResponseCard(response) {
             </div>
             
             <div class="response-order-info">
-                <div class="order-title">Заявка #${response.order_id}</div>
-                <!-- Здесь можно добавить детали заявки -->
+                <h4 class="order-title">📋 Заявка #${response.order_id} - ${response.order_type === 'buy' ? '🟢 Покупка' : '🔴 Продажа'}</h4>
+                <div style="font-size: 13px; color: var(--tg-theme-hint-color, #708499); margin-top: 4px;">
+                    👤 Автор: ${response.author_username ? 
+                        `<span onclick="openTelegramProfile('${response.author_username}')" style="color: var(--tg-theme-link-color, #0088cc); cursor: pointer; text-decoration: underline; font-weight: 500;">@${response.author_username}</span>` :
+                        `<span style="color: var(--tg-theme-text-color, #000); font-weight: 500;">${response.author_name || 'Неизвестен'}</span>`
+                    }
+                </div>
+                ${response.cryptocurrency ? `
+                    <div style="font-size: 12px; color: var(--tg-theme-hint-color, #708499); margin-top: 6px;">
+                        💰 ${response.amount || '?'} ${response.cryptocurrency || '?'} за ${response.price || '?'} ${response.fiat_currency || '?'} = ${(response.total_amount || (response.amount * response.price)).toLocaleString('ru')} ${response.fiat_currency || '?'}
+                    </div>
+                ` : ''}
             </div>
             
-            ${response.message ? `
-                <div class="response-message">
-                    <strong>💬 Ваше сообщение:</strong>
-                    <p>${response.message}</p>
-                </div>
-            ` : ''}
+            <div class="response-message">
+                <strong>💬 Ваше сообщение:</strong>
+                <p>${response.message || 'Без сообщения'}</p>
+            </div>
             
             ${response.status === 'accepted' ? `
                 <div class="response-actions">
@@ -2465,7 +2473,10 @@ function createOrderResponseCard(response) {
     return `
         <div class="response-card order-response">
             <div class="response-header">
-                <div class="response-user">👤 Пользователь #${response.user_id}</div>
+                <div class="response-user">👤 ${response.username ? 
+                    `<span onclick="openTelegramProfile('${response.username}')" style="color: var(--tg-theme-link-color, #0088cc); cursor: pointer; text-decoration: underline; font-weight: 500;">@${response.username}</span>` :
+                    `<span style="color: var(--tg-theme-text-color, #000); font-weight: 500;">${response.user_name || `Пользователь #${response.user_id}`}</span>`
+                }</div>
                 <div class="response-status" style="color: ${status.color}">
                     ${status.icon} ${status.text}
                 </div>

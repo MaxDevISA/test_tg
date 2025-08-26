@@ -24,6 +24,18 @@ type Response struct {
 	CreatedAt  time.Time      `json:"created_at" db:"created_at"`   // Время создания отклика
 	UpdatedAt  time.Time      `json:"updated_at" db:"updated_at"`   // Время последнего обновления
 	ReviewedAt *time.Time     `json:"reviewed_at" db:"reviewed_at"` // Время рассмотрения автором (null если еще не рассмотрен)
+	
+	// Дополнительные поля для фронтенда (не сохраняются в БД)
+	UserName     string `json:"user_name,omitempty"`     // Полное имя откликнувшегося
+	Username     string `json:"username,omitempty"`      // Telegram username откликнувшегося
+	AuthorName   string `json:"author_name,omitempty"`   // Полное имя автора заявки
+	AuthorUsername string `json:"author_username,omitempty"` // Telegram username автора заявки
+	OrderType    string `json:"order_type,omitempty"`    // Тип заявки (buy/sell)
+	Cryptocurrency string `json:"cryptocurrency,omitempty"` // Криптовалюта
+	FiatCurrency   string `json:"fiat_currency,omitempty"`  // Фиатная валюта
+	Amount         float64 `json:"amount,omitempty"`        // Объем
+	Price          float64 `json:"price,omitempty"`         // Цена
+	TotalAmount    float64 `json:"total_amount,omitempty"`  // Общая сумма
 }
 
 // CreateResponseRequest содержит данные для создания нового отклика
