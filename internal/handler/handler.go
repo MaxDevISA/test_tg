@@ -554,8 +554,8 @@ func (h *Handler) handleConfirmDeal(w http.ResponseWriter, r *http.Request) {
 		paymentProof = "confirmed_via_webapp"
 	}
 
-	// Подтверждаем сделку через сервис
-	if err := h.service.ConfirmDeal(dealID, user.ID, paymentProof); err != nil {
+	// Подтверждаем сделку через сервис с указанием роли пользователя
+	if err := h.service.ConfirmDealWithRole(dealID, user.ID, requestData.IsAuthor, paymentProof); err != nil {
 		log.Printf("[WARN] Ошибка подтверждения сделки ID=%d: %v", dealID, err)
 		h.sendErrorResponse(w, err.Error(), http.StatusBadRequest)
 		return

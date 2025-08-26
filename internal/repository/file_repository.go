@@ -737,6 +737,61 @@ func (r *FileRepository) ConfirmDeal(dealID int64, userID int64, isPaymentProof 
 	return nil
 }
 
+// ConfirmDealWithRole подтверждает сделку с указанием роли пользователя
+func (r *FileRepository) ConfirmDealWithRole(dealID int64, userID int64, isAuthor bool, paymentProof string) error {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	log.Printf("[INFO] Подтверждение сделки ID=%d пользователем ID=%d (isAuthor=%v)", dealID, userID, isAuthor)
+
+	// Загружаем сделки
+	var deals []model.Deal
+	if err := r.loadFromFile("deals.json", &deals); err != nil {
+		return fmt.Errorf("не удалось загрузить сделки: %w", err)
+	}
+
+	// Ищем сделку и обновляем соответствующее поле подтверждения
+	var dealFound = false
+	for i := range deals {
+		if deals[i].ID == dealID {
+			dealFound = true
+			
+			if isAuthor {
+				deals[i].AuthorConfirmed = true
+				deals[i].AuthorProof = paymentProof
+				log.Printf("[DEBUG] Автор сделки ID=%d подтвердил (AuthorConfirmed=true)", dealID)
+			} else {
+				deals[i].CounterConfirmed = true
+				deals[i].CounterProof = paymentProof
+				log.Printf("[DEBUG] Контрагент сделки ID=%d подтвердил (CounterConfirmed=true)", dealID)
+			}
+
+			// Если оба подтвердили, завершаем сделку
+			if deals[i].AuthorConfirmed && deals[i].CounterConfirmed {
+				deals[i].Status = model.DealStatusCompleted
+				now := time.Now()
+				deals[i].CompletedAt = &now
+				log.Printf("[INFO] Сделка ID=%d завершена - оба участника подтвердили", dealID)
+			}
+
+			// UpdatedAt поле отсутствует в модели Deal
+			break
+		}
+	}
+
+	if !dealFound {
+		return fmt.Errorf("сделка ID=%d не найдена", dealID)
+	}
+
+	// Сохраняем обновленные сделки
+	if err := r.saveToFile("deals.json", deals); err != nil {
+		return fmt.Errorf("не удалось сохранить сделки: %w", err)
+	}
+
+	log.Printf("[INFO] Сделка ID=%d успешно подтверждена пользователем ID=%d", dealID, userID)
+	return nil
+}
+
 // =====================================================
 // УПРАВЛЕНИЕ ОТЗЫВАМИ И РЕЙТИНГАМИ
 // =====================================================

@@ -688,6 +688,40 @@ func (s *Service) ConfirmDeal(dealID, userID int64, paymentProof string) error {
 	return nil
 }
 
+// ConfirmDealWithRole подтверждает сделку со стороны пользователя с указанием роли
+func (s *Service) ConfirmDealWithRole(dealID, userID int64, isAuthor bool, paymentProof string) error {
+	log.Printf("[INFO] Подтверждение сделки ID=%d пользователем ID=%d (isAuthor=%v)", dealID, userID, isAuthor)
+
+	// Проверяем доступ к сделке
+	deal, err := s.GetDeal(dealID, userID)
+	if err != nil {
+		return err
+	}
+
+	// Проверяем что сделка в подходящем статусе
+	if deal.Status != model.DealStatusInProgress && deal.Status != model.DealStatusWaitingConfirmation {
+		return fmt.Errorf("сделка в статусе '%s' не может быть подтверждена", deal.Status)
+	}
+
+	// Проверяем соответствие роли
+	if isAuthor && deal.AuthorID != userID {
+		return fmt.Errorf("пользователь не является автором сделки")
+	}
+	if !isAuthor && deal.CounterpartyID != userID {
+		return fmt.Errorf("пользователь не является контрагентом сделки")
+	}
+
+	// Подтверждаем сделку с указанием роли
+	if err := s.repo.ConfirmDealWithRole(dealID, userID, isAuthor, paymentProof); err != nil {
+		log.Printf("[ERROR] Не удалось подтвердить сделку ID=%d: %v", dealID, err)
+		return fmt.Errorf("не удалось подтвердить сделку: %w", err)
+	}
+
+	log.Printf("[INFO] Сделка ID=%d подтверждена пользователем ID=%d как %s", dealID, userID, 
+		map[bool]string{true: "автор", false: "контрагент"}[isAuthor])
+	return nil
+}
+
 // =====================================================
 // СИСТЕМА ОТЗЫВОВ И РЕЙТИНГОВ
 // =====================================================
