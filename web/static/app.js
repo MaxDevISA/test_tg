@@ -2607,6 +2607,7 @@ function createDealCard(deal) {
     const counterpartyDisplayName = isAuthor ? counterpartyName : authorName;
     const counterpartyDisplayUsername = isAuthor ? counterpartyUsername : authorUsername;
     const counterpartyTelegramUsername = isAuthor ? deal.counterparty_username : deal.author_username;
+    const counterpartyUserId = isAuthor ? deal.counterparty_id : deal.author_id;
     
     console.log('[DEBUG] Telegram usernames:', {
         authorUsername: deal.author_username,
@@ -2712,9 +2713,16 @@ function createDealCard(deal) {
                         💬 Написать
                     </button>
                 ` : ''}
-                <button onclick="confirmPayment(${deal.id}, ${isAuthor})" style="background: ${myConfirmed ? 'var(--tg-theme-hint-color, #6c757d)' : 'var(--tg-theme-button-color, #22c55e)'}; color: var(--tg-theme-button-text-color, white); border: none; padding: 8px 12px; border-radius: 4px; font-size: 12px; flex: 1;" ${myConfirmed ? 'disabled' : ''}>
-                    ${myConfirmed ? '✅ Подтверждено' : '✅ Подтвердить'}
-                </button>
+                
+                ${deal.status === 'completed' ? `
+                    <button onclick="openReviewModal(${deal.id}, ${counterpartyUserId}, '${counterpartyDisplayName}')" style="background: var(--tg-theme-button-color, #f59e0b); color: var(--tg-theme-button-text-color, white); border: none; padding: 8px 12px; border-radius: 4px; font-size: 12px; flex: 1;">
+                        ⭐ Оставить отзыв
+                    </button>
+                ` : `
+                    <button onclick="confirmPayment(${deal.id}, ${isAuthor})" style="background: ${myConfirmed ? 'var(--tg-theme-hint-color, #6c757d)' : 'var(--tg-theme-button-color, #22c55e)'}; color: var(--tg-theme-button-text-color, white); border: none; padding: 8px 12px; border-radius: 4px; font-size: 12px; flex: 1;" ${myConfirmed ? 'disabled' : ''}>
+                        ${myConfirmed ? '✅ Подтверждено' : '✅ Подтвердить'}
+                    </button>
+                `}
             </div>
         </div>
     `;
@@ -2840,5 +2848,239 @@ async function confirmPayment(dealId, isAuthor) {
     } catch (error) {
         console.error('[ERROR] Ошибка подтверждения сделки:', error);
         showAlert('❌ Ошибка сети при подтверждении сделки');
+    }
+}
+
+// =====================================================
+// ФУНКЦИИ ДЛЯ РАБОТЫ С ОТЗЫВАМИ
+// =====================================================
+
+// Переменная для хранения текущего рейтинга
+let currentReviewRating = 0;
+
+// Открытие модального окна для оставления отзыва
+function openReviewModal(dealId, toUserId, counterpartyName) {
+    console.log('[DEBUG] Открытие модального окна отзыва:', { dealId, toUserId, counterpartyName });
+    
+    // Заполняем скрытые поля
+    document.getElementById('reviewDealId').value = dealId;
+    document.getElementById('reviewToUserId').value = toUserId;
+    document.getElementById('reviewCounterpartyName').textContent = counterpartyName || 'Неизвестный пользователь';
+    
+    // Сбрасываем форму
+    resetReviewForm();
+    
+    // Показываем модальное окно
+    const modal = document.getElementById('reviewModal');
+    modal.classList.add('show');
+    document.body.classList.add('modal-open');
+    
+    // Инициализируем звездный рейтинг
+    initializeStarRating();
+}
+
+// Закрытие модального окна отзыва
+function closeReviewModal() {
+    const modal = document.getElementById('reviewModal');
+    modal.classList.remove('show');
+    document.body.classList.remove('modal-open');
+    
+    // Сбрасываем форму при закрытии
+    resetReviewForm();
+}
+
+// Сброс формы отзыва к исходному состоянию
+function resetReviewForm() {
+    // Очищаем рейтинг
+    currentReviewRating = 0;
+    document.getElementById('reviewRating').value = '';
+    
+    // Сбрасываем звезды
+    const stars = document.querySelectorAll('#starRating .star');
+    stars.forEach(star => {
+        star.classList.remove('active', 'hovered', 'just-selected');
+    });
+    
+    // Сбрасываем текст рейтинга
+    document.getElementById('ratingValue').textContent = 'Выберите оценку от 1 до 5 звезд';
+    
+    // Очищаем комментарий
+    document.getElementById('reviewComment').value = '';
+    
+    // Сбрасываем чекбокс анонимности
+    document.getElementById('reviewAnonymous').checked = false;
+}
+
+// Инициализация звездного рейтинга
+function initializeStarRating() {
+    const stars = document.querySelectorAll('#starRating .star');
+    
+    stars.forEach((star, index) => {
+        const rating = parseInt(star.getAttribute('data-rating'));
+        
+        // Обработчик клика по звезде
+        star.addEventListener('click', function() {
+            selectStarRating(rating);
+        });
+        
+        // Обработчик наведения мыши
+        star.addEventListener('mouseenter', function() {
+            hoverStarRating(rating);
+        });
+    });
+    
+    // Обработчик покидания области звездного рейтинга
+    const starRating = document.getElementById('starRating');
+    starRating.addEventListener('mouseleave', function() {
+        clearHoverStarRating();
+    });
+}
+
+// Выбор рейтинга по звездам
+function selectStarRating(rating) {
+    console.log('[DEBUG] Выбран рейтинг:', rating);
+    
+    currentReviewRating = rating;
+    document.getElementById('reviewRating').value = rating;
+    
+    // Обновляем визуальное отображение звезд
+    updateStarsDisplay(rating, true);
+    
+    // Обновляем текст рейтинга
+    const ratingTexts = {
+        1: '1 звезда - Очень плохо',
+        2: '2 звезды - Плохо', 
+        3: '3 звезды - Нормально',
+        4: '4 звезды - Хорошо',
+        5: '5 звезд - Отлично'
+    };
+    
+    document.getElementById('ratingValue').textContent = ratingTexts[rating];
+    document.getElementById('ratingValue').style.color = rating >= 4 ? '#22c55e' : rating === 3 ? '#f59e0b' : '#ef4444';
+    
+    // Добавляем анимацию к выбранной звезде
+    const selectedStar = document.querySelector(`#starRating .star[data-rating="${rating}"]`);
+    selectedStar.classList.add('just-selected');
+    setTimeout(() => {
+        selectedStar.classList.remove('just-selected');
+    }, 300);
+}
+
+// Отображение hover эффекта для звезд
+function hoverStarRating(rating) {
+    updateStarsDisplay(rating, false, true);
+}
+
+// Очистка hover эффекта
+function clearHoverStarRating() {
+    updateStarsDisplay(currentReviewRating, true);
+}
+
+// Обновление визуального отображения звезд
+function updateStarsDisplay(rating, isSelected = false, isHovered = false) {
+    const stars = document.querySelectorAll('#starRating .star');
+    
+    stars.forEach((star, index) => {
+        const starRating = parseInt(star.getAttribute('data-rating'));
+        
+        // Удаляем все классы
+        star.classList.remove('active', 'hovered');
+        
+        if (starRating <= rating) {
+            if (isSelected) {
+                star.classList.add('active');
+            } else if (isHovered) {
+                star.classList.add('hovered');
+            }
+        }
+    });
+}
+
+// Обработчик отправки формы отзыва
+document.addEventListener('DOMContentLoaded', function() {
+    const reviewForm = document.getElementById('reviewForm');
+    if (reviewForm) {
+        reviewForm.addEventListener('submit', handleReviewSubmit);
+    }
+    
+    // Обработчик закрытия модального окна по клику вне его
+    const reviewModal = document.getElementById('reviewModal');
+    if (reviewModal) {
+        reviewModal.addEventListener('click', function(e) {
+            if (e.target === reviewModal) {
+                closeReviewModal();
+            }
+        });
+    }
+});
+
+// Обработка отправки отзыва
+async function handleReviewSubmit(event) {
+    event.preventDefault();
+    
+    console.log('[DEBUG] Отправка отзыва');
+    
+    if (!currentUser) {
+        showAlert('❌ Требуется авторизация');
+        return;
+    }
+    
+    // Проверяем обязательные поля
+    const dealId = parseInt(document.getElementById('reviewDealId').value);
+    const toUserId = parseInt(document.getElementById('reviewToUserId').value);
+    const rating = currentReviewRating;
+    
+    if (!dealId || !toUserId || !rating) {
+        showAlert('❌ Пожалуйста, заполните все обязательные поля');
+        return;
+    }
+    
+    if (rating < 1 || rating > 5) {
+        showAlert('❌ Рейтинг должен быть от 1 до 5 звезд');
+        return;
+    }
+    
+    // Собираем данные формы
+    const reviewData = {
+        deal_id: dealId,
+        to_user_id: toUserId,
+        rating: rating,
+        comment: document.getElementById('reviewComment').value.trim(),
+        is_anonymous: document.getElementById('reviewAnonymous').checked
+    };
+    
+    console.log('[DEBUG] Данные отзыва для отправки:', reviewData);
+    
+    try {
+        // Блокируем кнопку отправки
+        const submitButton = document.querySelector('#reviewForm button[type="submit"]');
+        const originalText = submitButton.textContent;
+        submitButton.disabled = true;
+        submitButton.textContent = 'Отправка...';
+        
+        // Отправляем отзыв через API
+        const result = await apiRequest('/api/v1/reviews', 'POST', reviewData);
+        
+        if (result.success) {
+            showAlert('✅ Отзыв успешно отправлен!\n\nСпасибо за ваше мнение.');
+            closeReviewModal();
+            
+            // Обновляем активные сделки
+            await loadActiveDeals();
+        } else {
+            console.error('[ERROR] Ошибка создания отзыва:', result.message);
+            showAlert('❌ Ошибка при отправке отзыва: ' + (result.message || 'Неизвестная ошибка'));
+        }
+        
+    } catch (error) {
+        console.error('[ERROR] Ошибка отправки отзыва:', error);
+        showAlert('❌ Ошибка сети при отправке отзыва');
+    } finally {
+        // Разблокируем кнопку
+        const submitButton = document.querySelector('#reviewForm button[type="submit"]');
+        if (submitButton) {
+            submitButton.disabled = false;
+            submitButton.textContent = originalText;
+        }
     }
 }

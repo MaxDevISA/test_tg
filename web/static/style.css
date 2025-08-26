@@ -794,3 +794,145 @@ body {
         flex: none;
     }
 }
+
+/* ===========================================
+   СТИЛИ ДЛЯ МОДАЛЬНОГО ОКНА ОТЗЫВОВ
+   =========================================== */
+
+/* Звездный рейтинг */
+.star-rating {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    justify-content: flex-start;
+    margin-bottom: 8px;
+}
+
+.star-rating .star {
+    font-size: 28px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    opacity: 0.3;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+}
+
+/* Стили для неактивных звезд */
+.star-rating .star:hover,
+.star-rating .star.hovered {
+    opacity: 0.7;
+    transform: scale(1.1);
+}
+
+/* Стили для активных (выбранных) звезд */
+.star-rating .star.active {
+    opacity: 1;
+    transform: scale(1.0);
+}
+
+/* Анимация при клике */
+.star-rating .star:active {
+    transform: scale(1.2);
+}
+
+/* Стили для различных рейтингов */
+.star-rating .star[data-rating="1"].active,
+.star-rating .star[data-rating="2"].active {
+    filter: hue-rotate(0deg) saturate(1.2); /* Красноватый оттенок для низких оценок */
+}
+
+.star-rating .star[data-rating="3"].active {
+    filter: hue-rotate(45deg) saturate(1.1); /* Оранжевый для средней оценки */
+}
+
+.star-rating .star[data-rating="4"].active,
+.star-rating .star[data-rating="5"].active {
+    filter: hue-rotate(0deg) saturate(1.0); /* Золотой для высоких оценок */
+}
+
+/* Стили для чекбокса анонимности */
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.checkbox-label input[type="checkbox"] {
+    margin-right: 8px;
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: var(--tg-theme-button-color, #0088cc);
+}
+
+.checkbox-label .checkmark {
+    margin-left: 8px;
+}
+
+/* Адаптивные стили для мобильных устройств */
+@media (max-width: 480px) {
+    .star-rating .star {
+        font-size: 24px;
+    }
+    
+    .star-rating {
+        gap: 2px;
+    }
+}
+
+/* Дополнительные стили для модального окна отзывов */
+#reviewModal .modal-content {
+    max-width: 400px;
+    width: 95%;
+}
+
+#reviewModal .form-group {
+    margin-bottom: 16px;
+}
+
+#reviewModal .form-label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 8px;
+    font-size: 14px;
+    color: var(--tg-theme-text-color, #000);
+}
+
+#reviewModal .form-textarea {
+    width: 100%;
+    min-height: 80px;
+    padding: 12px;
+    border: 1px solid var(--tg-theme-section-separator-color, #e1e8ed);
+    border-radius: 8px;
+    background: var(--tg-theme-bg-color, #ffffff);
+    color: var(--tg-theme-text-color, #000);
+    font-family: inherit;
+    font-size: 14px;
+    resize: vertical;
+    transition: border-color 0.2s ease;
+}
+
+#reviewModal .form-textarea:focus {
+    outline: none;
+    border-color: var(--tg-theme-button-color, #0088cc);
+}
+
+#reviewModal .form-textarea::placeholder {
+    color: var(--tg-theme-hint-color, #708499);
+    font-style: italic;
+}
+
+/* Анимация появления звезд */
+@keyframes starPulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+}
+
+.star-rating .star.just-selected {
+    animation: starPulse 0.3s ease;
+}

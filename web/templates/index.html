@@ -184,7 +184,7 @@
                         <label><input type="checkbox" name="payment_methods" value="tinkoff"> Тинькофф</label>
                         <label><input type="checkbox" name="payment_methods" value="qiwi"> СПБ</label>
                         <label><input type="checkbox" name="payment_methods" value="yandex_money"> ЮMoney</label>
-                        <label><input type="checkbox" name="payment_methods" value="bank_transfer">По № карты</label>
+                        <label><input type="checkbox" name="payment_methods" value="bank_transfer"> По № карты</label>
                         <label><input type="checkbox" name="payment_methods" value="cash"> Наличные</label>
                     </div>
                 </div>
@@ -198,6 +198,79 @@
                 
                 <button type="submit" class="btn btn-primary">Создать заявку</button>
             </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для оставления отзыва -->
+    <div id="reviewModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">⭐ Оставить отзыв</h3>
+                <button class="modal-close" onclick="closeReviewModal()">&times;</button>
+            </div>
+            
+            <div class="modal-body">
+                <form id="reviewForm">
+                    <!-- Скрытые поля для передачи данных -->
+                    <input type="hidden" id="reviewDealId" name="deal_id">
+                    <input type="hidden" id="reviewToUserId" name="to_user_id">
+                    
+                    <!-- Информация о контрагенте -->
+                    <div style="background: var(--tg-theme-secondary-bg-color, #f8fafc); border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+                        <div style="font-size: 12px; color: var(--tg-theme-hint-color, #708499); margin-bottom: 4px;">Контрагент:</div>
+                        <div id="reviewCounterpartyName" style="font-weight: 600;"></div>
+                    </div>
+                    
+                    <!-- Рейтинг звездами -->
+                    <div class="form-group">
+                        <label class="form-label">Оценка (обязательно)</label>
+                        <div class="star-rating" id="starRating">
+                            <span class="star" data-rating="1">⭐</span>
+                            <span class="star" data-rating="2">⭐</span>
+                            <span class="star" data-rating="3">⭐</span>
+                            <span class="star" data-rating="4">⭐</span>
+                            <span class="star" data-rating="5">⭐</span>
+                        </div>
+                        <div id="ratingValue" style="margin-top: 8px; font-size: 14px; color: var(--tg-theme-hint-color, #708499);">
+                            Выберите оценку от 1 до 5 звезд
+                        </div>
+                        <input type="hidden" id="reviewRating" name="rating" required>
+                    </div>
+                    
+                    <!-- Комментарий -->
+                    <div class="form-group">
+                        <label class="form-label">Отзыв (необязательно)</label>
+                        <textarea class="form-textarea" id="reviewComment" name="comment" 
+                                  rows="4" maxlength="500" 
+                                  placeholder="Расскажите о вашем опыте сделки..."></textarea>
+                        <div style="font-size: 12px; color: var(--tg-theme-hint-color, #708499); margin-top: 4px;">
+                            Максимум 500 символов
+                        </div>
+                    </div>
+                    
+                    <!-- Анонимность -->
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="reviewAnonymous" name="is_anonymous">
+                            <span class="checkmark"></span>
+                            Анонимный отзыв
+                        </label>
+                        <div style="font-size: 12px; color: var(--tg-theme-hint-color, #708499); margin-top: 4px;">
+                            Ваше имя не будет отображаться в отзыве
+                        </div>
+                    </div>
+                    
+                    <!-- Кнопки действий -->
+                    <div style="display: flex; gap: 12px; margin-top: 24px;">
+                        <button type="button" class="btn btn-secondary" onclick="closeReviewModal()" style="flex: 1;">
+                            Отменить
+                        </button>
+                        <button type="submit" class="btn btn-primary" style="flex: 1;">
+                            ⭐ Оставить отзыв
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
