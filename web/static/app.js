@@ -80,6 +80,32 @@ function initNavigation() {
     });
 }
 
+// Обработка навигации по хэшу URL  
+function handleHashNavigation() {
+    console.log('[DEBUG] Проверка хэша URL для навигации');
+    
+    const hash = window.location.hash.replace('#', '');
+    console.log('[DEBUG] Найден хэш:', hash);
+    
+    if (hash) {
+        // Ищем соответствующую кнопку навигации
+        const targetButton = document.querySelector(`[data-view="${hash}"]`);
+        
+        if (targetButton) {
+            console.log('[DEBUG] Найдена кнопка для хэша:', hash);
+            // Автоматически кликаем на нужную кнопку через небольшую задержку
+            setTimeout(() => {
+                targetButton.click();
+                console.log('[DEBUG] Автоматический переход на страницу:', hash);
+            }, 500); // Даем время для инициализации приложения
+        } else {
+            console.log('[DEBUG] Кнопка для хэша не найдена:', hash);
+        }
+    } else {
+        console.log('[DEBUG] Хэш отсутствует, остаемся на главной странице');
+    }
+}
+
 // Модальное окно
 function initModal() {
     const modal = document.getElementById('createOrderModal');
@@ -1337,6 +1363,17 @@ document.addEventListener('DOMContentLoaded', () => {
     initNavigation();
     initModal();
     initReviewModal();
+    
+    // Обрабатываем хэш URL после полной инициализации
+    setTimeout(() => {
+        handleHashNavigation();
+    }, 1000); // Даем больше времени для полной загрузки
+    
+    // Обрабатываем изменение хэша в реальном времени
+    window.addEventListener('hashchange', () => {
+        console.log('[DEBUG] Изменение хэша обнаружено');
+        handleHashNavigation();
+    });
 });
 
 // Инициализация модального окна для отзывов
