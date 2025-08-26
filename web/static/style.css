@@ -671,7 +671,7 @@ input[type="submit"]:hover:not(.btn-danger):not(.btn-secondary):not(.btn-warning
     flex: 1;
 }
 
-/* СОДЕРЖИМОЕ КАРТОЧКИ - ЧЕТКАЯ ЧИТАЕМОСТЬ */
+/* СОДЕРЖИМОЕ КАРТОЧКИ - ЧЕТКАЯ ЧИТАЕМОСТЬ b*/
 .order-details, .response-details, .deal-details {
     display: grid;
     grid-template-columns: 1fr 1fr;
