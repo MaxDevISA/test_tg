@@ -146,60 +146,53 @@ body {
 
 .navigation {
     display: flex;
-    background: rgba(24, 24, 24, 0.8);
+    background: rgba(18, 18, 18, 0.95);
     backdrop-filter: blur(20px) saturate(180%);
     -webkit-backdrop-filter: blur(20px) saturate(180%);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
-    padding: 12px;
-    gap: 6px;
-    /* Тень как в Spotify */
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    padding: 8px 16px;
+    gap: 4px;
+    /* Минималистичная тень */
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 .nav-item {
     flex: 1;
-    min-width: 90px;
-    padding: 12px 16px;
+    min-width: 80px;
+    padding: 8px 12px;
     border: none;
     background: transparent;
-    color: var(--text-secondary);
-    font-size: 12px;
-    font-weight: 500;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 11px;
+    font-weight: 400;
     cursor: pointer;
     white-space: nowrap;
-    transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    border-radius: 8px;
+    transition: all 0.2s ease;
+    border-radius: 6px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 4px;
+    gap: 2px;
     text-align: center;
     position: relative;
-    overflow: hidden;
-    /* Стиль как в Spotify */
-    opacity: 0.7;
+    /* Минималистичный стиль Spotify */
 }
 
 .nav-item:hover:not(.active) {
-    background: rgba(29, 185, 84, 0.1);
-    color: var(--text-primary);
-    opacity: 1;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(29, 185, 84, 0.15);
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.9);
 }
 
 .nav-item.active {
-    background: var(--gradient-green) !important;
-    color: #000000 !important;
-    box-shadow: 0 6px 20px rgba(29, 185, 84, 0.35), 0 2px 8px rgba(29, 185, 84, 0.2);
-    transform: translateY(-2px);
-    font-weight: 700 !important;
-    opacity: 1 !important;
-    /* Spotify-стиль тень */
-    border-radius: 8px;
+    background: rgba(29, 185, 84, 0.15) !important;
+    color: #1DB954 !important;
+    font-weight: 600 !important;
+    border-bottom: 2px solid #1DB954;
+    border-radius: 6px 6px 0 0;
+    /* Тонкая подсветка как в Spotify */
 }
 
 .nav-item.active::before {
@@ -279,16 +272,12 @@ body {
 /* ============================================== */
 
 .filters {
-    background: linear-gradient(135deg, rgba(24, 24, 24, 0.9) 0%, rgba(32, 32, 32, 0.8) 100%);
-    border-radius: 16px; /* Более скругленные углы как в Spotify */
-    padding: 24px;
-    margin-bottom: 24px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 
-                0 4px 16px rgba(0, 0, 0, 0.2),
-                inset 0 1px 0 rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    background: rgba(24, 24, 24, 0.4);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    /* Простой минималистичный стиль */
 }
 
 .filter-row {
@@ -299,71 +288,57 @@ body {
 }
 
 .form-select, .form-input {
-    padding: 16px 20px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 8px; /* Скругление как в Spotify */
-    background: rgba(24, 24, 24, 0.8);
-    backdrop-filter: blur(10px) saturate(180%);
-    -webkit-backdrop-filter: blur(10px) saturate(180%);
+    padding: 12px 16px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 4px; /* Меньшее скругление */
+    background: rgba(40, 40, 40, 0.6);
     color: var(--text-primary);
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 400;
     width: 100%;
-    transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    transition: all 0.2s ease;
     font-family: inherit;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2), 
-                inset 0 1px 0 rgba(255, 255, 255, 0.05);
-    min-height: 48px; /* Высота как в Spotify */
+    /* Убираем лишние тени и эффекты */
+    min-height: 40px;
 }
 
 .form-input:focus {
     outline: none;
-    border-color: var(--accent-green);
-    box-shadow: 0 0 0 2px rgba(29, 185, 84, 0.3),
-                0 6px 20px rgba(0, 0, 0, 0.3),
-                inset 0 1px 0 rgba(255, 255, 255, 0.1);
-    background: rgba(32, 32, 32, 0.9);
+    border-color: #1DB954;
+    background: rgba(50, 50, 50, 0.8);
 }
 
 .form-select:focus {
     outline: none;
-    border-color: var(--accent-green);
-    box-shadow: 0 0 0 2px rgba(29, 185, 84, 0.3),
-                0 6px 20px rgba(0, 0, 0, 0.3),
-                inset 0 1px 0 rgba(255, 255, 255, 0.1);
-    background: rgba(32, 32, 32, 0.9);
+    border-color: #1DB954;
+    background: rgba(50, 50, 50, 0.8);
 }
 
 .form-input:hover {
-    border-color: rgba(29, 185, 84, 0.5);
-    background: rgba(32, 32, 32, 0.8);
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25),
-                inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.15);
+    background: rgba(50, 50, 50, 0.7);
 }
 
 .form-select:hover {
-    border-color: rgba(43, 228, 126, 0.3);
-    background: var(--background-card-hover);
-    transform: translateY(-1px);
+    border-color: rgba(255, 255, 255, 0.15);
+    background: rgba(50, 50, 50, 0.7);
 }
 
-/* Дополнительные стили для выпадающих списков */
+/* Стили для выпадающих списков */
 select.form-select {
     appearance: none;
     -webkit-appearance: none;
     -moz-appearance: none;
-    background-image: linear-gradient(45deg, transparent 50%, rgba(43, 228, 126, 0.5) 50%),
-                      linear-gradient(135deg, rgba(43, 228, 126, 0.5) 50%, transparent 50%);
-    background-position: calc(100% - 20px) calc(1em + 2px),
-                         calc(100% - 15px) calc(1em + 2px);
-    background-size: 5px 5px, 5px 5px;
+    /* Простая стрелка вниз */
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+    background-position: right 12px center;
+    background-size: 16px 16px;
     background-repeat: no-repeat;
     padding-right: 40px;
 }
 
 select.form-select:focus {
-    background-image: linear-gradient(45deg, transparent 50%, rgba(43, 228, 126, 0.7) 50%),
-                      linear-gradient(135deg, rgba(43, 228, 126, 0.7) 50%, transparent 50%);
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%231db954' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
 }
 
 .form-textarea {
@@ -392,28 +367,27 @@ select.form-select:focus {
 /* КНОПКИ - ЕДИНЫЙ ЗЕЛЕНЫЙ СТИЛЬ */
 /* ============================================== */
 
-/* 🎵 КНОПКИ В СТИЛЕ SPOTIFY */
+/* 🎵 КНОПКИ В СДЕРЖАННОМ СТИЛЕ SPOTIFY */
 button:not(.btn-danger):not(.btn-secondary):not(.btn-warning), 
 .btn:not(.btn-danger):not(.btn-secondary):not(.btn-warning), 
 input[type="button"]:not(.btn-danger):not(.btn-secondary):not(.btn-warning), 
 input[type="submit"]:not(.btn-danger):not(.btn-secondary):not(.btn-warning) {
-    background: var(--gradient-green) !important;
+    background: #1DB954 !important;
     color: #000000 !important;
     border: none !important;
-    font-weight: 700 !important;
-    border-radius: 50px !important; /* Скругленные как в Spotify */
+    font-weight: 600 !important;
+    border-radius: 24px !important;
     text-transform: none !important;
-    letter-spacing: 0.5px !important;
+    letter-spacing: 0.2px !important;
 }
 
 button:hover:not(.btn-danger):not(.btn-secondary):not(.btn-warning), 
 .btn:hover:not(.btn-danger):not(.btn-secondary):not(.btn-warning), 
 input[type="button"]:hover:not(.btn-danger):not(.btn-secondary):not(.btn-warning), 
 input[type="submit"]:hover:not(.btn-danger):not(.btn-secondary):not(.btn-warning) {
-    background: var(--gradient-green-intense) !important;
+    background: #1ed760 !important;
     color: #000000 !important;
-    transform: scale(1.05) !important; /* Эффект увеличения как в Spotify */
-    box-shadow: 0 8px 24px rgba(29, 185, 84, 0.4) !important;
+    transform: scale(1.02) !important; /* Меньшее увеличение */
 }
 
 /* Исключения для особых кнопок */
@@ -441,23 +415,22 @@ input[type="submit"]:hover:not(.btn-danger):not(.btn-secondary):not(.btn-warning
 }
 
 .btn {
-    padding: 12px 32px;
-    border-radius: 50px; /* Полностью скругленные как в Spotify */
+    padding: 10px 24px;
+    border-radius: 24px; /* Умеренно скругленные */
     border: none;
-    font-size: 14px;
-    font-weight: 700;
+    font-size: 13px;
+    font-weight: 600;
     cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    transition: all 0.2s ease;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
+    gap: 6px;
     text-decoration: none;
     position: relative;
-    overflow: hidden;
-    text-transform: none; /* Убираем uppercase */
-    letter-spacing: 0.4px;
-    min-height: 48px; /* Минимальная высота как в Spotify */
+    text-transform: none;
+    letter-spacing: 0.2px;
+    min-height: 36px; /* Меньшая высота */
 }
 
 .btn::before {
@@ -476,18 +449,15 @@ input[type="submit"]:hover:not(.btn-danger):not(.btn-secondary):not(.btn-warning
 }
 
 .btn-primary {
-    background: var(--gradient-green) !important;
-    color: black !important;
-    box-shadow: var(--shadow-card);
+    background: #1DB954 !important;
+    color: #000000 !important;
     width: 100%;
-    font-weight: 700 !important;
+    font-weight: 600 !important;
 }
 
 .btn-primary:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-card-hover);
-    background: var(--gradient-green-intense) !important;
-    color: black !important;
+    background: #1ed760 !important;
+    color: #000000 !important;
 }
 
 .btn-primary:active {
@@ -567,47 +537,36 @@ input[type="submit"]:hover:not(.btn-danger):not(.btn-secondary):not(.btn-warning
 /* КАРТОЧКИ ЗАЯВОК И КОНТЕНТА (ГЛАВНАЯ ПРОБЛЕМА РЕШЕНА) */
 /* ============================================== */
 
-/* 🎵 КАРТОЧКИ В СТИЛЕ SPOTIFY */
+/* 🎵 КАРТОЧКИ В МИНИМАЛИСТИЧНОМ СТИЛЕ SPOTIFY */
 .order-card, .response-card, .deal-card {
-    background: linear-gradient(135deg, rgba(24, 24, 24, 0.9) 0%, rgba(32, 32, 32, 0.9) 100%);
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
-    border: 1px solid rgba(255, 255, 255, 0.04);
-    border-radius: 12px;
-    padding: 24px;
-    margin-bottom: 16px; 
-    /* Тени как в Spotify */
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4), 
-                0 2px 6px rgba(0, 0, 0, 0.3),
-                inset 0 1px 0 rgba(255, 255, 255, 0.05);
-    transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    background: rgba(24, 24, 24, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 12px; 
+    /* Простая тень */
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    transition: all 0.2s ease;
     position: relative;
-    overflow: hidden;
     color: var(--text-primary);
 }
 
 .order-card:hover, .response-card:hover, .deal-card:hover {
-    transform: translateY(-6px);
-    /* Spotify-эффект свечения при наведении */
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6), 
-                0 6px 16px rgba(29, 185, 84, 0.2),
-                0 2px 8px rgba(0, 0, 0, 0.4),
-                inset 0 1px 0 rgba(255, 255, 255, 0.08);
-    border-color: rgba(29, 185, 84, 0.3);
-    background: linear-gradient(135deg, rgba(32, 32, 32, 0.95) 0%, rgba(40, 40, 40, 0.95) 100%);
+    background: rgba(32, 32, 32, 0.8);
+    border-color: rgba(29, 185, 84, 0.4);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
-/* ЗЕЛЕНЫЙ АКЦЕНТ КАК В SPOTIFY */
+/* ТОНКИЙ ЗЕЛЕНЫЙ АКЦЕНТ */
 .order-card::before, .response-card::before, .deal-card::before {
     content: '';
     position: absolute;
     top: 0;
     left: 0;
     right: 0;
-    height: 3px;
-    background: var(--gradient-green);
-    border-radius: 12px 12px 0 0;
-    opacity: 0.8;
+    height: 2px;
+    background: #1DB954;
+    border-radius: 8px 8px 0 0;
 }
 
 /* ЗАГОЛОВОК КАРТОЧКИ */
@@ -896,52 +855,45 @@ input[type="submit"]:hover:not(.btn-danger):not(.btn-secondary):not(.btn-warning
 
 .response-tabs {
     display: flex;
-    background: var(--background-card);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border-radius: var(--radius-xl);
-    padding: var(--space-sm);
-    margin-bottom: var(--space-xl);
+    background: rgba(24, 24, 24, 0.4);
+    border-radius: 8px;
+    padding: 6px;
+    margin-bottom: 16px;
     overflow-x: auto;
-    box-shadow: var(--shadow-card);
-    gap: var(--space-sm);
+    gap: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .response-tab {
     flex: 1;
-    min-width: 120px;
-    padding: var(--space-md) var(--space-lg);
-    border: 2px solid transparent;
-    background: rgba(30, 32, 47, 0.5);
-    color: var(--text-secondary);
-    font-size: 13px;
-    font-weight: 500;
-    border-radius: var(--radius-md);
+    min-width: 100px;
+    padding: 8px 12px;
+    border: none;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 12px;
+    font-weight: 400;
+    border-radius: 6px;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: all 0.2s ease;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: var(--space-xs);
+    gap: 2px;
     white-space: nowrap;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    text-transform: none;
+    letter-spacing: 0;
 }
 
 .response-tab.active {
-    background: var(--gradient-green);
-    color: black !important;
-    border-color: var(--accent-green);
-    box-shadow: var(--shadow-card);
-    transform: translateY(-2px);
-    font-weight: 700 !important;
+    background: rgba(29, 185, 84, 0.15);
+    color: #1DB954 !important;
+    font-weight: 600 !important;
 }
 
 .response-tab:hover:not(.active) {
-    background: rgba(43, 228, 126, 0.15);
-    color: var(--accent-green);
-    border-color: rgba(43, 228, 126, 0.4);
-    transform: translateY(-1px);
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.9);
 }
 
 .response-content {
@@ -959,16 +911,12 @@ input[type="submit"]:hover:not(.btn-danger):not(.btn-secondary):not(.btn-warning
 
 .section-header {
     text-align: center;
-    margin-bottom: var(--space-2xl);
-    padding: var(--space-2xl);
-    background: var(--background-card);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border-radius: var(--radius-xl);
-    box-shadow: var(--shadow-card);
-    border: 1px solid var(--border-card);
+    margin-bottom: 20px;
+    padding: 16px;
+    background: rgba(24, 24, 24, 0.4);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
     position: relative;
-    overflow: hidden;
 }
 
 .section-header::before {
@@ -977,26 +925,23 @@ input[type="submit"]:hover:not(.btn-danger):not(.btn-secondary):not(.btn-warning
     top: 0;
     left: 0;
     right: 0;
-    height: 4px;
-    background: var(--gradient-success);
+    height: 2px;
+    background: #1DB954;
+    border-radius: 8px 8px 0 0;
 }
 
 .section-header h2 {
-    font-size: 28px;
-    font-weight: 700;
-    margin-bottom: var(--space-md);
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 8px;
     color: var(--text-primary);
-    background: var(--gradient-green);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
 }
 
 .section-description {
-    font-size: 16px;
+    font-size: 13px;
     color: var(--text-muted);
     margin: 0;
-    line-height: 1.6;
+    line-height: 1.5;
 }
 
 /* ============================================== */
@@ -1012,21 +957,18 @@ input[type="submit"]:hover:not(.btn-danger):not(.btn-secondary):not(.btn-warning
 
 .profile-stat-card {
     text-align: center;
-    padding: var(--space-2xl);
-    background: var(--background-card);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border: 1px solid var(--border-card);
-    border-radius: var(--radius-xl);
-    box-shadow: var(--shadow-card);
-    transition: all 0.3s ease;
+    padding: 20px;
+    background: rgba(24, 24, 24, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    transition: all 0.2s ease;
     position: relative;
-    overflow: hidden;
 }
 
 .profile-stat-card:hover {
-    box-shadow: var(--shadow-card-hover);
-    transform: translateY(-4px);
+    background: rgba(32, 32, 32, 0.8);
+    border-color: rgba(29, 185, 84, 0.4);
 }
 
 .profile-stat-card::before {
@@ -1035,8 +977,9 @@ input[type="submit"]:hover:not(.btn-danger):not(.btn-secondary):not(.btn-warning
     top: 0;
     left: 0;
     right: 0;
-    height: 4px;
-    background: var(--gradient-success);
+    height: 2px;
+    background: #1DB954;
+    border-radius: 8px 8px 0 0;
 }
 
 .profile-stat-number {
@@ -1127,15 +1070,12 @@ input[type="submit"]:hover:not(.btn-danger):not(.btn-secondary):not(.btn-warning
 
 .empty-state {
     text-align: center;
-    padding: var(--space-2xl);
+    padding: 24px;
     color: var(--text-muted);
-    background: var(--background-card);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border-radius: var(--radius-xl);
-    box-shadow: var(--shadow-card);
-    margin: var(--space-xl) 0;
-    border: 1px solid var(--border-card);
+    background: rgba(24, 24, 24, 0.4);
+    border-radius: 8px;
+    margin: 16px 0;
+    border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .empty-icon {
@@ -1163,16 +1103,13 @@ input[type="submit"]:hover:not(.btn-danger):not(.btn-secondary):not(.btn-warning
 /* ============================================== */
 
 .order-info-card {
-    background: var(--background-card);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border: 1px solid var(--border-card);
-    border-radius: var(--radius-xl);
-    padding: var(--space-xl);
-    margin-bottom: var(--space-xl);
-    box-shadow: var(--shadow-card);
+    background: rgba(24, 24, 24, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
     position: relative;
-    overflow: hidden;
 }
 
 .order-info-card::before {
@@ -1181,8 +1118,9 @@ input[type="submit"]:hover:not(.btn-danger):not(.btn-secondary):not(.btn-warning
     top: 0;
     left: 0;
     right: 0;
-    height: 4px;
-    background: var(--gradient-warning);
+    height: 2px;
+    background: #ffa726;
+    border-radius: 8px 8px 0 0;
 }
 
 .order-info-title {
