@@ -1078,9 +1078,9 @@ func (s *Service) GetMyResponses(userID int64) ([]*model.Response, error) {
 					response.AuthorName += " " + author.LastName
 				}
 				response.AuthorUsername = author.Username
-				
-				log.Printf("[DEBUG] Обогащен отклик ID=%d: User=%s(@%s) -> Author=%s(@%s), Order=%s %s", 
-					response.ID, response.UserName, response.Username, 
+
+				log.Printf("[DEBUG] Обогащен отклик ID=%d: User=%s(@%s) -> Author=%s(@%s), Order=%s %s",
+					response.ID, response.UserName, response.Username,
 					response.AuthorName, response.AuthorUsername,
 					response.OrderType, response.Cryptocurrency)
 			}
@@ -1128,8 +1128,8 @@ func (s *Service) GetResponsesToMyOrders(authorID int64) ([]*model.Response, err
 					response.AuthorName += " " + author.LastName
 				}
 				response.AuthorUsername = author.Username
-				
-				log.Printf("[DEBUG] Обогащен отклик на заявку ID=%d: %s(@%s) -> Author=%s(@%s), Order=%s %s", 
+
+				log.Printf("[DEBUG] Обогащен отклик на заявку ID=%d: %s(@%s) -> Author=%s(@%s), Order=%s %s",
 					response.ID, response.UserName, response.Username,
 					response.AuthorName, response.AuthorUsername,
 					response.OrderType, response.Cryptocurrency)
