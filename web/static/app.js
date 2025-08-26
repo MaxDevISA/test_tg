@@ -168,7 +168,8 @@ async function loadOrders() {
     content.innerHTML = '<div class="loading"><div class="spinner"></div><p>Загрузка заявок...</p></div>';
     
     try {
-        const response = await fetch('/api/v1/orders');
+        // Добавляем фильтр status=active чтобы показывались только активные заявки
+        const response = await fetch('/api/v1/orders?status=active');
         const result = await response.json();
         
         // Отладочная информация
@@ -941,9 +942,13 @@ function displayProfileWithReviews(user, reviews, stats) {
                         ${review.comment}
                     </div>
                     ` : ''}
-                    ${!review.is_anonymous ? `
+                    ${!review.is_anonymous && review.from_user_name ? `
                     <div style="font-size: 11px; color: var(--tg-theme-hint-color, #708499); margin-top: 6px;">
-                        От: Пользователь #${review.from_user_id}
+                        От: ${review.from_user_username ? '@' + review.from_user_username : review.from_user_name}
+                    </div>
+                    ` : review.is_anonymous ? `
+                    <div style="font-size: 11px; color: var(--tg-theme-hint-color, #708499); margin-top: 6px;">
+                        Анонимный отзыв
                     </div>
                     ` : ''}
                 </div>
@@ -1081,16 +1086,7 @@ function displayMyProfile(user, stats, reviews) {
             </div>
             `}
             
-            <!-- Объем торгов -->
-            ${stats?.total_trade_volume > 0 ? `
-            <div style="background: var(--tg-theme-secondary-bg-color, #f8f9fa); border-radius: 12px; padding: 16px; margin-bottom: 24px; text-align: center;">
-                <div style="font-size: 14px; color: var(--tg-theme-hint-color, #708499); margin-bottom: 4px;">
-                    Общий объем торгов
-                </div>
-                <div style="font-size: 24px; font-weight: 700; color: #22c55e;">
-                    $${stats.total_trade_volume.toLocaleString('ru')}
-                </div>
-            </div>` : ''}
+
     `;
     
     // Отзывы
@@ -1113,6 +1109,15 @@ function displayMyProfile(user, stats, reviews) {
                     ${review.comment ? `
                     <div class="profile-review-comment">
                         ${review.comment}
+                    </div>
+                    ` : ''}
+                    ${!review.is_anonymous && review.from_user_name ? `
+                    <div class="profile-review-author" style="font-size: 11px; color: var(--tg-theme-hint-color, #708499); margin-top: 6px;">
+                        От: ${review.from_user_username ? '@' + review.from_user_username : review.from_user_name}
+                    </div>
+                    ` : review.is_anonymous ? `
+                    <div class="profile-review-author" style="font-size: 11px; color: var(--tg-theme-hint-color, #708499); margin-top: 6px;">
+                        Анонимный отзыв
                     </div>
                     ` : ''}
                 </div>
@@ -1584,6 +1589,15 @@ function displayUserProfileModal(profileData, reviews) {
                     ${review.comment ? `
                     <div class="profile-review-comment">
                         ${review.comment}
+                    </div>
+                    ` : ''}
+                    ${!review.is_anonymous && review.from_user_name ? `
+                    <div class="profile-review-author" style="font-size: 11px; color: var(--tg-theme-hint-color, #708499); margin-top: 6px;">
+                        От: ${review.from_user_username ? '@' + review.from_user_username : review.from_user_name}
+                    </div>
+                    ` : review.is_anonymous ? `
+                    <div class="profile-review-author" style="font-size: 11px; color: var(--tg-theme-hint-color, #708499); margin-top: 6px;">
+                        Анонимный отзыв
                     </div>
                     ` : ''}
                 </div>
@@ -2595,7 +2609,6 @@ function createDealCard(deal) {
     
     // Определяем роль пользователя в сделке
     const isAuthor = currentInternalUserId === deal.author_id;
-    const userRole = isAuthor ? 'Автор заявки' : 'Откликнувшийся';
     
     // Получаем данные автора и контрагента
     const authorName = deal.author_name || `Пользователь ${deal.author_id}`;
@@ -2627,8 +2640,7 @@ function createDealCard(deal) {
     
     const status = statusConfig[deal.status] || statusConfig.in_progress;
     
-    // Оставшееся время
-    const timeLeft = deal.expires_at ? calculateTimeLeft(deal.expires_at) : null;
+    // Убираем таймер - больше не используем
     
     // Подтверждения участников
     const authorConfirmed = deal.author_confirmed || false;
@@ -2643,7 +2655,6 @@ function createDealCard(deal) {
                     ${deal.order_type === 'buy' ? '🟢 Покупка' : '🔴 Продажа'}
                 </span>
                 <div style="display: flex; align-items: center; gap: 8px;">
-                    <span style="font-size: 12px; color: var(--tg-theme-hint-color, #708499);">${userRole}</span>
                     <span style="color: ${status.color}; font-weight: 500; font-size: 14px;">
                         ${status.icon} ${status.text}
                     </span>
@@ -2687,11 +2698,7 @@ function createDealCard(deal) {
                 </div>
             </div>
             
-            ${timeLeft ? `
-                <div style="background: #fef3cd; border: 1px solid #fbbf24; border-radius: 4px; padding: 8px; margin-bottom: 12px; text-align: center;">
-                    <span style="color: #92400e; font-weight: 500;">⏰ Осталось времени: ${timeLeft}</span>
-                </div>
-            ` : ''}
+
             
             <div style="background: var(--tg-theme-secondary-bg-color, #f8fafc); border-radius: 6px; padding: 8px; margin-bottom: 12px;">
                 <div style="font-size: 12px; color: var(--tg-theme-hint-color, #708499); margin-bottom: 6px;">Подтверждения:</div>
@@ -2728,25 +2735,7 @@ function createDealCard(deal) {
     `;
 }
 
-// Вычисление оставшегося времени
-function calculateTimeLeft(expiresAt) {
-    const now = new Date();
-    const expires = new Date(expiresAt);
-    const diff = expires.getTime() - now.getTime();
-    
-    if (diff <= 0) {
-        return 'Истекло';
-    }
-    
-    const minutes = Math.floor(diff / 60000);
-    const seconds = Math.floor((diff % 60000) / 1000);
-    
-    if (minutes > 0) {
-        return `${minutes}м ${seconds}с`;
-    } else {
-        return `${seconds}с`;
-    }
-}
+// Функция таймера удалена - больше не используем таймеры в сделках
 
 // Связь с контрагентом в Telegram
 function contactCounterparty(username) {

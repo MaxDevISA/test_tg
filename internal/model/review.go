@@ -28,6 +28,10 @@ type Review struct {
 	UpdatedAt     time.Time  `json:"updated_at" db:"updated_at"`         // Дата последнего обновления
 	IsVisible     bool       `json:"is_visible" db:"is_visible"`         // Видимый ли отзыв (может быть скрыт админом)
 	ReportedCount int        `json:"reported_count" db:"reported_count"` // Количество жалоб на отзыв
+
+	// Дополнительные поля для отображения (заполняются при запросе)
+	FromUserName     string `json:"from_user_name,omitempty"`     // Имя автора отзыва
+	FromUserUsername string `json:"from_user_username,omitempty"` // Username автора отзыва
 }
 
 // Rating представляет агрегированный рейтинг пользователя

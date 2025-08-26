@@ -862,11 +862,42 @@ func (r *FileRepository) GetReviewsByUserID(userID int64, limit, offset int) ([]
 		return nil, fmt.Errorf("не удалось загрузить отзывы: %w", err)
 	}
 
+	// Загружаем всех пользователей для получения имен авторов отзывов
+	var allUsers []model.User
+	if err := r.loadFromFile("users.json", &allUsers); err != nil {
+		log.Printf("[WARN] Не удалось загрузить пользователей для отзывов: %v", err)
+	}
+
+	// Создаем карту пользователей для быстрого поиска
+	userMap := make(map[int64]model.User)
+	for _, user := range allUsers {
+		userMap[user.ID] = user
+	}
+
 	// Фильтруем отзывы для данного пользователя (видимые отзывы)
 	var userReviews []*model.Review
 	for _, review := range allReviews {
 		if review.ToUserID == userID && review.IsVisible {
 			reviewCopy := review
+
+			// Заполняем информацию об авторе отзыва (если не анонимный)
+			if !reviewCopy.IsAnonymous {
+				if author, exists := userMap[reviewCopy.FromUserID]; exists {
+					reviewCopy.FromUserName = author.FirstName
+					if author.LastName != "" {
+						reviewCopy.FromUserName += " " + author.LastName
+					}
+					reviewCopy.FromUserUsername = author.Username
+				} else {
+					// Если пользователь не найден, показываем ID
+					reviewCopy.FromUserName = fmt.Sprintf("Пользователь #%d", reviewCopy.FromUserID)
+				}
+			} else {
+				// Для анонимных отзывов скрываем автора
+				reviewCopy.FromUserName = "Аноним"
+				reviewCopy.FromUserUsername = ""
+			}
+
 			userReviews = append(userReviews, &reviewCopy)
 		}
 	}

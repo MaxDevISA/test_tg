@@ -261,7 +261,7 @@ func (s *Service) CreateOrder(userID int64, orderData *model.Order) (*model.Orde
 	orderData.Status = model.OrderStatusActive
 	orderData.IsActive = true
 	orderData.TotalAmount = orderData.Amount * orderData.Price
-	orderData.ExpiresAt = time.Now().Add(24 * time.Hour) // Заявка действует 24 часа
+	// Убираем ExpiresAt - таймеры больше не используются
 
 	// Если не указан минимальный и максимальный лимит, устанавливаем их равными общей сумме
 	if orderData.MinAmount == 0 {
@@ -1233,7 +1233,7 @@ func (s *Service) AcceptResponse(responseID, authorID int64) (*model.Deal, error
 		PaymentMethods: order.PaymentMethods,
 		OrderType:      order.Type,
 		Status:         model.DealStatusInProgress,
-		ExpiresAt:      time.Now().Add(1 * time.Hour), // Таймер 1 час
+		// Убираем ExpiresAt - таймеры больше не используются
 	}
 
 	if err := s.repo.CreateDeal(deal); err != nil {
