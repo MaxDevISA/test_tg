@@ -220,25 +220,30 @@ body {
     overflow-x: hidden !important; /* УБИРАЕМ ГОРИЗОНТАЛЬНЫЙ СКРОЛЛ */
     width: 100%; /* Ограничиваем ширину */
     box-sizing: border-box; /* Включаем padding в размеры */
+    scrollbar-width: none !important; /* Firefox - убираем скроллбар */
+    -ms-overflow-style: none !important; /* IE - убираем скроллбар */
 }
 
-/* Кастомная полоса прокрутки */
+/* ПОЛНОСТЬЮ СКРЫВАЕМ СКРОЛЛБАРЫ В КОНТЕЙНЕРЕ ДЛЯ WEBKIT БРАУЗЕРОВ */
 .container::-webkit-scrollbar {
-    width: 6px;
+    width: 0px !important; /* Убираем ширину скроллбара */
+    background: transparent; /* Прозрачный фон */
+    display: none !important; /* Полностью скрываем */
 }
 
 .container::-webkit-scrollbar-track {
-    background: var(--bg-secondary);
-    border-radius: 3px;
+    background: transparent !important; /* Прозрачная дорожка */
+    display: none !important;
 }
 
 .container::-webkit-scrollbar-thumb {
-    background: var(--accent-green);
-    border-radius: 3px;
+    background: transparent !important; /* Прозрачный ползунок */
+    display: none !important;
 }
 
 .container::-webkit-scrollbar-thumb:hover {
-    background: var(--accent-green-hover);
+    background: transparent !important; /* Прозрачный при hover */
+    display: none !important;
 }
 
 .view {
