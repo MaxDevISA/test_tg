@@ -1839,9 +1839,9 @@ func (s *Service) sendOrderCreatedGroupNotification(order *model.Order, user *mo
 		operationType = strings.ToUpper(string(order.Type))
 	}
 
-	// Формируем текст уведомления по шаблону
+	// Формируем текст уведомления по шаблону со ссылкой на приложение
 	message := fmt.Sprintf(
-		"Пользователь <b>%s</b> создал новую заявку:\n\n💰 <b>%s %s %s</b>\n💎 Объем: <b>%.8f %s</b>\n💵 Курс: <b>%.2f %s</b> за 1 %s\n💸 Общая сумма: <b>%.2f %s</b>\n\n🚀 <i>Откликайтесь быстрее!</i>",
+		"Пользователь <b>%s</b> создал новую заявку:\n\n💰 <b>%s %s %s</b>\n💎 Объем: <b>%.8f %s</b>\n💵 Курс: <b>%.2f %s</b> за 1 %s\n💸 Общая сумма: <b>%.2f %s</b>\n\n🚀 <i>Откликайтесь быстрее!</i>\n\n👉 <a href=\"%s/#orders\">Открыть приложение</a>",
 		userName,
 		operationType,
 		order.Cryptocurrency,
@@ -1853,6 +1853,7 @@ func (s *Service) sendOrderCreatedGroupNotification(order *model.Order, user *mo
 		order.Cryptocurrency,
 		order.TotalAmount,
 		order.FiatCurrency,
+		s.notificationService.webAppURL,
 	)
 
 	// Отправляем групповое уведомление

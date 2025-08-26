@@ -226,10 +226,7 @@ func (ns *NotificationService) SendGroupNotification(notificationType model.Noti
 		}
 	}
 
-	// Создаем inline кнопку для перехода в приложение
-	if order != nil {
-		message.ReplyMarkup = ns.createGroupInlineKeyboard(order)
-	}
+	// Кнопки не добавляем - ссылка будет в тексте сообщения
 
 	// Отправляем сообщение через Telegram Bot API
 	if err := ns.sendTelegramMessage(message); err != nil {
@@ -239,22 +236,6 @@ func (ns *NotificationService) SendGroupNotification(notificationType model.Noti
 
 	log.Printf("[INFO] Групповое уведомление успешно отправлено в чат %s", ns.groupChatID)
 	return nil
-}
-
-// createGroupInlineKeyboard создает inline клавиатуру для групповых уведомлений
-func (ns *NotificationService) createGroupInlineKeyboard(order *model.Order) *model.TelegramInlineKeyboard {
-	// Создаем кнопку "Открыть приложение" которая ведет на главную страницу с хешем #orders
-	appButton := model.TelegramInlineKeyboardButton{
-		Text:   "🚀 Открыть приложение",
-		WebApp: &model.TelegramWebAppInfo{URL: fmt.Sprintf("%s/#orders", ns.webAppURL)},
-	}
-
-	// Возвращаем клавиатуру с одной кнопкой
-	return &model.TelegramInlineKeyboard{
-		InlineKeyboard: [][]model.TelegramInlineKeyboardButton{
-			{appButton}, // Первый ряд с кнопкой приложения
-		},
-	}
 }
 
 // formatNotificationMessage форматирует текст уведомления для Telegram
