@@ -2527,10 +2527,18 @@ function createDealCard(deal) {
     
     // Определяем роль пользователя в сделке
     const isAuthor = currentInternalUserId === deal.author_id;
-    const userRole = isAuthor ? 'Автор' : 'Контрагент';
-    const counterpartyName = isAuthor ? 
-        (deal.counterparty_name || `Пользователь ${deal.counterparty_id}`) : 
-        (deal.author_name || `Пользователь ${deal.author_id}`);
+    const userRole = isAuthor ? 'Автор заявки' : 'Откликнувшийся';
+    
+    // Получаем данные автора и контрагента
+    const authorName = deal.author_name || `Пользователь ${deal.author_id}`;
+    const authorUsername = deal.author_username ? `@${deal.author_username}` : '';
+    const counterpartyName = deal.counterparty_name || `Пользователь ${deal.counterparty_id}`;
+    const counterpartyUsername = deal.counterparty_username ? `@${deal.counterparty_username}` : '';
+    
+    // Определяем контрагента для текущего пользователя
+    const counterpartyDisplayName = isAuthor ? counterpartyName : authorName;
+    const counterpartyDisplayUsername = isAuthor ? counterpartyUsername : authorUsername;
+    const counterpartyTelegramUsername = isAuthor ? deal.counterparty_username : deal.author_username;
     
     // Статус сделки
     const statusConfig = {
@@ -2546,36 +2554,94 @@ function createDealCard(deal) {
     // Оставшееся время
     const timeLeft = deal.expires_at ? calculateTimeLeft(deal.expires_at) : null;
     
+    // Подтверждения участников
+    const authorConfirmed = deal.author_confirmed || false;
+    const counterConfirmed = deal.counter_confirmed || false;
+    const myConfirmed = isAuthor ? authorConfirmed : counterConfirmed;
+    const partnerConfirmed = isAuthor ? counterConfirmed : authorConfirmed;
+    
     return `
-        <div class="deal-card" style="border: 1px solid #e1e8ed; border-radius: 8px; padding: 16px; margin-bottom: 16px; background: #f8f9fa;">
-            <div class="deal-header" style="display: flex; justify-content: space-between; margin-bottom: 12px;">
-                <div class="deal-info">
-                    <div class="deal-type ${deal.order_type === 'buy' ? 'buy' : 'sell'}" style="color: ${deal.order_type === 'buy' ? '#22c55e' : '#ef4444'}; font-weight: 600;">
-                        ${deal.order_type === 'buy' ? '🟢 Покупка' : '🔴 Продажа'}
+        <div class="order-card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <span style="font-weight: 600; color: ${deal.order_type === 'buy' ? '#22c55e' : '#ef4444'};">
+                    ${deal.order_type === 'buy' ? '🟢 Покупка' : '🔴 Продажа'}
+                </span>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 12px; color: #6b7280;">${userRole}</span>
+                    <span style="color: ${status.color}; font-weight: 500; font-size: 14px;">
+                        ${status.icon} ${status.text}
+                    </span>
+                </div>
+            </div>
+            
+            <div style="margin-bottom: 12px;">
+                <strong style="font-size: 18px;">${deal.amount || '?'} ${deal.cryptocurrency || '?'}</strong> 
+                <span style="color: #6b7280;">за</span>
+                <strong style="font-size: 16px;">${deal.price || '?'} ${deal.fiat_currency || '?'}</strong>
+            </div>
+            
+            <div style="background: #f1f5f9; padding: 12px; border-radius: 6px; margin-bottom: 12px; font-size: 13px;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <div>
+                        <div style="color: #64748b; margin-bottom: 4px;">📝 Автор:</div>
+                        <div style="font-weight: 500;">${authorName}</div>
+                        <div style="color: #3b82f6; font-size: 12px;">${authorUsername}</div>
                     </div>
-                    <div class="deal-role" style="font-size: 12px; color: #6b7280;">${userRole}</div>
+                    <div>
+                        <div style="color: #64748b; margin-bottom: 4px;">🤝 Откликнулся:</div>
+                        <div style="font-weight: 500;">${counterpartyName}</div>
+                        <div style="color: #3b82f6; font-size: 12px;">${counterpartyUsername}</div>
+                    </div>
                 </div>
-                <div class="deal-status" style="color: ${status.color}; font-weight: 500;">
-                    ${status.icon} ${status.text}
+                
+                <div style="margin-top: 12px; padding-top: 8px; border-top: 1px solid #e2e8f0;">
+                    <div style="color: #64748b; margin-bottom: 4px;">💳 Способ оплаты:</div>
+                    <div style="font-weight: 500;">${(deal.payment_methods || []).join(', ') || 'Не указано'}</div>
+                </div>
+                
+                <div style="margin-top: 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 12px;">
+                    <div>
+                        <span style="color: #64748b;">💰 Курс:</span>
+                        <span style="font-weight: 500;">${deal.price} ${deal.fiat_currency}</span>
+                    </div>
+                    <div>
+                        <span style="color: #64748b;">💵 Сумма:</span>
+                        <span style="font-weight: 500;">${deal.total_amount || (deal.amount * deal.price).toFixed(2)} ${deal.fiat_currency}</span>
+                    </div>
                 </div>
             </div>
             
-            <div class="deal-amount" style="margin-bottom: 12px; font-size: 16px;">
-                <strong>${deal.amount || '?'} ${deal.cryptocurrency || '?'}</strong> за <strong>${deal.price || '?'} ${deal.fiat_currency || '?'}</strong>
+            ${timeLeft ? `
+                <div style="background: #fef3cd; border: 1px solid #fbbf24; border-radius: 4px; padding: 8px; margin-bottom: 12px; text-align: center;">
+                    <span style="color: #92400e; font-weight: 500;">⏰ Осталось времени: ${timeLeft}</span>
+                </div>
+            ` : ''}
+            
+            <div style="background: #f8fafc; border-radius: 6px; padding: 8px; margin-bottom: 12px;">
+                <div style="font-size: 12px; color: #64748b; margin-bottom: 6px;">Подтверждения:</div>
+                <div style="display: flex; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <span>${myConfirmed ? '✅' : '⏳'}</span>
+                        <span style="font-size: 12px;">Вы</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <span>${partnerConfirmed ? '✅' : '⏳'}</span>
+                        <span style="font-size: 12px;">Контрагент</span>
+                    </div>
+                </div>
             </div>
             
-            <div class="deal-details" style="font-size: 12px; color: #6b7280; margin-bottom: 12px;">
-                <div class="deal-counterparty">👤 ${counterpartyName}</div>
-                <div class="deal-payment">💳 ${(deal.payment_methods || []).join(', ') || 'Не указано'}</div>
-                ${timeLeft ? `<div class="deal-timer">⏰ ${timeLeft}</div>` : ''}
-            </div>
-            
-            <div class="deal-actions" style="display: flex; gap: 8px;">
-                <button onclick="viewDealDetails(${deal.id})" class="btn" style="background: #3b82f6; color: white; border: none; padding: 8px 16px; border-radius: 4px; font-size: 12px; flex: 1;">
-                    📋 Детали сделки
+            <div style="display: flex; gap: 8px;">
+                ${counterpartyTelegramUsername ? `
+                    <button onclick="contactCounterparty('${counterpartyTelegramUsername}')" style="background: #0088cc; color: white; border: none; padding: 8px 12px; border-radius: 4px; font-size: 12px; flex: 1;">
+                        💬 Написать
+                    </button>
+                ` : ''}
+                <button onclick="viewDealDetails(${deal.id})" style="background: #6c757d; color: white; border: none; padding: 8px 12px; border-radius: 4px; font-size: 12px; flex: 1;">
+                    📋 Детали
                 </button>
-                <button onclick="confirmPayment(${deal.id})" class="btn" style="background: #22c55e; color: white; border: none; padding: 8px 16px; border-radius: 4px; font-size: 12px; flex: 1;">
-                    ✅ Подтвердить
+                <button onclick="confirmPayment(${deal.id}, ${isAuthor})" style="background: ${myConfirmed ? '#6c757d' : '#22c55e'}; color: white; border: none; padding: 8px 12px; border-radius: 4px; font-size: 12px; flex: 1;" ${myConfirmed ? 'disabled' : ''}>
+                    ${myConfirmed ? '✅ Подтверждено' : '✅ Подтвердить'}
                 </button>
             </div>
         </div>
@@ -2602,13 +2668,74 @@ function calculateTimeLeft(expiresAt) {
     }
 }
 
-// Заглушки для функций управления сделками (будут доработаны)
-function viewDealDetails(dealId) {
-    console.log('[DEBUG] Просмотр деталей сделки:', dealId);
-    showAlert('📋 Детали сделки будут добавлены в следующем обновлении');
+// Связь с контрагентом в Telegram
+function contactCounterparty(username) {
+    console.log('[DEBUG] Открытие чата с контрагентом:', username);
+    
+    if (username) {
+        const telegramUrl = `https://t.me/${username}`;
+        
+        if (tg && tg.openTelegramLink) {
+            // Используем Telegram WebApp API для открытия ссылки
+            tg.openTelegramLink(telegramUrl);
+        } else {
+            // Резервный вариант - открываем в новом окне
+            window.open(telegramUrl, '_blank');
+        }
+    } else {
+        showAlert('❌ Не удалось найти username контрагента');
+    }
 }
 
-function confirmPayment(dealId) {
-    console.log('[DEBUG] Подтверждение платежа для сделки:', dealId);
-    showAlert('✅ Подтверждение платежа будет добавлено в следующем обновлении');
+// Просмотр деталей сделки
+function viewDealDetails(dealId) {
+    console.log('[DEBUG] Просмотр деталей сделки:', dealId);
+    
+    // Пока что показываем базовую информацию
+    showAlert(`📋 Сделка #${dealId}\n\nДетальная информация о сделке будет добавлена в следующем обновлении.`);
+}
+
+// Подтверждение платежа/получения в сделке  
+async function confirmPayment(dealId, isAuthor) {
+    console.log('[DEBUG] Подтверждение сделки:', { dealId, isAuthor });
+    
+    if (!currentUser) {
+        showAlert('❌ Требуется авторизация');
+        return;
+    }
+    
+    try {
+        // Подтверждаем через API
+        const result = await apiRequest(`/api/v1/deals/${dealId}/confirm`, 'POST', {
+            is_author: isAuthor
+        });
+        
+        if (result.success) {
+            const message = isAuthor ? 
+                '✅ Вы подтвердили получение средств!' : 
+                '✅ Вы подтвердили отправку средств!';
+            
+            showAlert(message);
+            
+            // Перезагружаем активные сделки
+            await loadActiveDeals();
+            
+            // Проверяем завершена ли сделка
+            if (result.deal_completed) {
+                showAlert('🎉 Сделка успешно завершена!\n\nВы можете оставить отзыв о контрагенте.');
+                
+                // Можно добавить переход к форме отзыва
+                setTimeout(() => {
+                    // switchResponseTab('completed-deals'); // если будет такой таб
+                }, 2000);
+            }
+            
+        } else {
+            showAlert('❌ ' + (result.message || 'Ошибка при подтверждении сделки'));
+        }
+        
+    } catch (error) {
+        console.error('[ERROR] Ошибка подтверждения сделки:', error);
+        showAlert('❌ Ошибка сети при подтверждении сделки');
+    }
 }

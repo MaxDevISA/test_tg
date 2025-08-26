@@ -511,13 +511,34 @@ func (h *Handler) handleConfirmDeal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: Получить ID пользователя из JWT токена
-	userID := int64(1) // Заглушка
+	// Получаем данные пользователя из Telegram заголовка
+	telegramUserIDStr := r.Header.Get("X-Telegram-User-ID")
+	if telegramUserIDStr == "" {
+		log.Printf("[ERROR] Отсутствует заголовок X-Telegram-User-ID")
+		h.sendErrorResponse(w, "Не авторизован", http.StatusUnauthorized)
+		return
+	}
 
-	log.Printf("[INFO] Подтверждение сделки ID=%d пользователем ID=%d", dealID, userID)
+	telegramUserID, err := strconv.ParseInt(telegramUserIDStr, 10, 64)
+	if err != nil {
+		log.Printf("[ERROR] Неверный формат Telegram User ID: %s", telegramUserIDStr)
+		h.sendErrorResponse(w, "Неверный формат пользователя", http.StatusBadRequest)
+		return
+	}
 
-	// Читаем данные запроса (может содержать доказательство оплаты)
+	// Получаем пользователя по Telegram ID
+	user, err := h.service.GetUserByTelegramID(telegramUserID)
+	if err != nil {
+		log.Printf("[ERROR] Ошибка получения пользователя: %v", err)
+		h.sendErrorResponse(w, "Не авторизован", http.StatusUnauthorized)
+		return
+	}
+
+	log.Printf("[INFO] Подтверждение сделки ID=%d пользователем ID=%d", dealID, user.ID)
+
+	// Читаем данные запроса
 	var requestData struct {
+		IsAuthor     bool   `json:"is_author"`     // Является ли пользователь автором заявки
 		PaymentProof string `json:"payment_proof"` // Доказательство оплаты (ссылка на скриншот)
 		Notes        string `json:"notes"`         // Дополнительные заметки
 	}
@@ -527,17 +548,32 @@ func (h *Handler) handleConfirmDeal(w http.ResponseWriter, r *http.Request) {
 		// Игнорируем ошибку декодирования - подтверждение без доказательств
 	}
 
+	// Используем базовое подтверждение если не указано
+	paymentProof := requestData.PaymentProof
+	if paymentProof == "" {
+		paymentProof = "confirmed_via_webapp"
+	}
+
 	// Подтверждаем сделку через сервис
-	if err := h.service.ConfirmDeal(dealID, userID, requestData.PaymentProof); err != nil {
+	if err := h.service.ConfirmDeal(dealID, user.ID, paymentProof); err != nil {
 		log.Printf("[WARN] Ошибка подтверждения сделки ID=%d: %v", dealID, err)
 		h.sendErrorResponse(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	log.Printf("[INFO] Сделка ID=%d подтверждена пользователем ID=%d", dealID, userID)
+	log.Printf("[INFO] Сделка ID=%d подтверждена пользователем ID=%d", dealID, user.ID)
+
+	// Проверяем завершена ли сделка (оба участника подтвердили)
+	deal, err := h.service.GetDeal(dealID, user.ID)
+	dealCompleted := false
+	if err == nil {
+		dealCompleted = deal.Status == "completed"
+	}
+	// Возвращаем успешный ответ
 	h.sendJSONResponse(w, map[string]interface{}{
-		"success": true,
-		"message": "Сделка успешно подтверждена",
+		"success":        true,
+		"message":        "Сделка успешно подтверждена",
+		"deal_completed": dealCompleted,
 	})
 }
 
