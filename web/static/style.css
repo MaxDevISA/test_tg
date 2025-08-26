@@ -144,66 +144,57 @@ body {
 /* НАВИГАЦИОННОЕ МЕНЮ */
 /* ============================================== */
 
+/* ЧИСТАЯ МИНИМАЛИСТИЧНАЯ НАВИГАЦИЯ БЕЗ ЗЕЛЕНИ */
 .navigation {
     display: flex;
     background: rgba(18, 18, 18, 0.95);
     backdrop-filter: blur(20px) saturate(180%);
     -webkit-backdrop-filter: blur(20px) saturate(180%);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
-    padding: 8px 16px;
-    gap: 4px;
-    /* Минималистичная тень */
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    padding: 12px 16px;
+    gap: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .nav-item {
     flex: 1;
     min-width: 80px;
-    padding: 8px 12px;
+    padding: 12px 16px;
     border: none;
     background: transparent;
     color: rgba(255, 255, 255, 0.6);
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 400;
     cursor: pointer;
     white-space: nowrap;
-    transition: all 0.2s ease;
-    border-radius: 6px;
+    transition: all 0.3s ease;
+    border-radius: 8px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 2px;
+    gap: 4px;
     text-align: center;
     position: relative;
-    /* Минималистичный стиль Spotify */
+    /* Убираем все лишние декорации */
+    border-bottom: 3px solid transparent;
 }
 
+/* Простой hover без зеленого фона и без translateY */
 .nav-item:hover:not(.active) {
-    background: rgba(255, 255, 255, 0.08);
     color: rgba(255, 255, 255, 0.9);
+    /* Убираем translateY чтобы не было скролла */
 }
 
+/* АКТИВНЫЙ ПУНКТ - ТОЛЬКО БЕЛЫЙ ТЕКСТ И ПОДЧЕРКИВАНИЕ */
 .nav-item.active {
-    background: rgba(29, 185, 84, 0.15) !important;
-    color: #1DB954 !important;
+    background: transparent !important; /* Никакого зеленого фона! */
+    color: #ffffff !important; /* Белый текст */
     font-weight: 600 !important;
-    border-bottom: 2px solid #1DB954;
-    border-radius: 6px 6px 0 0;
-    /* Тонкая подсветка как в Spotify */
-}
-
-.nav-item.active::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: linear-gradient(45deg, rgba(255,255,255,0.1) 0%, transparent 100%);
-    pointer-events: none;
+    border-bottom: 3px solid #1DB954 !important; /* Только зеленое подчеркивание */
+    border-radius: 8px 8px 0 0 !important;
 }
 
 .tab-icon {
@@ -324,21 +315,70 @@ body {
     background: rgba(50, 50, 50, 0.7);
 }
 
-/* Стили для выпадающих списков */
+/* ПОЛНОЕ СКРЫТИЕ НАТИВНЫХ ЭЛЕМЕНТОВ УПРАВЛЕНИЯ ДЛЯ SELECT */
 select.form-select {
-    appearance: none;
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    /* Простая стрелка вниз */
-    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
-    background-position: right 12px center;
-    background-size: 16px 16px;
-    background-repeat: no-repeat;
-    padding-right: 40px;
+    /* Убираем все нативные стили */
+    appearance: none !important;
+    -webkit-appearance: none !important;
+    -moz-appearance: none !important;
+    -ms-appearance: none !important;
+    
+    /* Убираем стрелки и галочки во всех браузерах */
+    background-image: none !important;
+    
+    /* Убираем возможные тени и обводки браузера */
+    -webkit-box-shadow: none !important;
+    -moz-box-shadow: none !important;
+    box-shadow: none !important;
+    
+    /* Убираем outline при фокусе */
+    outline: none !important;
+    
+    /* Переопределяем все возможные стили браузера */
+    border: 1px solid rgba(255, 255, 255, 0.06) !important;
+    border-radius: 4px !important;
+    background: rgba(40, 40, 40, 0.6) !important;
+    color: var(--text-primary) !important;
+    
+    /* Убираем padding справа для стрелки */
+    padding: 12px 16px !important;
+    
+    /* Принудительно убираем все псевдоэлементы браузера */
+    -webkit-appearance: none !important;
+    -moz-appearance: textfield !important;
 }
 
+/* Убираем псевдоэлементы в Firefox */
+select.form-select::-moz-focus-inner {
+    border: 0 !important;
+    padding: 0 !important;
+}
+
+/* Убираем стрелку в Internet Explorer и Edge */
+select.form-select::-ms-expand {
+    display: none !important;
+}
+
+/* Убираем все возможные псевдоэлементы в WebKit браузерах */
+select.form-select::-webkit-calendar-picker-indicator,
+select.form-select::-webkit-clear-button,
+select.form-select::-webkit-inner-spin-button,
+select.form-select::-webkit-outer-spin-button {
+    display: none !important;
+    -webkit-appearance: none !important;
+}
+
+/* Стили фокуса без нативных элементов */
 select.form-select:focus {
-    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%231db954' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+    border-color: #1DB954 !important;
+    background: rgba(50, 50, 50, 0.8) !important;
+    outline: none !important;
+    box-shadow: 0 0 0 2px rgba(29, 185, 84, 0.3) !important;
+}
+
+select.form-select:hover {
+    border-color: rgba(255, 255, 255, 0.15) !important;
+    background: rgba(50, 50, 50, 0.7) !important;
 }
 
 .form-textarea {
@@ -387,7 +427,8 @@ input[type="button"]:hover:not(.btn-danger):not(.btn-secondary):not(.btn-warning
 input[type="submit"]:hover:not(.btn-danger):not(.btn-secondary):not(.btn-warning) {
     background: #1ed760 !important;
     color: #000000 !important;
-    transform: scale(1.02) !important; /* Меньшее увеличение */
+    /* Убрали scale чтобы не было скроллбара */
+    box-shadow: 0 2px 8px rgba(29, 185, 84, 0.3) !important;
 }
 
 /* Исключения для особых кнопок */
@@ -399,7 +440,7 @@ input[type="submit"]:hover:not(.btn-danger):not(.btn-secondary):not(.btn-warning
 
 .btn-danger:hover {
     background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%) !important;
-    transform: translateY(-2px);
+    /* Убираем translateY чтобы не было скролла */
     box-shadow: var(--shadow-card-hover);
 }
 
@@ -472,7 +513,7 @@ input[type="submit"]:hover:not(.btn-danger):not(.btn-secondary):not(.btn-warning
 
 .btn-secondary:hover {
     background: var(--background-card-hover);
-    transform: translateY(-1px);
+    /* Убираем translateY чтобы не было скролла */
     box-shadow: var(--shadow-card);
 }
 
@@ -484,7 +525,7 @@ input[type="submit"]:hover:not(.btn-danger):not(.btn-secondary):not(.btn-warning
 }
 
 .btn-success:hover {
-    transform: translateY(-2px);
+    /* Убираем translateY чтобы не было скролла */
     box-shadow: var(--shadow-card-hover);
     color: black !important;
 }
@@ -496,7 +537,7 @@ input[type="submit"]:hover:not(.btn-danger):not(.btn-secondary):not(.btn-warning
 }
 
 .btn-danger:hover {
-    transform: translateY(-2px);
+    /* Убираем translateY чтобы не было скролла */
     box-shadow: var(--shadow-card-hover);
 }
 
@@ -507,7 +548,7 @@ input[type="submit"]:hover:not(.btn-danger):not(.btn-secondary):not(.btn-warning
 }
 
 .btn-warning:hover {
-    transform: translateY(-2px);
+    /* Убираем translateY чтобы не было скролла */
     box-shadow: var(--shadow-card-hover);
 }
 
@@ -519,7 +560,7 @@ input[type="submit"]:hover:not(.btn-danger):not(.btn-secondary):not(.btn-warning
 }
 
 .btn-info:hover {
-    transform: translateY(-2px);
+    /* Убираем translateY чтобы не было скролла */
     box-shadow: var(--shadow-card-hover);
     background: var(--gradient-green-intense) !important;
     color: black !important;
@@ -864,36 +905,43 @@ input[type="submit"]:hover:not(.btn-danger):not(.btn-secondary):not(.btn-warning
     border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
+/* ЧИСТЫЕ ВКЛАДКИ БЕЗ ЗЕЛЕНЫХ ФОНОВ */
 .response-tab {
     flex: 1;
     min-width: 100px;
-    padding: 8px 12px;
+    padding: 10px 16px;
     border: none;
     background: transparent;
     color: rgba(255, 255, 255, 0.6);
     font-size: 12px;
     font-weight: 400;
-    border-radius: 6px;
+    border-radius: 8px;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.3s ease;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 2px;
+    gap: 4px;
     white-space: nowrap;
     text-transform: none;
     letter-spacing: 0;
+    /* Добавляем прозрачную нижнюю границу для анимации */
+    border-bottom: 2px solid transparent;
+    position: relative;
 }
 
+/* АКТИВНАЯ ВКЛАДКА - ТОЛЬКО ПОДЧЕРКИВАНИЕ */
 .response-tab.active {
-    background: rgba(29, 185, 84, 0.15);
-    color: #1DB954 !important;
+    background: transparent !important; /* Никакого зеленого фона! */
+    color: #ffffff !important; /* Белый текст */
     font-weight: 600 !important;
+    border-bottom: 2px solid #1DB954 !important; /* Только зеленое подчеркивание */
 }
 
+/* Простой hover без зеленого фона и без translateY */
 .response-tab:hover:not(.active) {
-    background: rgba(255, 255, 255, 0.08);
     color: rgba(255, 255, 255, 0.9);
+    /* Убираем translateY чтобы не было скролла */
 }
 
 .response-content {
@@ -1581,9 +1629,7 @@ a:hover {
     }
 }
 
-/* Применяем свечение только к вкладкам откликов */
-.response-tab.active {
-    animation: greenGlow 3s ease-in-out infinite;
-}
+/* Убрали анимацию свечения - теперь чистый дизайн */
+/* .response-tab.active теперь имеет простые стили выше */
 
 /* Завершение файла */
