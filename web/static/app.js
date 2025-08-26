@@ -1787,8 +1787,15 @@ function closeRespondModal() {
     if (modal) {
         modal.classList.remove('show');
         // Очищаем форму
-        document.getElementById('respondMessage').value = '';
-        document.getElementById('respondAutoAccept').checked = true;
+        const messageField = document.getElementById('respondMessage');
+        if (messageField) {
+            messageField.value = '';
+        }
+        // respondAutoAccept удален из новой логики откликов
+        // const autoAcceptField = document.getElementById('respondAutoAccept');
+        // if (autoAcceptField) {
+        //     autoAcceptField.checked = true;
+        // }
     }
 }
 
