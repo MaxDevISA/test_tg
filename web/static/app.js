@@ -1783,19 +1783,25 @@ function closeProfileModal() {
 }
 
 function closeRespondModal() {
-    const modal = document.getElementById('respondModal');
-    if (modal) {
-        modal.classList.remove('show');
-        // Очищаем форму
-        const messageField = document.getElementById('respondMessage');
-        if (messageField) {
-            messageField.value = '';
+    console.log('[DEBUG] Закрываем модальное окно отклика');
+    try {
+        const modal = document.getElementById('respondModal');
+        if (modal) {
+            modal.classList.remove('show');
+            
+            // Безопасно очищаем форму
+            const messageField = document.getElementById('respondMessage');
+            if (messageField && messageField.value !== undefined) {
+                messageField.value = '';
+                console.log('[DEBUG] Очистили поле сообщения');
+            }
+            
+            console.log('[DEBUG] Модальное окно закрыто успешно');
+        } else {
+            console.log('[DEBUG] Модальное окно не найдено');
         }
-        // respondAutoAccept удален из новой логики откликов
-        // const autoAcceptField = document.getElementById('respondAutoAccept');
-        // if (autoAcceptField) {
-        //     autoAcceptField.checked = true;
-        // }
+    } catch (error) {
+        console.error('[ERROR] Ошибка при закрытии модального окна:', error);
     }
 }
 
