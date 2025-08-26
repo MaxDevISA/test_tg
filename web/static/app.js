@@ -241,63 +241,55 @@ function displayOrders(orders) {
         });
         
         const authorDisplay = authorUsername ? 
-            `<span onclick="openTelegramProfile('${authorUsername}')" style="color: var(--tg-theme-link-color, #2BE47E); cursor: pointer; text-decoration: underline; font-weight: 500;">@${authorUsername}</span>` :
-            `<span style="color: var(--tg-theme-text-color, #000); font-weight: 500;">${authorName}</span>`;
+            `<span onclick="openTelegramProfile('${authorUsername}')" style="color: #1DB954; cursor: pointer; text-decoration: underline; font-weight: 500;">@${authorUsername}</span>` :
+            `<span style="color: #ffffff; font-weight: 500;">${authorName}</span>`;
         
         return '<div class="order-card">' +
             '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">' +
                 '<span style="font-weight: 600; color: ' + (order.type === 'buy' ? '#22c55e' : '#ef4444') + ';">' +
                     (order.type === 'buy' ? '🟢 Покупка' : '🔴 Продажа') +
                 '</span>' +
-                '<span style="font-size: 12px; color: var(--tg-theme-hint-color, #708499);">' +
+                '<span style="font-size: 12px; color: rgba(255, 255, 255, 0.5);">' +
                     (order.created_at ? new Date(order.created_at).toLocaleString('ru') : 'Дата неизвестна') +
                 '</span>' +
             '</div>' +
             
             '<div style="margin-bottom: 10px;">' +
-                '<div style="font-size: 14px; margin-bottom: 4px;">👤 Автор: ' + authorDisplay + '</div>' +
+                '<div style="font-size: 14px; margin-bottom: 4px; color: #ffffff;">👤 Автор: ' + authorDisplay + '</div>' +
             '</div>' +
             
-            '<div style="background: var(--tg-theme-secondary-bg-color, rgba(255,255,255,0.1)); border: 1px solid var(--tg-theme-section-separator-color, rgba(255,255,255,0.2)); padding: 10px; border-radius: 6px; margin-bottom: 10px;">' +
+            '<div style="background: rgba(30, 30, 40, 0.6); border: 1px solid rgba(255, 255, 255, 0.1); padding: 10px; border-radius: 6px; margin-bottom: 10px;">' +
                 '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px;">' +
                     '<div>' +
-                        '<span style="color: var(--tg-theme-hint-color, #708499);">📊 Объем:</span><br>' +
-                        '<strong style="color: var(--tg-theme-text-color, #000);">' + (order.amount || '?') + ' ' + (order.cryptocurrency || '?') + '</strong>' +
+                        '<span style="color: rgba(255, 255, 255, 0.6);">📊 Объем:</span><br>' +
+                        '<strong style="color: #ffffff;">' + (order.amount || '?') + ' ' + (order.cryptocurrency || '?') + '</strong>' +
                     '</div>' +
                     '<div>' +
-                        '<span style="color: var(--tg-theme-hint-color, #708499);">💰 Курс:</span><br>' +
-                        '<strong style="color: var(--tg-theme-text-color, #000);">' + (order.price || '?') + ' ' + (order.fiat_currency || '?') + ' за 1' + (order.cryptocurrency || '?') + '</strong>' +
+                        '<span style="color: rgba(255, 255, 255, 0.6);">💰 Курс:</span><br>' +
+                        '<strong style="color: #ffffff;">' + (order.price || '?') + ' ' + (order.fiat_currency || '?') + ' за 1' + (order.cryptocurrency || '?') + '</strong>' +
                     '</div>' +
                 '</div>' +
-                '<div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--tg-theme-section-separator-color, #e2e8f0); font-size: 13px;">' +
-                    '<span style="color: var(--tg-theme-hint-color, #708499);">💵 Общая сумма:</span> ' +
-                    '<strong style="color: var(--tg-theme-text-color, #000); font-size: 15px;">' + totalAmount.toLocaleString('ru') + ' ' + (order.fiat_currency || '?') + '</strong>' +
+                '<div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255, 255, 255, 0.15); font-size: 13px;">' +
+                    '<span style="color: rgba(255, 255, 255, 0.6);">💵 Общая сумма:</span> ' +
+                    '<strong style="color: #ffffff; font-size: 15px;">' + totalAmount.toLocaleString('ru') + ' ' + (order.fiat_currency || '?') + '</strong>' +
                 '</div>' +
             '</div>' +
             
-            '<div style="font-size: 12px; color: var(--tg-theme-hint-color, #708499); margin-bottom: 10px;">' +
-                '💳 Способы оплаты: ' + ((order.payment_methods || []).join(', ') || 'Не указано') +
+            '<div style="font-size: 12px; color: rgba(255, 255, 255, 0.6); margin-bottom: 10px;">' +
+                '💳 Способы оплаты: <span style="color: #ffffff;">' + ((order.payment_methods || []).join(', ') || 'Не указано') + '</span>' +
             '</div>' +
             
-            (order.description ? '<div style="font-size: 12px; margin-bottom: 10px; color: var(--tg-theme-text-color, #000);">' + order.description + '</div>' : '') +
+            (order.description ? '<div style="font-size: 12px; margin-bottom: 10px; color: #ffffff;">' + order.description + '</div>' : '') +
             
             (!isMyOrder ? 
                 '<div style="display: flex; gap: 8px; margin-top: 12px;">' +
-                    '<button onclick="openUserProfile(' + (order.user_id || 0) + ')" ' +
-                           'style="background: var(--tg-theme-hint-color, #6c757d); color: var(--tg-theme-button-text-color, white); border: none; padding: 8px 12px; ' +
-                           'border-radius: 4px; font-size: 12px; flex: 1;">👤 Профиль</button>' +
-                    '<button onclick="respondToOrder(' + (order.id || 0) + ')" ' +
-                           'style="background: var(--tg-theme-button-color, #22c55e); color: var(--tg-theme-button-text-color, white); border: none; padding: 8px 12px; ' +
-                           'border-radius: 4px; font-size: 12px; flex: 2;">🤝 Откликнуться</button>' +
+                    '<button onclick="openUserProfile(' + (order.user_id || 0) + ')" class="btn btn-secondary" style="flex: 1; font-size: 12px;">👤 Профиль</button>' +
+                    '<button onclick="respondToOrder(' + (order.id || 0) + ')" class="btn btn-primary" style="flex: 2; font-size: 12px;">🤝 Откликнуться</button>' +
                 '</div>' : 
                 '<div style="display: flex; gap: 8px; margin-top: 12px;">' +
                     '<div style="background: rgba(43, 228, 126, 0.1); border: 1px solid #2BE47E; border-radius: 4px; padding: 8px 12px; font-size: 12px; color: #2BE47E; flex: 1; text-align: center; font-weight: 700;">📝 Ваша заявка</div>' +
-                    '<button onclick="editOrder(' + (order.id || 0) + ')" ' +
-                           'style="background: var(--tg-theme-button-color, #f59e0b); color: var(--tg-theme-button-text-color, white); border: none; padding: 8px 12px; ' +
-                           'border-radius: 4px; font-size: 12px; flex: 1;">✏️ Редактировать</button>' +
-                    '<button onclick="viewOrderResponses(' + (order.id || 0) + ')" ' +
-                           'style="background: var(--tg-theme-button-color, #2BE47E); color: black; border: none; padding: 8px 12px; ' +
-                           'border-radius: 4px; font-size: 12px; flex: 1;">👀 Отклики (' + (order.response_count || 0) + ')</button>' +
+                    '<button onclick="editOrder(' + (order.id || 0) + ')" class="btn btn-warning" style="flex: 1; font-size: 12px;">✏️ Редактировать</button>' +
+                    '<button onclick="viewOrderResponses(' + (order.id || 0) + ')" class="btn btn-info" style="flex: 1; font-size: 12px;">👀 Отклики (' + (order.response_count || 0) + ')</button>' +
                 '</div>'
             ) +
         '</div>';
@@ -1060,17 +1052,17 @@ function displayMyProfile(user, stats, reviews) {
                     <div class="profile-stat-label">Успешность</div>
                 </div>
             </div>` : `
-            <div style="background: linear-gradient(135deg, var(--tg-theme-secondary-bg-color, #f8f9fa) 0%, var(--tg-theme-bg-color, #ffffff) 100%); border-radius: 16px; padding: 24px; margin-bottom: 24px; text-align: center; border: 1px solid var(--tg-theme-section-separator-color, #e1e8ed);">
+            <div style="background: rgba(18, 18, 18, 0.9); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px; padding: 24px; margin-bottom: 24px; text-align: center; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);">
                 <div style="font-size: 32px; margin-bottom: 12px;">🚀</div>
-                <div style="font-size: 18px; font-weight: 600; margin-bottom: 8px; color: var(--tg-theme-text-color, #000000);">
+                <div style="font-size: 18px; font-weight: 600; margin-bottom: 8px; color: #ffffff;">
                     Добро пожаловать на биржу!
                 </div>
-                <div style="font-size: 14px; color: var(--tg-theme-hint-color, #708499); line-height: 1.4;">
+                <div style="font-size: 14px; color: rgba(255, 255, 255, 0.7); line-height: 1.4;">
                     Пока у вас нет заявок и сделок.<br/>
                     Создайте первую заявку и начните торговать!
                 </div>
                 <div style="margin-top: 16px;">
-                    <button onclick="goToOrders()" style="background: var(--tg-theme-button-color, #2BE47E); color: black; border: none; border-radius: 8px; padding: 10px 20px; font-size: 14px; cursor: pointer; font-weight: 700;">
+                    <button onclick="goToOrders()" class="btn btn-primary">
                         📋 Перейти к заявкам
                     </button>
                 </div>
