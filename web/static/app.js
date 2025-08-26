@@ -2317,12 +2317,48 @@ async function loadResponsesToMyOrders() {
     container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
     
     try {
-        const result = await apiRequest('/api/v1/responses/to-my', 'GET');
+        // Загружаем отклики, заявки и сделки параллельно для фильтрации
+        const [responsesResult, ordersResult, dealsResult] = await Promise.all([
+            apiRequest('/api/v1/responses/to-my', 'GET'),
+            apiRequest('/api/v1/orders/my', 'GET'),
+            apiRequest('/api/v1/deals', 'GET')
+        ]);
         
-        if (result.success) {
-            displayResponsesToMyOrders(result.responses || []);
+        if (responsesResult.success) {
+            const responses = responsesResult.responses || [];
+            const orders = ordersResult.success ? ordersResult.orders || [] : [];
+            const deals = dealsResult.success ? dealsResult.deals || [] : [];
+            
+            console.log('[DEBUG] Загружено откликов:', responses.length, 'заявок:', orders.length, 'сделок:', deals.length);
+            
+            // Фильтруем отклики - убираем те, что относятся к завершенным/удаленным заявкам
+            const activeResponses = responses.filter(response => {
+                // Ищем заявку для этого отклика
+                const order = orders.find(o => o.id === response.order_id);
+                
+                if (!order) {
+                    // Заявка удалена - убираем отклик
+                    console.log('[DEBUG] Убираем отклик к удаленной заявке:', response.order_id);
+                    return false;
+                }
+                
+                // Если заявка в сделке, проверяем статус сделки
+                if (order.status === 'in_deal') {
+                    const deal = deals.find(d => d.order_id === order.id);
+                    if (deal && deal.status === 'completed') {
+                        // Сделка завершена - убираем отклик
+                        console.log('[DEBUG] Убираем отклик к завершенной сделке:', order.id, deal.id);
+                        return false;
+                    }
+                }
+                
+                return true; // Оставляем отклик
+            });
+            
+            console.log('[DEBUG] Отфильтровано откликов:', activeResponses.length, 'из', responses.length);
+            displayResponsesToMyOrders(activeResponses);
         } else {
-            container.innerHTML = `<div class="error-message">❌ ${result.message}</div>`;
+            container.innerHTML = `<div class="error-message">❌ ${responsesResult.message}</div>`;
         }
     } catch (error) {
         console.error('[ERROR] Ошибка загрузки откликов на заявки:', error);
@@ -2425,12 +2461,25 @@ function displayResponsesToMyOrders(responses) {
         responsesByOrder[response.order_id].push(response);
     });
     
+    // Сортируем группы заявок: сначала те, что имеют waiting отклики
+    const sortedOrderGroups = Object.entries(responsesByOrder).sort(([, responsesA], [, responsesB]) => {
+        const hasWaitingA = responsesA.some(r => r.status === 'waiting') ? 1 : 0;
+        const hasWaitingB = responsesB.some(r => r.status === 'waiting') ? 1 : 0;
+        return hasWaitingB - hasWaitingA; // Заявки с waiting откликами наверх
+    });
+    
     let html = '';
-    Object.entries(responsesByOrder).forEach(([orderId, orderResponses]) => {
+    sortedOrderGroups.forEach(([orderId, orderResponses]) => {
         const waitingResponses = orderResponses.filter(r => r.status === 'waiting');
         
+        // Сортируем отклики внутри заявки: waiting → accepted → rejected
+        const sortedResponses = orderResponses.sort((a, b) => {
+            const statusOrder = { waiting: 0, accepted: 1, rejected: 2 };
+            return statusOrder[a.status] - statusOrder[b.status];
+        });
+        
         // Берём первый отклик для получения информации о заявке
-        const firstResponse = orderResponses[0];
+        const firstResponse = sortedResponses[0];
         const orderTypeText = firstResponse.order_type === 'buy' ? '🟢 Покупка' : '🔴 Продажа';
         const totalAmount = firstResponse.total_amount || (firstResponse.amount * firstResponse.price);
         
@@ -2444,7 +2493,7 @@ function displayResponsesToMyOrders(responses) {
                 ` : ''}
                 <span class="response-count">${waitingResponses.length} новых откликов</span>
             </div>
-            ${orderResponses.map(response => createOrderResponseCard(response)).join('')}
+            ${sortedResponses.map(response => createOrderResponseCard(response)).join('')}
         </div>`;
     });
     
