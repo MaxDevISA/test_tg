@@ -261,7 +261,8 @@ func (s *Service) CreateOrder(userID int64, orderData *model.Order) (*model.Orde
 	orderData.Status = model.OrderStatusActive
 	orderData.IsActive = true
 	orderData.TotalAmount = orderData.Amount * orderData.Price
-	// Убираем ExpiresAt - таймеры больше не используются
+	// Устанавливаем ExpiresAt в далекое будущее - таймеры больше не используются
+	orderData.ExpiresAt = time.Now().Add(365 * 24 * time.Hour) // 1 год
 
 	// Если не указан минимальный и максимальный лимит, устанавливаем их равными общей сумме
 	if orderData.MinAmount == 0 {
@@ -1052,11 +1053,7 @@ func (s *Service) CreateResponse(userID int64, responseData *model.CreateRespons
 		return nil, fmt.Errorf("заявка недоступна для откликов")
 	}
 
-	// Проверяем что заявка не истекла
-	if time.Now().After(order.ExpiresAt) {
-		log.Printf("[WARN] Заявка ID=%d истекла", responseData.OrderID)
-		return nil, fmt.Errorf("срок действия заявки истек")
-	}
+	// Убираем проверку срока истечения - таймеры больше не используются
 
 	// Создаем отклик
 	response := &model.Response{

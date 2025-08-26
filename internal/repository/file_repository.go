@@ -287,6 +287,8 @@ func (r *FileRepository) CreateOrder(order *model.Order) error {
 	order.UpdatedAt = time.Now()
 	order.Status = model.OrderStatusActive
 	order.IsActive = true
+	// Устанавливаем ExpiresAt в далекое будущее - таймеры больше не используются
+	order.ExpiresAt = time.Now().Add(365 * 24 * time.Hour) // 1 год
 
 	// Добавляем заявку к списку
 	orders = append(orders, *order)
@@ -500,7 +502,6 @@ func (r *FileRepository) GetMatchingOrders(order *model.Order) ([]*model.Order, 
 	}
 
 	var matchingOrders []*model.Order
-	currentTime := time.Now()
 
 	// Фильтруем подходящие заявки
 	for _, candidateOrder := range orders {
@@ -510,8 +511,8 @@ func (r *FileRepository) GetMatchingOrders(order *model.Order) ([]*model.Order, 
 			candidateOrder.FiatCurrency == order.FiatCurrency && // Та же фиатная валюта
 			candidateOrder.Status == model.OrderStatusActive && // Активная заявка
 			candidateOrder.IsActive && // Не отключена
-			candidateOrder.UserID != order.UserID && // Не наша заявка
-			candidateOrder.ExpiresAt.After(currentTime) { // Не истекла
+			candidateOrder.UserID != order.UserID { // Не наша заявка
+			// Убираем проверку ExpiresAt - таймеры больше не используются
 
 			// Проверяем совместимость цен
 			if r.isPriceCompatible(order, &candidateOrder) {

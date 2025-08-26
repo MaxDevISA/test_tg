@@ -1079,7 +1079,7 @@ function displayMyProfile(user, stats, reviews) {
                     Создайте первую заявку и начните торговать!
                 </div>
                 <div style="margin-top: 16px;">
-                    <button onclick="showView('orders')" style="background: var(--tg-theme-button-color, #2481cc); color: var(--tg-theme-button-text-color, #ffffff); border: none; border-radius: 8px; padding: 10px 20px; font-size: 14px; cursor: pointer;">
+                    <button onclick="document.querySelector('[data-view=\\"orders\\"]').click()" style="background: var(--tg-theme-button-color, #2481cc); color: var(--tg-theme-button-text-color, #ffffff); border: none; border-radius: 8px; padding: 10px 20px; font-size: 14px; cursor: pointer;">
                         📋 Перейти к заявкам
                     </button>
                 </div>

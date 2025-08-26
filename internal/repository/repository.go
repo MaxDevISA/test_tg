@@ -692,8 +692,8 @@ func (r *Repository) GetMatchingOrders(order *model.Order) ([]*model.Order, erro
 			status = 'active' AND                 -- Активная заявка
 			is_active = true AND                  -- Не отключена
 			auto_match = true AND                 -- Разрешено автосопоставление
-			user_id != $4 AND                     -- Не наша заявка
-			expires_at > NOW()                    -- Не истекла
+			user_id != $4                         -- Не наша заявка
+			-- Убираем проверку expires_at - таймеры больше не используются
 		ORDER BY 
 			CASE WHEN $1 = 'sell' THEN price END ASC,     -- Для покупки: сначала дешевые продажи
 			CASE WHEN $1 = 'buy' THEN price END DESC,     -- Для продажи: сначала дорогие покупки  
