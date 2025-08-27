@@ -1228,20 +1228,61 @@ func (s *Service) CreateResponse(userID int64, responseData *model.CreateRespons
 		return nil, fmt.Errorf("заявка недоступна для откликов")
 	}
 
-	// Убираем проверку срока истечения - таймеры больше не используются
-
-	// Создаем отклик
-	response := &model.Response{
-		OrderID: responseData.OrderID,
-		UserID:  userID,
-		Message: responseData.Message,
-		Status:  model.ResponseStatusWaiting, // Устанавливаем статус "ожидает рассмотрения"
+	// Проверяем, есть ли уже отклик от этого пользователя на эту заявку
+	existingResponses, err := s.repo.GetResponsesByFilter(&model.ResponseFilter{
+		OrderID: &responseData.OrderID,
+		UserID:  &userID,
+		Limit:   1,
+	})
+	if err != nil {
+		log.Printf("[ERROR] Не удалось проверить существующие отклики: %v", err)
+		return nil, fmt.Errorf("ошибка при проверке существующих откликов")
 	}
 
-	// Сохраняем отклик в репозитории
-	if err := s.repo.CreateResponse(response); err != nil {
-		log.Printf("[ERROR] Не удалось создать отклик: %v", err)
-		return nil, fmt.Errorf("не удалось создать отклик: %w", err)
+	var response *model.Response
+
+	if len(existingResponses) > 0 {
+		existingResponse := existingResponses[0]
+		log.Printf("[INFO] Найден существующий отклик ID=%d со статусом %s", existingResponse.ID, existingResponse.Status)
+
+		if existingResponse.Status == model.ResponseStatusWaiting {
+			log.Printf("[WARN] Пользователь ID=%d уже откликнулся на заявку ID=%d", userID, responseData.OrderID)
+			return nil, fmt.Errorf("вы уже откликнулись на эту заявку")
+		} else if existingResponse.Status == model.ResponseStatusRejected {
+			// Обновляем отклонённый отклик на новое сообщение и статус waiting
+			log.Printf("[INFO] Обновляем отклонённый отклик ID=%d на новое сообщение", existingResponse.ID)
+
+			existingResponse.Message = responseData.Message
+			existingResponse.Status = model.ResponseStatusWaiting
+
+			if err := s.repo.UpdateResponseStatus(existingResponse.ID, model.ResponseStatusWaiting); err != nil {
+				log.Printf("[ERROR] Не удалось обновить статус отклика: %v", err)
+				return nil, fmt.Errorf("не удалось обновить отклик: %w", err)
+			}
+
+			// TODO: Также обновить сообщение отклика в БД (нужен метод UpdateResponseMessage)
+			log.Printf("[INFO] Отклик ID=%d обновлён со статусом waiting", existingResponse.ID)
+			response = existingResponse
+		} else {
+			// Отклик принят (accepted) - нельзя повторно откликаться
+			log.Printf("[WARN] Отклик пользователя ID=%d уже принят для заявки ID=%d", userID, responseData.OrderID)
+			return nil, fmt.Errorf("ваш отклик уже принят, повторно откликаться нельзя")
+		}
+	} else {
+		// Создаем новый отклик
+		log.Printf("[INFO] Создаём новый отклик для пользователя ID=%d на заявку ID=%d", userID, responseData.OrderID)
+		response = &model.Response{
+			OrderID: responseData.OrderID,
+			UserID:  userID,
+			Message: responseData.Message,
+			Status:  model.ResponseStatusWaiting,
+		}
+
+		// Сохраняем отклик в репозитории
+		if err := s.repo.CreateResponse(response); err != nil {
+			log.Printf("[ERROR] Не удалось создать отклик: %v", err)
+			return nil, fmt.Errorf("не удалось создать отклик: %w", err)
+		}
 	}
 
 	// Отправляем уведомление автору заявки о новом отклике
