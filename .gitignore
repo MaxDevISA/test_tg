@@ -1,3 +1,7 @@
+# ============================
+# Go специфичные файлы
+# ============================
+
 # Исполняемые файлы Go
 *.exe
 *.exe~
@@ -8,11 +12,11 @@ bot
 bot.exe
 p2p-exchange
 p2p-exchange.exe
- енет
+
 # Файлы тестирования Go
 *.test
 
-# Файлы покрытия тестами
+# Файлы покрытия тестами Go
 *.out
 coverage.html
 coverage.txt
@@ -24,14 +28,31 @@ coverage.txt
 # go.mod
 # go.sum
 
+# ============================
+# Данные приложения
+# ============================
+
 # Локальные данные приложения - JSON файлы с пользовательскими данными
 data/
-*.json
+# Исключение: не игнорируем примеры данных если они есть
+!data/.example
+
+# ============================
+# Конфигурация и секреты
+# ============================
 
 # Файлы конфигурации с чувствительными данными
 .env
 *.env
+.env.local
+.env.production
+.env.development
+!.env.example
 !env.example
+
+# ============================
+# Логи и временные файлы
+# ============================
 
 # Логи приложения
 *.log
@@ -42,10 +63,13 @@ log/
 *.tmp
 *.temp
 *~
-.DS_Store
-Thumbs.db
+*.swp
+*.swo
 
-# IDE файлы
+# ============================
+# IDE и редакторы
+# ============================
+
 # Visual Studio Code
 .vscode/
 *.code-workspace
@@ -63,10 +87,8 @@ Thumbs.db
 # Vim
 *.swp
 *.swo
-*~
 
 # Emacs
-*~
 \#*\#
 /.emacs.desktop
 /.emacs.desktop.lock
@@ -75,30 +97,55 @@ auto-save-list
 tramp
 .\#*
 
-# Папки сборки
-build/
-dist/
-out/
-
-# Папки зависимостей Node.js (если используется для фронтенда)
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
+# ============================
 # Системные файлы
+# ============================
+
+# macOS
 .DS_Store
 .DS_Store?
 ._*
 .Spotlight-V100
 .Trashes
+
+# Windows
 ehthumbs.db
 Thumbs.db
+desktop.ini
 
-# Файлы резервных копий
-*.bak
-*.backup
-*.orig
+# Linux
+*~
+
+# ============================
+# Сборка и деплой
+# ============================
+
+# Папки сборки
+build/
+dist/
+out/
+bin/
+target/
+
+# ============================
+# Node.js (если используется)
+# ============================
+
+# Зависимости Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Package locks (раскомментировать если нужно игнорировать)
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml
+
+# ============================
+# Безопасность
+# ============================
 
 # Сертификаты и ключи безопасности
 *.pem
@@ -107,11 +154,62 @@ Thumbs.db
 *.cert
 *.p12
 *.pfx
+*.jks
+*.keystore
 
-# Файлы Docker (если используется)
-.dockerignore
+# ============================
+# Docker
+# ============================
+
+# Docker override файлы
 docker-compose.override.yml
+.dockerignore
+
+# ============================
+# Прочее
+# ============================
+
+# Файлы резервных копий
+*.bak
+*.backup
+*.orig
 
 # Папки кэша
 .cache/
 .tmp/
+cache/
+
+# Архивы
+*.zip
+*.tar
+*.gz
+*.rar
+*.7z
+
+# Профилирование
+*.prof
+*.pprof
+
+# Air (live reload tool for Go)
+.air.toml
+tmp/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Documentation builds
+docs/_build/
+site/
+
+# Coverage files
+profile.cov
+coverage.out
+
+# Dependency directories
+vendor/
+
+# Test results
+test-results/
+*.xml

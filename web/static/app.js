@@ -974,7 +974,10 @@ function displayProfileWithReviews(user, reviews, stats) {
                     ` : ''}
                     ${!review.is_anonymous && review.from_user_name ? `
                     <div class="profile-review-author">
-                        От: ${review.from_user_username ? '@' + review.from_user_username : review.from_user_name}
+                        От: ${review.from_user_username ? 
+                            `<span onclick="openTelegramProfile('${review.from_user_username}')" style="color: var(--tg-theme-link-color, #2BE47E); cursor: pointer; text-decoration: underline; font-weight: 500;">@${review.from_user_username}</span>` :
+                            review.from_user_name
+                        }
                     </div>
                     ` : review.is_anonymous ? `
                     <div class="profile-review-anonymous">
@@ -1143,7 +1146,10 @@ function displayMyProfile(user, stats, reviews) {
                     ` : ''}
                     ${!review.is_anonymous && review.from_user_name ? `
                     <div class="profile-review-author">
-                        От: ${review.from_user_username ? '@' + review.from_user_username : review.from_user_name}
+                        От: ${review.from_user_username ? 
+                            `<span onclick="openTelegramProfile('${review.from_user_username}')" style="color: var(--tg-theme-link-color, #2BE47E); cursor: pointer; text-decoration: underline; font-weight: 500;">@${review.from_user_username}</span>` :
+                            review.from_user_name
+                        }
                     </div>
                     ` : review.is_anonymous ? `
                     <div class="profile-review-anonymous">
@@ -1829,7 +1835,10 @@ function displayUserProfileModal(profileData, reviews) {
                     ` : ''}
                     ${!review.is_anonymous && review.from_user_name ? `
                     <div class="profile-review-author" style="font-size: 11px; color: var(--tg-theme-hint-color, #708499); margin-top: 6px;">
-                        От: ${review.from_user_username ? '@' + review.from_user_username : review.from_user_name}
+                        От: ${review.from_user_username ? 
+                            `<span onclick="openTelegramProfile('${review.from_user_username}')" style="color: var(--tg-theme-link-color, #2BE47E); cursor: pointer; text-decoration: underline; font-weight: 500;">@${review.from_user_username}</span>` :
+                            review.from_user_name
+                        }
                     </div>
                     ` : review.is_anonymous ? `
                     <div class="profile-review-author" style="font-size: 11px; color: var(--tg-theme-hint-color, #708499); margin-top: 6px;">
