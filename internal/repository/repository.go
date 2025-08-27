@@ -191,8 +191,14 @@ func (r *Repository) CreateOrder(order *model.Order) error {
 			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
 		) RETURNING id, created_at, updated_at, status, is_active`
 
+	// Сериализуем способы оплаты в JSON
+	paymentMethodsJSON, err := json.Marshal(order.PaymentMethods)
+	if err != nil {
+		return fmt.Errorf("не удалось сериализовать способы оплаты: %w", err)
+	}
+
 	// Выполняем запрос и получаем сгенерированные поля
-	err := r.db.QueryRow(
+	err = r.db.QueryRow(
 		query,
 		order.UserID,
 		order.Type,
@@ -203,7 +209,7 @@ func (r *Repository) CreateOrder(order *model.Order) error {
 		order.TotalAmount,
 		order.MinAmount,
 		order.MaxAmount,
-		order.PaymentMethods, // Gorilla/mux автоматически преобразует []string в JSONB
+		paymentMethodsJSON, // JSON-сериализованный массив способов оплаты
 		order.Description,
 		order.ExpiresAt,
 		false, // AutoMatch больше не используется в новой логике откликов
@@ -409,6 +415,12 @@ func (r *Repository) CreateDeal(deal *model.Deal) error {
 			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
 		) RETURNING id, created_at`
 
+	// Выбираем первый способ оплаты из массива
+	paymentMethod := "bank_transfer" // По умолчанию
+	if len(deal.PaymentMethods) > 0 {
+		paymentMethod = deal.PaymentMethods[0]
+	}
+
 	// Выполняем запрос и получаем ID и время создания
 	err := r.db.QueryRow(
 		query,
@@ -421,7 +433,7 @@ func (r *Repository) CreateDeal(deal *model.Deal) error {
 		deal.Amount,
 		deal.Price,
 		deal.TotalAmount,
-		deal.PaymentMethods, // Теперь это массив строк
+		paymentMethod, // Используем первый способ оплаты
 		deal.Status,
 	).Scan(&deal.ID, &deal.CreatedAt)
 
