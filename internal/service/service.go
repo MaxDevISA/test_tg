@@ -731,6 +731,30 @@ func (s *Service) GetUserDeals(userID int64) ([]*model.Deal, error) {
 			log.Printf("[WARN] Не удалось получить данные контрагента ID=%d для сделки ID=%d: %v",
 				deal.CounterpartyID, deal.ID, err)
 		}
+
+		// Проверяем статус отзывов для завершенных сделок
+		if deal.Status == model.DealStatusCompleted {
+			// Проверяем, оставил ли автор отзыв о контрагенте
+			if canReview, err := s.repo.CheckCanReview(deal.ID, deal.AuthorID, deal.CounterpartyID); err == nil {
+				// Если НЕ может оставить отзыв, значит уже оставил
+				deal.AuthorReviewGiven = !canReview
+			} else {
+				log.Printf("[DEBUG] Не удалось проверить отзыв автора для сделки ID=%d: %v", deal.ID, err)
+				deal.AuthorReviewGiven = false
+			}
+
+			// Проверяем, оставил ли контрагент отзыв об авторе
+			if canReview, err := s.repo.CheckCanReview(deal.ID, deal.CounterpartyID, deal.AuthorID); err == nil {
+				// Если НЕ может оставить отзыв, значит уже оставил
+				deal.CounterpartyReviewGiven = !canReview
+			} else {
+				log.Printf("[DEBUG] Не удалось проверить отзыв контрагента для сделки ID=%d: %v", deal.ID, err)
+				deal.CounterpartyReviewGiven = false
+			}
+
+			log.Printf("[DEBUG] Сделка ID=%d - статус отзывов: автор=%t, контрагент=%t",
+				deal.ID, deal.AuthorReviewGiven, deal.CounterpartyReviewGiven)
+		}
 	}
 
 	log.Printf("[INFO] Найдено сделок для пользователя ID=%d: %d", userID, len(deals))

@@ -107,10 +107,12 @@ type Deal struct {
 	DisputeReason    string     `json:"dispute_reason" db:"dispute_reason"`       // Причина спора (если есть)
 
 	// Дополнительные поля для фронтенда (не сохраняются в БД)
-	AuthorUsername       string `json:"author_username,omitempty"`       // Telegram username автора
-	AuthorName           string `json:"author_name,omitempty"`           // Полное имя автора
-	CounterpartyUsername string `json:"counterparty_username,omitempty"` // Telegram username контрагента
-	CounterpartyName     string `json:"counterparty_name,omitempty"`     // Полное имя контрагента
+	AuthorUsername          string `json:"author_username,omitempty"`           // Telegram username автора
+	AuthorName              string `json:"author_name,omitempty"`               // Полное имя автора
+	CounterpartyUsername    string `json:"counterparty_username,omitempty"`     // Telegram username контрагента
+	CounterpartyName        string `json:"counterparty_name,omitempty"`         // Полное имя контрагента
+	AuthorReviewGiven       bool   `json:"author_review_given,omitempty"`       // Оставил ли автор отзыв о контрагенте
+	CounterpartyReviewGiven bool   `json:"counterparty_review_given,omitempty"` // Оставил ли контрагент отзыв об авторе
 }
 
 // OrderFilter содержит параметры для фильтрации заявок

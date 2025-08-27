@@ -1489,30 +1489,48 @@ function applyOrdersFilter() {
 
 // Отображение отфильтрованных заявок
 function displayFilteredOrders(orders) {
+    console.log('[DEBUG] displayFilteredOrders получила заявок:', orders.length);
+    console.log('[DEBUG] displayFilteredOrders первая заявка:', orders[0]);
+    console.log('[DEBUG] displayFilteredOrders currentInternalUserId:', currentInternalUserId);
+    
     const content = document.getElementById('ordersContent');
     
     // Фильтруем только заявки, доступные для откликов на рынке
     const marketOrders = orders.filter(order => {
+        const statusOk = order.status === 'active' || order.status === 'has_responses';
+        console.log('[DEBUG] Заявка', order.id, '- статус:', order.status, 'подходит:', statusOk);
         // Показываем заявки со статусами: active (без откликов) и has_responses (есть отклики, но автор еще не выбрал)
-        return order.status === 'active' || order.status === 'has_responses';
+        return statusOk;
     });
     
-    console.log('[DEBUG] Отображение отфильтрованных заявок:', marketOrders.length);
+    console.log('[DEBUG] Заявок после фильтра по статусу:', marketOrders.length);
     
-    if (marketOrders.length === 0) {
-        content.innerHTML = '<p class="text-center text-muted">Заявки с выбранными фильтрами не найдены</p>';
+    // Отображаем заявки точно так же как в оригинальной функции
+    const notMyOrders = marketOrders.filter(order => {
+        const isNotMine = !order.user_id || order.user_id !== currentInternalUserId;
+        console.log('[DEBUG] Заявка', order.id, '- user_id:', order.user_id, 'current:', currentInternalUserId, 'не моя:', isNotMine);
+        return isNotMine;
+    });
+    
+    console.log('[DEBUG] Заявок после фильтра "не мои":', notMyOrders.length);
+    
+    if (notMyOrders.length === 0) {
+        if (marketOrders.length > 0) {
+            content.innerHTML = '<p class="text-center text-muted">На рынке только ваши собственные заявки</p>';
+        } else {
+            content.innerHTML = '<p class="text-center text-muted">Заявки с выбранными фильтрами не найдены</p>';
+        }
         return;
     }
     
-    // Отображаем заявки точно так же как в оригинальной функции
-    const ordersHTML = marketOrders
-        .filter(order => !order.user_id || order.user_id !== currentInternalUserId)
+    const ordersHTML = notMyOrders
         .map(order => createOrderCardHTML(order))
         .join('');
     
     if (!ordersHTML) {
         content.innerHTML = '<p class="text-center text-muted">Нет заявок для отображения</p>';
     } else {
+        console.log('[DEBUG] Устанавливаем HTML с', notMyOrders.length, 'заявками');
         content.innerHTML = ordersHTML;
     }
 }
@@ -2528,18 +2546,64 @@ async function loadMyResponses() {
     container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
     
     try {
-        // Загружаем отклики и сделки параллельно
-        const [responsesResult, dealsResult] = await Promise.all([
+        // Загружаем отклики, заявки и сделки параллельно для фильтрации
+        const [responsesResult, ordersResult, dealsResult] = await Promise.all([
             apiRequest('/api/v1/responses/my', 'GET'),
+            apiRequest('/api/v1/orders', 'GET'), // Загружаем ВСЕ заявки для проверки актуальности
             apiRequest('/api/v1/deals', 'GET')
         ]);
         
         if (responsesResult.success) {
             const responses = responsesResult.responses || [];
+            const orders = ordersResult.success ? ordersResult.orders || [] : [];
             const deals = dealsResult.success ? dealsResult.deals || [] : [];
             
+            console.log('[DEBUG] Загружено откликов:', responses.length, 'заявок:', orders.length, 'сделок:', deals.length);
+            
+            // Фильтруем отклики - убираем те, что относятся к удаленным/завершенным заявкам
+            const activeResponses = responses.filter(response => {
+                const order = orders.find(o => o.id === response.order_id);
+                if (!order) {
+                    // Заявка не найдена (удалена) - убираем отклик
+                    console.log('[DEBUG] Убираем отклик к удаленной заявке:', response.order_id);
+                    return false;
+                }
+                
+                if (order.status === 'cancelled' || order.status === 'expired') {
+                    // Заявка отменена/истекла - убираем отклик
+                    console.log('[DEBUG] Убираем отклик к отмененной/истекшей заявке:', order.id, order.status);
+                    return false;
+                }
+                
+                // Если заявка в сделке, проверяем не с кем-то другим ли
+                if (order.status === 'in_deal') {
+                    const deal = deals.find(d => d.order_id === order.id);
+                    if (deal) {
+                        // Проверяем, участвует ли текущий пользователь в этой сделке
+                        const isInDeal = deal.author_id === currentInternalUserId || 
+                                        deal.counterparty_id === currentInternalUserId;
+                        
+                        if (!isInDeal) {
+                            // Сделка с кем-то другим - убираем отклик
+                            console.log('[DEBUG] Убираем отклик к заявке в сделке с другим пользователем:', order.id, deal.id);
+                            return false;
+                        }
+                        
+                        if (deal.status === 'completed') {
+                            // Сделка завершена - убираем отклик
+                            console.log('[DEBUG] Убираем отклик к завершенной сделке:', order.id, deal.id);
+                            return false;
+                        }
+                    }
+                }
+                
+                return true; // Оставляем отклик
+            });
+            
+            console.log('[DEBUG] Отфильтровано моих откликов:', activeResponses.length, 'из', responses.length);
+            
             // Дополняем отклики информацией о статусе сделки
-            const responsesWithDeals = responses.map(response => {
+            const responsesWithDeals = activeResponses.map(response => {
                 if (response.status === 'accepted') {
                     // Ищем сделку для этого принятого отклика
                     const deal = deals.find(d => d.response_id === response.id);
@@ -3111,9 +3175,22 @@ function createDealCard(deal) {
                 ` : ''}
                 
                 ${deal.status === 'completed' ? `
-                    <button onclick="openReviewModal(${deal.id}, ${counterpartyUserId}, '${counterpartyDisplayName}')" style="background: var(--tg-theme-button-color, #f59e0b); color: var(--tg-theme-button-text-color, white); border: none; padding: 8px 12px; border-radius: 4px; font-size: 12px; flex: 1;">
-                        ⭐ Оставить отзыв
-                    </button>
+                    ${(() => {
+                        // Определяем, оставил ли текущий пользователь уже отзыв
+                        const userAlreadyReviewed = isAuthor ? deal.author_review_given : deal.counterparty_review_given;
+                        
+                        console.log('[DEBUG] Проверка отзыва для сделки', deal.id, '- isAuthor:', isAuthor, ', reviewGiven:', userAlreadyReviewed);
+                        
+                        if (userAlreadyReviewed) {
+                            return '<button disabled style="background: var(--tg-theme-hint-color, #6c757d); color: var(--tg-theme-button-text-color, white); border: none; padding: 8px 12px; border-radius: 4px; font-size: 12px; flex: 1; cursor: not-allowed;">' +
+                                '✅ Отзыв оставлен' +
+                                '</button>';
+                        } else {
+                            return '<button onclick="openReviewModal(' + deal.id + ', ' + counterpartyUserId + ', \'' + counterpartyDisplayName + '\')" style="background: var(--tg-theme-button-color, #f59e0b); color: var(--tg-theme-button-text-color, white); border: none; padding: 8px 12px; border-radius: 4px; font-size: 12px; flex: 1;">' +
+                                '⭐ Оставить отзыв' +
+                                '</button>';
+                        }
+                    })()}
                 ` : `
                     <button onclick="confirmPayment(${deal.id}, ${isAuthor})" style="background: ${myConfirmed ? 'var(--tg-theme-hint-color, #6c757d)' : 'var(--tg-theme-button-color, #22c55e)'}; color: var(--tg-theme-button-text-color, white); border: none; padding: 8px 12px; border-radius: 4px; font-size: 12px; flex: 1;" ${myConfirmed ? 'disabled' : ''}>
                         ${myConfirmed ? '✅ Подтверждено' : '✅ Подтвердить'}
