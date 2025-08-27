@@ -3199,9 +3199,11 @@ function createDealCard(deal) {
                 ${deal.status === 'completed' ? `
                     ${(() => {
                         // Определяем, оставил ли текущий пользователь уже отзыв
-                        const userAlreadyReviewed = isAuthor ? deal.author_review_given : deal.counterparty_review_given;
+                        const userAlreadyReviewed = isAuthor ? (deal.author_review_given === true) : (deal.counterparty_review_given === true);
                         
-                        console.log('[DEBUG] Проверка отзыва для сделки', deal.id, '- isAuthor:', isAuthor, ', reviewGiven:', userAlreadyReviewed);
+                        console.log('[DEBUG] Проверка отзыва для сделки', deal.id, '- isAuthor:', isAuthor, 
+                                  ', authorReview:', deal.author_review_given, ', counterpartyReview:', deal.counterparty_review_given, 
+                                  ', userAlreadyReviewed:', userAlreadyReviewed);
                         
                         if (userAlreadyReviewed) {
                             return '<button disabled style="background: var(--tg-theme-hint-color, #6c757d); color: var(--tg-theme-button-text-color, white); border: none; padding: 8px 12px; border-radius: 4px; font-size: 12px; flex: 1; cursor: not-allowed;">' +
