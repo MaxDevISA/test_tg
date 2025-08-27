@@ -1294,7 +1294,7 @@ func (r *Repository) CreateResponse(response *model.Response) error {
 		VALUES ($1, $2, $3, $4, NOW(), NOW())
 		RETURNING id, created_at, updated_at`
 
-	err := r.db.QueryRow(query, response.OrderID, response.UserID, response.Message, response.Status).
+	err := r.db.QueryRow(query, response.OrderID, response.UserID, response.Message, string(response.Status)).
 		Scan(&response.ID, &response.CreatedAt, &response.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("не удалось создать отклик: %w", err)
@@ -1313,7 +1313,7 @@ func (r *Repository) UpdateResponseStatus(responseID int64, status model.Respons
 		SET status = $2, updated_at = NOW(), reviewed_at = CASE WHEN $2 != 'waiting' THEN NOW() ELSE reviewed_at END
 		WHERE id = $1`
 
-	result, err := r.db.Exec(query, responseID, status)
+	result, err := r.db.Exec(query, responseID, string(status))
 	if err != nil {
 		return fmt.Errorf("не удалось обновить статус отклика: %w", err)
 	}
@@ -1371,7 +1371,7 @@ func (r *Repository) GetResponsesByFilter(filter *model.ResponseFilter) ([]*mode
 
 	if filter.Status != nil {
 		query += fmt.Sprintf(" AND r.status = $%d", argIndex)
-		args = append(args, *filter.Status)
+		args = append(args, string(*filter.Status))
 		argIndex++
 	}
 
