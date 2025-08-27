@@ -1310,10 +1310,10 @@ func (r *Repository) UpdateResponseStatus(responseID int64, status model.Respons
 
 	query := `
 		UPDATE responses 
-		SET status = $2, updated_at = NOW(), reviewed_at = CASE WHEN $2 != 'waiting' THEN NOW() ELSE reviewed_at END
+		SET status = $2, updated_at = NOW(), reviewed_at = CASE WHEN $3 != 'waiting' THEN NOW() ELSE reviewed_at END
 		WHERE id = $1`
 
-	result, err := r.db.Exec(query, responseID, string(status))
+	result, err := r.db.Exec(query, responseID, string(status), string(status))
 	if err != nil {
 		return fmt.Errorf("не удалось обновить статус отклика: %w", err)
 	}
