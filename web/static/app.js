@@ -953,8 +953,8 @@ function displayProfileWithReviews(user, reviews, stats) {
     // Отзывы
     if (reviews && reviews.length > 0) {
         html += `
-            <div style="margin-bottom: 16px;">
-                <h3 style="font-size: 16px; margin-bottom: 12px;">📝 Последние отзывы</h3>
+            <div class="profile-reviews-section">
+                <div class="profile-reviews-title">📝 Последние отзывы</div>
         `;
         
         reviews.forEach(review => {
@@ -962,26 +962,22 @@ function displayProfileWithReviews(user, reviews, stats) {
             const reviewDate = new Date(review.created_at).toLocaleDateString('ru');
             
             html += `
-                <div style="border: 1px solid var(--tg-theme-section-separator-color, #e1e8ed); 
-                            border-radius: 8px; padding: 12px; margin-bottom: 8px;
-                            background: var(--tg-theme-bg-color, #ffffff);">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                        <span style="font-size: 14px;">${reviewStars}</span>
-                        <span style="font-size: 11px; color: var(--tg-theme-hint-color, #708499);">
-                            ${reviewDate}
-                        </span>
+                <div class="profile-review-card">
+                    <div class="profile-review-header">
+                        <span class="profile-review-stars">${reviewStars}</span>
+                        <span class="profile-review-date">${reviewDate}</span>
                     </div>
                     ${review.comment ? `
-                    <div style="font-size: 13px; line-height: 1.4;">
+                    <div class="profile-review-comment">
                         ${review.comment}
                     </div>
                     ` : ''}
                     ${!review.is_anonymous && review.from_user_name ? `
-                    <div style="font-size: 11px; color: var(--tg-theme-hint-color, #708499); margin-top: 6px;">
+                    <div class="profile-review-author">
                         От: ${review.from_user_username ? '@' + review.from_user_username : review.from_user_name}
                     </div>
                     ` : review.is_anonymous ? `
-                    <div style="font-size: 11px; color: var(--tg-theme-hint-color, #708499); margin-top: 6px;">
+                    <div class="profile-review-anonymous">
                         Анонимный отзыв
                     </div>
                     ` : ''}
@@ -992,8 +988,8 @@ function displayProfileWithReviews(user, reviews, stats) {
         html += `</div>`;
     } else if (totalReviews === 0) {
         html += `
-            <div style="text-center; padding: 20px; color: var(--tg-theme-hint-color, #708499);">
-                📝 Пока нет отзывов
+            <div class="profile-reviews-empty">
+                Пока нет отзывов
             </div>
         `;
     }
@@ -1146,11 +1142,11 @@ function displayMyProfile(user, stats, reviews) {
                     </div>
                     ` : ''}
                     ${!review.is_anonymous && review.from_user_name ? `
-                    <div class="profile-review-author" style="font-size: 11px; color: var(--tg-theme-hint-color, #708499); margin-top: 6px;">
+                    <div class="profile-review-author">
                         От: ${review.from_user_username ? '@' + review.from_user_username : review.from_user_name}
                     </div>
                     ` : review.is_anonymous ? `
-                    <div class="profile-review-author" style="font-size: 11px; color: var(--tg-theme-hint-color, #708499); margin-top: 6px;">
+                    <div class="profile-review-anonymous">
                         Анонимный отзыв
                     </div>
                     ` : ''}
@@ -1161,8 +1157,8 @@ function displayMyProfile(user, stats, reviews) {
         html += `</div>`;
     } else if (hasStats) {
         html += `
-            <div style="text-align: center; padding: 20px; color: var(--tg-theme-hint-color, #666); font-size: 13px;">
-                📝 Пока нет отзывов обо мне
+            <div class="profile-reviews-empty">
+                Пока нет отзывов обо мне
             </div>
         `;
     }
@@ -1847,8 +1843,8 @@ function displayUserProfileModal(profileData, reviews) {
         html += `</div>`;
     } else {
         html += `
-            <div class="text-center" style="padding: 20px; color: var(--tg-theme-hint-color, #666); font-size: 13px;">
-                📝 Пока нет отзывов
+            <div class="profile-reviews-empty">
+                Пока нет отзывов
             </div>
         `;
     }
