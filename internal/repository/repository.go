@@ -463,7 +463,7 @@ func (r *Repository) GetDealsByUserID(userID int64) ([]*model.Deal, error) {
 		SELECT id, buy_order_id, sell_order_id, buyer_id, seller_id,
 		       cryptocurrency, fiat_currency, amount, price, total_amount,
 		       payment_method, status, created_at, completed_at,
-		       buyer_confirmed, seller_confirmed, payment_proof, notes
+		       author_confirmed, counter_confirmed, author_proof, notes
 		FROM deals 
 		WHERE buyer_id = $1 OR seller_id = $1
 		ORDER BY created_at DESC`
@@ -479,8 +479,8 @@ func (r *Repository) GetDealsByUserID(userID int64) ([]*model.Deal, error) {
 	var deals []*model.Deal
 	for rows.Next() {
 		deal := &model.Deal{}
-		var paymentMethodStr string            // Временная переменная для сканирования payment_method
-		var paymentProof, notes sql.NullString // Переменные для NULL-значений
+		var paymentMethodStr string           // Временная переменная для сканирования payment_method
+		var authorProof, notes sql.NullString // Переменные для NULL-значений
 
 		err := rows.Scan(
 			&deal.ID,
@@ -499,8 +499,8 @@ func (r *Repository) GetDealsByUserID(userID int64) ([]*model.Deal, error) {
 			&deal.CompletedAt,
 			&deal.AuthorConfirmed,
 			&deal.CounterConfirmed,
-			&paymentProof, // NULL-safe сканирование payment_proof
-			&notes,        // NULL-safe сканирование notes
+			&authorProof, // NULL-safe сканирование author_proof
+			&notes,       // NULL-safe сканирование notes
 		)
 		if err != nil {
 			return nil, fmt.Errorf("не удалось сканировать сделку: %w", err)
@@ -510,8 +510,8 @@ func (r *Repository) GetDealsByUserID(userID int64) ([]*model.Deal, error) {
 		deal.PaymentMethods = []string{paymentMethodStr}
 
 		// Конвертируем NULL-значения в строки
-		deal.AuthorProof = paymentProof.String // sql.NullString.String возвращает "" если NULL
-		deal.Notes = notes.String              // sql.NullString.String возвращает "" если NULL
+		deal.AuthorProof = authorProof.String // sql.NullString.String возвращает "" если NULL
+		deal.Notes = notes.String             // sql.NullString.String возвращает "" если NULL
 
 		deals = append(deals, deal)
 	}
@@ -528,13 +528,13 @@ func (r *Repository) GetDealByID(dealID int64) (*model.Deal, error) {
 		SELECT id, buy_order_id, sell_order_id, buyer_id, seller_id,
 		       cryptocurrency, fiat_currency, amount, price, total_amount,
 		       payment_method, status, created_at, completed_at,
-		       buyer_confirmed, seller_confirmed, payment_proof, notes
+		       author_confirmed, counter_confirmed, author_proof, notes
 		FROM deals 
 		WHERE id = $1`
 
 	// Выполняем запрос и сканируем результат
-	var paymentMethodStr string            // Временная переменная для сканирования payment_method
-	var paymentProof, notes sql.NullString // Переменные для NULL-значений
+	var paymentMethodStr string           // Временная переменная для сканирования payment_method
+	var authorProof, notes sql.NullString // Переменные для NULL-значений
 
 	err := r.db.QueryRow(query, dealID).Scan(
 		&deal.ID,
@@ -553,8 +553,8 @@ func (r *Repository) GetDealByID(dealID int64) (*model.Deal, error) {
 		&deal.CompletedAt,
 		&deal.AuthorConfirmed,
 		&deal.CounterConfirmed,
-		&paymentProof, // NULL-safe сканирование payment_proof
-		&notes,        // NULL-safe сканирование notes
+		&authorProof, // NULL-safe сканирование author_proof
+		&notes,       // NULL-safe сканирование notes
 	)
 
 	if err != nil {
@@ -568,8 +568,8 @@ func (r *Repository) GetDealByID(dealID int64) (*model.Deal, error) {
 	deal.PaymentMethods = []string{paymentMethodStr}
 
 	// Конвертируем NULL-значения в строки
-	deal.AuthorProof = paymentProof.String // sql.NullString.String возвращает "" если NULL
-	deal.Notes = notes.String              // sql.NullString.String возвращает "" если NULL
+	deal.AuthorProof = authorProof.String // sql.NullString.String возвращает "" если NULL
+	deal.Notes = notes.String             // sql.NullString.String возвращает "" если NULL
 
 	return deal, nil
 }
@@ -617,7 +617,7 @@ func (r *Repository) ConfirmDeal(dealID int64, userID int64, isPaymentProof bool
 	var currentStatus string
 
 	query := `
-		SELECT buyer_id, seller_id, buyer_confirmed, seller_confirmed, status
+		SELECT buyer_id, seller_id, author_confirmed, counter_confirmed, status
 		FROM deals 
 		WHERE id = $1`
 
@@ -634,7 +634,7 @@ func (r *Repository) ConfirmDeal(dealID int64, userID int64, isPaymentProof bool
 		// Покупатель подтверждает получение криптовалюты
 		updateQuery = `
 			UPDATE deals 
-			SET buyer_confirmed = true, updated_at = NOW()
+			SET author_confirmed = true, updated_at = NOW()
 			WHERE id = $1`
 		buyerConfirmed = true
 	} else if userID == sellerID {
@@ -642,12 +642,12 @@ func (r *Repository) ConfirmDeal(dealID int64, userID int64, isPaymentProof bool
 		if isPaymentProof {
 			updateQuery = `
 				UPDATE deals 
-				SET seller_confirmed = true, payment_proof = $2, updated_at = NOW()
+				SET counter_confirmed = true, author_proof = $2, updated_at = NOW()
 				WHERE id = $1`
 		} else {
 			updateQuery = `
 				UPDATE deals 
-				SET seller_confirmed = true, updated_at = NOW()
+				SET counter_confirmed = true, updated_at = NOW()
 				WHERE id = $1`
 		}
 		sellerConfirmed = true
