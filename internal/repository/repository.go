@@ -2,6 +2,7 @@ package repository
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
@@ -1155,4 +1156,293 @@ func (r *Repository) ConfirmDealWithRole(dealID int64, userID int64, isAuthor bo
 		map[bool]string{true: "автор", false: "контрагент"}[isAuthor])
 
 	return nil
+}
+
+// GetUserByID получает пользователя по его внутреннему ID (PostgreSQL)
+func (r *Repository) GetUserByID(userID int64) (*model.User, error) {
+	log.Printf("[INFO] Получение пользователя по ID=%d", userID)
+
+	query := `
+		SELECT id, telegram_id, telegram_user_id, first_name, last_name, 
+		       username, photo_url, is_bot, language_code, created_at, 
+		       updated_at, is_active, rating, total_deals, successful_deals, chat_member
+		FROM users 
+		WHERE id = $1`
+
+	user := &model.User{}
+	err := r.db.QueryRow(query, userID).Scan(
+		&user.ID, &user.TelegramID, &user.TelegramUserID, &user.FirstName, &user.LastName,
+		&user.Username, &user.PhotoURL, &user.IsBot, &user.LanguageCode, &user.CreatedAt,
+		&user.UpdatedAt, &user.IsActive, &user.Rating, &user.TotalDeals, &user.SuccessfulDeals, &user.ChatMember,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("пользователь с ID=%d не найден", userID)
+		}
+		return nil, fmt.Errorf("не удалось получить пользователя: %w", err)
+	}
+
+	log.Printf("[INFO] Пользователь найден: ID=%d, TelegramID=%d", user.ID, user.TelegramID)
+	return user, nil
+}
+
+// GetOrderByID получает заявку по ID (PostgreSQL)
+func (r *Repository) GetOrderByID(orderID int64) (*model.Order, error) {
+	log.Printf("[INFO] Получение заявки по ID=%d", orderID)
+
+	query := `
+		SELECT id, user_id, type, cryptocurrency, fiat_currency, amount, price, total_amount,
+		       min_amount, max_amount, payment_methods, description, status, created_at, updated_at,
+		       expires_at, completed_at, is_active
+		FROM orders 
+		WHERE id = $1`
+
+	order := &model.Order{}
+	var paymentMethodsJSON []byte
+	err := r.db.QueryRow(query, orderID).Scan(
+		&order.ID, &order.UserID, &order.Type, &order.Cryptocurrency, &order.FiatCurrency,
+		&order.Amount, &order.Price, &order.TotalAmount, &order.MinAmount, &order.MaxAmount,
+		&paymentMethodsJSON, &order.Description, &order.Status, &order.CreatedAt, &order.UpdatedAt,
+		&order.ExpiresAt, &order.CompletedAt, &order.IsActive,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("заявка с ID=%d не найдена", orderID)
+		}
+		return nil, fmt.Errorf("не удалось получить заявку: %w", err)
+	}
+
+	// Парсим JSON для способов оплаты
+	if err := json.Unmarshal(paymentMethodsJSON, &order.PaymentMethods); err != nil {
+		return nil, fmt.Errorf("не удалось парсить способы оплаты: %w", err)
+	}
+
+	log.Printf("[INFO] Заявка найдена: ID=%d, Type=%s, Amount=%.2f", order.ID, order.Type, order.Amount)
+	return order, nil
+}
+
+// UpdateOrder обновляет заявку в базе данных (PostgreSQL)
+func (r *Repository) UpdateOrder(order *model.Order) error {
+	log.Printf("[INFO] Обновление заявки ID=%d", order.ID)
+
+	// Сериализуем способы оплаты в JSON
+	paymentMethodsJSON, err := json.Marshal(order.PaymentMethods)
+	if err != nil {
+		return fmt.Errorf("не удалось сериализовать способы оплаты: %w", err)
+	}
+
+	query := `
+		UPDATE orders 
+		SET type = $2, cryptocurrency = $3, fiat_currency = $4, amount = $5, price = $6, 
+		    total_amount = $7, min_amount = $8, max_amount = $9, payment_methods = $10, 
+		    description = $11, updated_at = NOW()
+		WHERE id = $1`
+
+	result, err := r.db.Exec(query,
+		order.ID, order.Type, order.Cryptocurrency, order.FiatCurrency, order.Amount,
+		order.Price, order.TotalAmount, order.MinAmount, order.MaxAmount,
+		paymentMethodsJSON, order.Description,
+	)
+	if err != nil {
+		return fmt.Errorf("не удалось обновить заявку: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("не удалось получить количество обновленных строк: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("заявка с ID=%d не найдена", order.ID)
+	}
+
+	log.Printf("[INFO] Заявка ID=%d успешно обновлена", order.ID)
+	return nil
+}
+
+// =====================================================
+// МЕТОДЫ ДЛЯ РАБОТЫ С ОТКЛИКАМИ (RESPONSES)
+// =====================================================
+
+// CreateResponse создает новый отклик в базе данных (PostgreSQL)
+func (r *Repository) CreateResponse(response *model.Response) error {
+	log.Printf("[INFO] Создание отклика на заявку ID=%d от пользователя ID=%d", response.OrderID, response.UserID)
+
+	query := `
+		INSERT INTO responses (order_id, user_id, message, status, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, NOW(), NOW())
+		RETURNING id, created_at, updated_at`
+
+	err := r.db.QueryRow(query, response.OrderID, response.UserID, response.Message, response.Status).
+		Scan(&response.ID, &response.CreatedAt, &response.UpdatedAt)
+	if err != nil {
+		return fmt.Errorf("не удалось создать отклик: %w", err)
+	}
+
+	log.Printf("[INFO] Отклик создан с ID=%d", response.ID)
+	return nil
+}
+
+// UpdateResponseStatus обновляет статус отклика (PostgreSQL)
+func (r *Repository) UpdateResponseStatus(responseID int64, status model.ResponseStatus) error {
+	log.Printf("[INFO] Обновление статуса отклика ID=%d на %s", responseID, status)
+
+	query := `
+		UPDATE responses 
+		SET status = $2, updated_at = NOW(), reviewed_at = CASE WHEN $2 != 'waiting' THEN NOW() ELSE reviewed_at END
+		WHERE id = $1`
+
+	result, err := r.db.Exec(query, responseID, status)
+	if err != nil {
+		return fmt.Errorf("не удалось обновить статус отклика: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("не удалось получить количество обновленных строк: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("отклик с ID=%d не найден", responseID)
+	}
+
+	log.Printf("[INFO] Статус отклика ID=%d обновлен на %s", responseID, status)
+	return nil
+}
+
+// GetResponsesByFilter получает отклики по фильтру (PostgreSQL)
+func (r *Repository) GetResponsesByFilter(filter *model.ResponseFilter) ([]*model.Response, error) {
+	log.Printf("[INFO] Получение откликов по фильтру: %+v", filter)
+
+	// Базовый запрос
+	query := `
+		SELECT r.id, r.order_id, r.user_id, r.message, r.status, r.created_at, r.updated_at, r.reviewed_at,
+		       u.first_name || COALESCE(' ' || u.last_name, '') as user_name, u.username,
+		       o.type, o.cryptocurrency, o.fiat_currency, o.amount, o.price, o.total_amount,
+		       author.first_name || COALESCE(' ' || author.last_name, '') as author_name, author.username as author_username
+		FROM responses r
+		JOIN users u ON r.user_id = u.id
+		JOIN orders o ON r.order_id = o.id
+		JOIN users author ON o.user_id = author.id
+		WHERE 1=1`
+
+	args := []interface{}{}
+	argIndex := 1
+
+	// Добавляем условия фильтрации
+	if filter.OrderID != nil {
+		query += fmt.Sprintf(" AND r.order_id = $%d", argIndex)
+		args = append(args, *filter.OrderID)
+		argIndex++
+	}
+
+	if filter.UserID != nil {
+		query += fmt.Sprintf(" AND r.user_id = $%d", argIndex)
+		args = append(args, *filter.UserID)
+		argIndex++
+	}
+
+	if filter.AuthorID != nil {
+		query += fmt.Sprintf(" AND o.user_id = $%d", argIndex)
+		args = append(args, *filter.AuthorID)
+		argIndex++
+	}
+
+	if filter.Status != nil {
+		query += fmt.Sprintf(" AND r.status = $%d", argIndex)
+		args = append(args, *filter.Status)
+		argIndex++
+	}
+
+	// Сортировка
+	if filter.SortBy != "" {
+		sortBy := "r.created_at" // по умолчанию
+		switch filter.SortBy {
+		case "created_at":
+			sortBy = "r.created_at"
+		case "updated_at":
+			sortBy = "r.updated_at"
+		}
+
+		sortOrder := "DESC" // по умолчанию
+		if filter.SortOrder == "asc" {
+			sortOrder = "ASC"
+		}
+
+		query += fmt.Sprintf(" ORDER BY %s %s", sortBy, sortOrder)
+	} else {
+		query += " ORDER BY r.created_at DESC"
+	}
+
+	// Лимит и оффсет
+	if filter.Limit > 0 {
+		query += fmt.Sprintf(" LIMIT $%d", argIndex)
+		args = append(args, filter.Limit)
+		argIndex++
+	}
+
+	if filter.Offset > 0 {
+		query += fmt.Sprintf(" OFFSET $%d", argIndex)
+		args = append(args, filter.Offset)
+	}
+
+	rows, err := r.db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("не удалось выполнить запрос откликов: %w", err)
+	}
+	defer rows.Close()
+
+	var responses []*model.Response
+	for rows.Next() {
+		response := &model.Response{}
+		err := rows.Scan(
+			&response.ID, &response.OrderID, &response.UserID, &response.Message, &response.Status,
+			&response.CreatedAt, &response.UpdatedAt, &response.ReviewedAt,
+			&response.UserName, &response.Username,
+			&response.OrderType, &response.Cryptocurrency, &response.FiatCurrency,
+			&response.Amount, &response.Price, &response.TotalAmount,
+			&response.AuthorName, &response.AuthorUsername,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("не удалось прочитать отклик: %w", err)
+		}
+		responses = append(responses, response)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("ошибка при чтении откликов: %w", err)
+	}
+
+	log.Printf("[INFO] Найдено откликов: %d", len(responses))
+	return responses, nil
+}
+
+// GetResponsesForOrder получает все отклики для заявки (PostgreSQL)
+func (r *Repository) GetResponsesForOrder(orderID int64) ([]*model.Response, error) {
+	filter := &model.ResponseFilter{
+		OrderID:   &orderID,
+		SortBy:    "created_at",
+		SortOrder: "asc",
+	}
+	return r.GetResponsesByFilter(filter)
+}
+
+// GetResponsesFromUser получает все отклики пользователя (PostgreSQL)
+func (r *Repository) GetResponsesFromUser(userID int64) ([]*model.Response, error) {
+	filter := &model.ResponseFilter{
+		UserID:    &userID,
+		SortBy:    "created_at",
+		SortOrder: "desc",
+	}
+	return r.GetResponsesByFilter(filter)
+}
+
+// GetResponsesForAuthor получает отклики на заявки автора (PostgreSQL)
+func (r *Repository) GetResponsesForAuthor(authorID int64) ([]*model.Response, error) {
+	filter := &model.ResponseFilter{
+		AuthorID:  &authorID,
+		SortBy:    "created_at",
+		SortOrder: "desc",
+	}
+	return r.GetResponsesByFilter(filter)
 }
