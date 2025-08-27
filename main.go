@@ -61,6 +61,14 @@ func main() {
 		log.Printf("[INFO] TELEGRAM_WEBAPP_URL не задан, используется по умолчанию: %s", webAppURL)
 	}
 
+	// Получаем URL бота из переменных окружения для ссылок в уведомлениях (необязательно)
+	botURL := os.Getenv("TELEGRAM_BOT_URL")
+	if botURL == "" {
+		// Если не задан, используем стандартную ссылку на Telegram (без конкретного бота)
+		botURL = "https://t.me" // По умолчанию просто ссылка на Telegram
+		log.Printf("[INFO] TELEGRAM_BOT_URL не задан, используется по умолчанию: %s", botURL)
+	}
+
 	// Получаем ID группового чата для публикации новых заявок (необязательно)
 	groupChatID := os.Getenv("TELEGRAM_GROUP_CHAT_ID")
 	if groupChatID != "" {
@@ -107,7 +115,7 @@ func main() {
 
 	// Инициализируем слой сервисов для бизнес-логики
 	// Сервисы содержат всю логику работы с заявками, пользователями и отзывами
-	svc := service.NewServiceWithGroup(repo, telegramToken, chatID, webAppURL, groupChatID, groupTopicID)
+	svc := service.NewServiceWithGroup(repo, telegramToken, chatID, webAppURL, groupChatID, groupTopicID, botURL)
 	log.Println("[INFO] Сервисы инициализированы")
 	log.Println("[INFO] Система уведомлений готова к отправке сообщений участникам сделок")
 

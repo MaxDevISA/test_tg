@@ -50,16 +50,16 @@ func NewService(repo repository.RepositoryInterface, telegramToken, chatID strin
 // NewServiceWithWebApp создает новый экземпляр сервиса с URL веб-приложения
 // Принимает интерфейс репозитория, токен бота, ID чата и URL веб-приложения
 func NewServiceWithWebApp(repo repository.RepositoryInterface, telegramToken, chatID, webAppURL string) *Service {
-	return NewServiceWithGroup(repo, telegramToken, chatID, webAppURL, "", "")
+	return NewServiceWithGroup(repo, telegramToken, chatID, webAppURL, "", "", "")
 }
 
 // NewServiceWithGroup создает новый экземпляр сервиса с поддержкой групповых уведомлений
-// Принимает все параметры включая настройки группового чата
-func NewServiceWithGroup(repo repository.RepositoryInterface, telegramToken, chatID, webAppURL, groupChatID, groupTopicID string) *Service {
+// Принимает все параметры включая настройки группового чата и URL бота
+func NewServiceWithGroup(repo repository.RepositoryInterface, telegramToken, chatID, webAppURL, groupChatID, groupTopicID, botURL string) *Service {
 	log.Println("[INFO] Инициализация сервиса бизнес-логики")
 
 	// Инициализируем сервис уведомлений с переданными параметрами
-	notificationService := NewNotificationServiceWithGroup(telegramToken, webAppURL, groupChatID, groupTopicID)
+	notificationService := NewNotificationServiceWithBotURL(telegramToken, webAppURL, groupChatID, groupTopicID, botURL)
 
 	return &Service{
 		repo:                repo,
@@ -2003,9 +2003,9 @@ func (s *Service) sendOrderCreatedGroupNotification(order *model.Order, user *mo
 		operationType = strings.ToUpper(string(order.Type))
 	}
 
-	// Формируем текст уведомления по шаблону со ссылкой на приложение
+	// Формируем текст уведомления по шаблону со ссылкой на бота
 	message := fmt.Sprintf(
-		"Пользователь <b>%s</b> создал новую заявку:\n\n💰 <b>%s %s %s</b>\n💎 Объем: <b>%.2f %s</b>\n💵 Курс: <b>%.2f %s</b> за 1 %s\n💸 Общая сумма: <b>%.2f %s</b>\n\n🚀 <i>Откликайтесь быстрее!</i>\n\n👉 <a href=\"%s/#orders\">Открыть приложение</a>",
+		"Пользователь <b>%s</b> создал новую заявку:\n\n💰 <b>%s %s %s</b>\n💎 Объем: <b>%.2f %s</b>\n💵 Курс: <b>%.2f %s</b> за 1 %s\n💸 Общая сумма: <b>%.2f %s</b>\n\n🚀 <i>Откликайтесь быстрее!</i>\n\n👉 <a href=\"%s\">Перейти в бот</a>",
 		userName,
 		operationType,
 		order.Cryptocurrency,
@@ -2017,7 +2017,7 @@ func (s *Service) sendOrderCreatedGroupNotification(order *model.Order, user *mo
 		order.Cryptocurrency,
 		order.TotalAmount,
 		order.FiatCurrency,
-		s.notificationService.webAppURL,
+		s.notificationService.botURL,
 	)
 
 	// Отправляем групповое уведомление

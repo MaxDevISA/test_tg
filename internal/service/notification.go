@@ -19,6 +19,7 @@ type NotificationService struct {
 	httpClient    *http.Client                                           // HTTP клиент для запросов к Telegram Bot API
 	templates     map[model.NotificationType]*model.NotificationTemplate // Шаблоны уведомлений
 	webAppURL     string                                                 // URL веб-приложения для создания кнопок
+	botURL        string                                                 // URL бота для ссылок в уведомлениях
 	groupChatID   string                                                 // ID группового чата для публикации заявок (необязательно)
 	groupTopicID  string                                                 // ID темы в групповом чате (необязательно)
 }
@@ -28,9 +29,9 @@ func NewNotificationService(telegramToken, webAppURL string) *NotificationServic
 	return NewNotificationServiceWithGroup(telegramToken, webAppURL, "", "")
 }
 
-// NewNotificationServiceWithGroup создает новый экземпляр сервиса уведомлений с поддержкой групповых уведомлений
-func NewNotificationServiceWithGroup(telegramToken, webAppURL, groupChatID, groupTopicID string) *NotificationService {
-	log.Println("[INFO] Инициализация сервиса уведомлений")
+// NewNotificationServiceWithBotURL создает новый экземпляр сервиса уведомлений с URL бота
+func NewNotificationServiceWithBotURL(telegramToken, webAppURL, groupChatID, groupTopicID, botURL string) *NotificationService {
+	log.Println("[INFO] Инициализация сервиса уведомлений с URL бота")
 
 	if groupChatID != "" {
 		log.Printf("[INFO] Групповые уведомления включены для чата: %s", groupChatID)
@@ -44,6 +45,7 @@ func NewNotificationServiceWithGroup(telegramToken, webAppURL, groupChatID, grou
 		httpClient:    &http.Client{Timeout: 10 * time.Second}, // HTTP клиент с таймаутом 10 сек
 		templates:     make(map[model.NotificationType]*model.NotificationTemplate),
 		webAppURL:     webAppURL,
+		botURL:        botURL,
 		groupChatID:   groupChatID,
 		groupTopicID:  groupTopicID,
 	}
@@ -52,6 +54,11 @@ func NewNotificationServiceWithGroup(telegramToken, webAppURL, groupChatID, grou
 	service.initTemplates()
 
 	return service
+}
+
+// NewNotificationServiceWithGroup создает новый экземпляр сервиса уведомлений с поддержкой групповых уведомлений
+func NewNotificationServiceWithGroup(telegramToken, webAppURL, groupChatID, groupTopicID string) *NotificationService {
+	return NewNotificationServiceWithBotURL(telegramToken, webAppURL, groupChatID, groupTopicID, "")
 }
 
 // initTemplates инициализирует шаблоны уведомлений для разных типов событий
