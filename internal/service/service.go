@@ -1235,6 +1235,7 @@ func (s *Service) CreateResponse(userID int64, responseData *model.CreateRespons
 		OrderID: responseData.OrderID,
 		UserID:  userID,
 		Message: responseData.Message,
+		Status:  model.ResponseStatusWaiting, // Устанавливаем статус "ожидает рассмотрения"
 	}
 
 	// Сохраняем отклик в репозитории
