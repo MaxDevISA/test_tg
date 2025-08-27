@@ -2829,7 +2829,11 @@ function displayResponsesToMyOrders(responses) {
                         💰 ${firstResponse.amount || '?'} ${firstResponse.cryptocurrency || '?'} за ${firstResponse.price || '?'} ${firstResponse.fiat_currency || '?'} = ${totalAmount.toLocaleString('ru')} ${firstResponse.fiat_currency || '?'}
                     </div>
                 ` : ''}
-                <span class="response-count">${waitingResponses.length} новых откликов</span>
+                ${waitingResponses.length > 0 ? `
+                    <div style="margin-top: 12px; padding: 6px 12px; background: var(--tg-theme-button-color, #2BE47E); color: black; border-radius: 6px; font-size: 12px; font-weight: 600; display: inline-block;">
+                        ${waitingResponses.length} новых откликов
+                    </div>
+                ` : ''}
             </div>
             ${sortedResponses.map(response => createOrderResponseCard(response)).join('')}
         </div>`;
@@ -2930,11 +2934,11 @@ function createOrderResponseCard(response) {
             </div>
             
             ${response.status === 'waiting' ? `
-                <div class="response-actions">
-                    <button onclick="acceptResponse(${response.id})" class="btn btn-success">
+                <div style="display: flex; gap: 6px; margin-top: 12px;">
+                    <button onclick="acceptResponse(${response.id})" class="btn btn-compact btn-success" style="flex: 1;">
                         ✅ Принять
                     </button>
-                    <button onclick="rejectResponse(${response.id})" class="btn btn-danger">
+                    <button onclick="rejectResponse(${response.id})" class="btn btn-compact btn-danger" style="flex: 1;">
                         ❌ Отклонить
                     </button>
                 </div>
