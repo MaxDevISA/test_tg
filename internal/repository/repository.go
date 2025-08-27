@@ -479,7 +479,8 @@ func (r *Repository) GetDealsByUserID(userID int64) ([]*model.Deal, error) {
 	var deals []*model.Deal
 	for rows.Next() {
 		deal := &model.Deal{}
-		var paymentMethodStr string // Временная переменная для сканирования payment_method
+		var paymentMethodStr string            // Временная переменная для сканирования payment_method
+		var paymentProof, notes sql.NullString // Переменные для NULL-значений
 
 		err := rows.Scan(
 			&deal.ID,
@@ -498,8 +499,8 @@ func (r *Repository) GetDealsByUserID(userID int64) ([]*model.Deal, error) {
 			&deal.CompletedAt,
 			&deal.AuthorConfirmed,
 			&deal.CounterConfirmed,
-			&deal.AuthorProof,
-			&deal.Notes,
+			&paymentProof, // NULL-safe сканирование payment_proof
+			&notes,        // NULL-safe сканирование notes
 		)
 		if err != nil {
 			return nil, fmt.Errorf("не удалось сканировать сделку: %w", err)
@@ -507,6 +508,10 @@ func (r *Repository) GetDealsByUserID(userID int64) ([]*model.Deal, error) {
 
 		// Конвертируем payment_method string в []string для совместимости с моделью
 		deal.PaymentMethods = []string{paymentMethodStr}
+
+		// Конвертируем NULL-значения в строки
+		deal.AuthorProof = paymentProof.String // sql.NullString.String возвращает "" если NULL
+		deal.Notes = notes.String              // sql.NullString.String возвращает "" если NULL
 
 		deals = append(deals, deal)
 	}
@@ -528,7 +533,8 @@ func (r *Repository) GetDealByID(dealID int64) (*model.Deal, error) {
 		WHERE id = $1`
 
 	// Выполняем запрос и сканируем результат
-	var paymentMethodStr string // Временная переменная для сканирования payment_method
+	var paymentMethodStr string            // Временная переменная для сканирования payment_method
+	var paymentProof, notes sql.NullString // Переменные для NULL-значений
 
 	err := r.db.QueryRow(query, dealID).Scan(
 		&deal.ID,
@@ -547,8 +553,8 @@ func (r *Repository) GetDealByID(dealID int64) (*model.Deal, error) {
 		&deal.CompletedAt,
 		&deal.AuthorConfirmed,
 		&deal.CounterConfirmed,
-		&deal.AuthorProof,
-		&deal.Notes,
+		&paymentProof, // NULL-safe сканирование payment_proof
+		&notes,        // NULL-safe сканирование notes
 	)
 
 	if err != nil {
@@ -560,6 +566,10 @@ func (r *Repository) GetDealByID(dealID int64) (*model.Deal, error) {
 
 	// Конвертируем payment_method string в []string для совместимости с моделью
 	deal.PaymentMethods = []string{paymentMethodStr}
+
+	// Конвертируем NULL-значения в строки
+	deal.AuthorProof = paymentProof.String // sql.NullString.String возвращает "" если NULL
+	deal.Notes = notes.String              // sql.NullString.String возвращает "" если NULL
 
 	return deal, nil
 }
