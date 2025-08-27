@@ -479,6 +479,8 @@ func (r *Repository) GetDealsByUserID(userID int64) ([]*model.Deal, error) {
 	var deals []*model.Deal
 	for rows.Next() {
 		deal := &model.Deal{}
+		var paymentMethodStr string // Временная переменная для сканирования payment_method
+
 		err := rows.Scan(
 			&deal.ID,
 			&deal.ResponseID,
@@ -490,7 +492,7 @@ func (r *Repository) GetDealsByUserID(userID int64) ([]*model.Deal, error) {
 			&deal.Amount,
 			&deal.Price,
 			&deal.TotalAmount,
-			&deal.PaymentMethods,
+			&paymentMethodStr, // Сканируем в string, не в []string
 			&deal.Status,
 			&deal.CreatedAt,
 			&deal.CompletedAt,
@@ -502,6 +504,10 @@ func (r *Repository) GetDealsByUserID(userID int64) ([]*model.Deal, error) {
 		if err != nil {
 			return nil, fmt.Errorf("не удалось сканировать сделку: %w", err)
 		}
+
+		// Конвертируем payment_method string в []string для совместимости с моделью
+		deal.PaymentMethods = []string{paymentMethodStr}
+
 		deals = append(deals, deal)
 	}
 
@@ -522,6 +528,8 @@ func (r *Repository) GetDealByID(dealID int64) (*model.Deal, error) {
 		WHERE id = $1`
 
 	// Выполняем запрос и сканируем результат
+	var paymentMethodStr string // Временная переменная для сканирования payment_method
+
 	err := r.db.QueryRow(query, dealID).Scan(
 		&deal.ID,
 		&deal.ResponseID,
@@ -533,7 +541,7 @@ func (r *Repository) GetDealByID(dealID int64) (*model.Deal, error) {
 		&deal.Amount,
 		&deal.Price,
 		&deal.TotalAmount,
-		&deal.PaymentMethods,
+		&paymentMethodStr, // Сканируем в string, не в []string
 		&deal.Status,
 		&deal.CreatedAt,
 		&deal.CompletedAt,
@@ -549,6 +557,9 @@ func (r *Repository) GetDealByID(dealID int64) (*model.Deal, error) {
 		}
 		return nil, fmt.Errorf("не удалось найти сделку: %w", err)
 	}
+
+	// Конвертируем payment_method string в []string для совместимости с моделью
+	deal.PaymentMethods = []string{paymentMethodStr}
 
 	return deal, nil
 }
