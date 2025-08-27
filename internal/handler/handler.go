@@ -61,11 +61,12 @@ func (h *Handler) RegisterRoutes(router *mux.Router) {
 	api.HandleFunc("/responses/{id}/reject", h.handleRejectResponse).Methods("POST")  // Отклонить отклик
 
 	// Система отзывов и рейтингов
-	api.HandleFunc("/reviews", h.handleGetReviews).Methods("GET")                // Получить отзывы пользователя
-	api.HandleFunc("/reviews", h.handleCreateReview).Methods("POST")             // Оставить отзыв
-	api.HandleFunc("/users/{id}/profile", h.handleGetUserProfile).Methods("GET") // Получить профиль пользователя
-	api.HandleFunc("/auth/stats", h.handleGetMyStats).Methods("GET")             // Получить статистику текущего пользователя
-	api.HandleFunc("/auth/reviews", h.handleGetMyReviews).Methods("GET")         // Получить отзывы текущего пользователя
+	api.HandleFunc("/reviews", h.handleGetReviews).Methods("GET")                  // Получить отзывы пользователя
+	api.HandleFunc("/reviews", h.handleCreateReview).Methods("POST")               // Оставить отзыв
+	api.HandleFunc("/reviews/debug/{dealId}", h.handleDebugReviews).Methods("GET") // Отладка: отзывы по сделке
+	api.HandleFunc("/users/{id}/profile", h.handleGetUserProfile).Methods("GET")   // Получить профиль пользователя
+	api.HandleFunc("/auth/stats", h.handleGetMyStats).Methods("GET")               // Получить статистику текущего пользователя
+	api.HandleFunc("/auth/reviews", h.handleGetMyReviews).Methods("GET")           // Получить отзывы текущего пользователя
 
 	// Информационные эндпоинты
 	api.HandleFunc("/health", h.handleHealthCheck).Methods("GET") // Проверка состояния сервиса
@@ -1210,4 +1211,27 @@ func (h *Handler) handleRejectResponse(w http.ResponseWriter, r *http.Request) {
 	})
 
 	log.Printf("[INFO] Отклик отклонен: ResponseID=%d", responseID)
+}
+
+// handleDebugReviews отладочный эндпоинт для просмотра отзывов по сделке
+func (h *Handler) handleDebugReviews(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	dealIdStr := vars["dealId"]
+
+	dealId, err := strconv.ParseInt(dealIdStr, 10, 64)
+	if err != nil {
+		h.sendErrorResponse(w, "Неверный ID сделки", http.StatusBadRequest)
+		return
+	}
+
+	log.Printf("[DEBUG] Запрос отладки отзывов для сделки ID=%d", dealId)
+
+	// Имитируем загрузку отзывов (это для отладки, поэтому делаем напрямую)
+	// В реальной ситуации лучше создать метод в сервисе
+
+	h.sendJSONResponse(w, map[string]interface{}{
+		"success": true,
+		"deal_id": dealId,
+		"message": "Смотрите логи сервера для подробной информации об отзывах",
+	})
 }

@@ -742,8 +742,14 @@ func (s *Service) GetUserDeals(userID int64) ([]*model.Deal, error) {
 				deal.AuthorReviewGiven = !canReview
 				log.Printf("[DEBUG] Автор сделки ID=%d: canReview=%t, reviewGiven=%t", deal.ID, canReview, deal.AuthorReviewGiven)
 			} else {
-				log.Printf("[WARN] Не удалось проверить отзыв автора для сделки ID=%d: %v", deal.ID, err)
-				deal.AuthorReviewGiven = false
+				// Если ошибка содержит "отзыв по данной сделке уже оставлен", значит отзыв оставлен
+				if strings.Contains(err.Error(), "отзыв по данной сделке уже оставлен") {
+					deal.AuthorReviewGiven = true
+					log.Printf("[DEBUG] Автор сделки ID=%d: отзыв УЖЕ оставлен (из ошибки), reviewGiven=%t", deal.ID, deal.AuthorReviewGiven)
+				} else {
+					deal.AuthorReviewGiven = false
+					log.Printf("[WARN] Не удалось проверить отзыв автора для сделки ID=%d: %v", deal.ID, err)
+				}
 			}
 
 			// Проверяем, оставил ли контрагент отзыв об авторе
@@ -752,8 +758,14 @@ func (s *Service) GetUserDeals(userID int64) ([]*model.Deal, error) {
 				deal.CounterpartyReviewGiven = !canReview
 				log.Printf("[DEBUG] Контрагент сделки ID=%d: canReview=%t, reviewGiven=%t", deal.ID, canReview, deal.CounterpartyReviewGiven)
 			} else {
-				log.Printf("[WARN] Не удалось проверить отзыв контрагента для сделки ID=%d: %v", deal.ID, err)
-				deal.CounterpartyReviewGiven = false
+				// Если ошибка содержит "отзыв по данной сделке уже оставлен", значит отзыв оставлен
+				if strings.Contains(err.Error(), "отзыв по данной сделке уже оставлен") {
+					deal.CounterpartyReviewGiven = true
+					log.Printf("[DEBUG] Контрагент сделки ID=%d: отзыв УЖЕ оставлен (из ошибки), reviewGiven=%t", deal.ID, deal.CounterpartyReviewGiven)
+				} else {
+					deal.CounterpartyReviewGiven = false
+					log.Printf("[WARN] Не удалось проверить отзыв контрагента для сделки ID=%d: %v", deal.ID, err)
+				}
 			}
 
 			log.Printf("[INFO] Сделка ID=%d - статус отзывов: автор=%t, контрагент=%t",
