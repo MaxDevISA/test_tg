@@ -239,8 +239,7 @@ func (r *Repository) GetOrdersByFilter(filter *model.OrderFilter) ([]*model.Orde
 		SELECT id, user_id, type, cryptocurrency, fiat_currency, 
 		       amount, price, total_amount, min_amount, max_amount,
 		       payment_methods, description, status, created_at,
-		       updated_at, expires_at, matched_user_id, matched_at,
-		       completed_at, is_active, auto_match
+		       updated_at, expires_at, completed_at, is_active
 		FROM orders`
 
 	// Условия WHERE
@@ -328,6 +327,8 @@ func (r *Repository) GetOrdersByFilter(filter *model.OrderFilter) ([]*model.Orde
 	var orders []*model.Order
 	for rows.Next() {
 		order := &model.Order{}
+		var paymentMethodsJSON []byte
+
 		err := rows.Scan(
 			&order.ID,
 			&order.UserID,
@@ -339,7 +340,7 @@ func (r *Repository) GetOrdersByFilter(filter *model.OrderFilter) ([]*model.Orde
 			&order.TotalAmount,
 			&order.MinAmount,
 			&order.MaxAmount,
-			&order.PaymentMethods,
+			&paymentMethodsJSON, // JSON из базы данных
 			&order.Description,
 			&order.Status,
 			&order.CreatedAt,
@@ -347,12 +348,20 @@ func (r *Repository) GetOrdersByFilter(filter *model.OrderFilter) ([]*model.Orde
 			&order.ExpiresAt,
 			&order.CompletedAt,
 			&order.IsActive,
-			&order.ResponseCount,
-			&order.AcceptedResponseID,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("не удалось сканировать заявку: %w", err)
 		}
+
+		// Парсим JSON для способов оплаты
+		if err := json.Unmarshal(paymentMethodsJSON, &order.PaymentMethods); err != nil {
+			return nil, fmt.Errorf("не удалось парсить способы оплаты: %w", err)
+		}
+
+		// Устанавливаем значения по умолчанию для фронтенда
+		order.ResponseCount = 0        // Будет вычисляться отдельно если нужно
+		order.AcceptedResponseID = nil // Будет устанавливаться отдельно если нужно
+
 		orders = append(orders, order)
 	}
 
