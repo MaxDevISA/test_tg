@@ -259,7 +259,7 @@ func (s *Service) checkChatMembership(userTelegramID int64) (bool, error) {
 // CreateOrder создает новую заявку на покупку или продажу криптовалюты
 // Проверяет валидность данных и сохраняет заявку в базе данных
 func (s *Service) CreateOrder(userID int64, orderData *model.Order) (*model.Order, error) {
-	log.Printf("[INFO] Создание заявки пользователем ID=%d: Type=%s, Crypto=%s, Amount=%.8f",
+	log.Printf("[INFO] Создание заявки пользователем ID=%d: Type=%s, Crypto=%s, Amount=%.2f",
 		userID, orderData.Type, orderData.Cryptocurrency, orderData.Amount)
 
 	// Проверяем права пользователя на создание заявки
@@ -316,7 +316,7 @@ func (s *Service) CreateOrder(userID int64, orderData *model.Order) (*model.Orde
 
 // UpdateOrder обновляет существующую заявку
 func (s *Service) UpdateOrder(orderID, userID int64, orderData *model.Order) (*model.Order, error) {
-	log.Printf("[INFO] Обновление заявки ID=%d пользователем ID=%d: Type=%s, Crypto=%s, Amount=%.8f",
+	log.Printf("[INFO] Обновление заявки ID=%d пользователем ID=%d: Type=%s, Crypto=%s, Amount=%.2f",
 		orderID, userID, orderData.Type, orderData.Cryptocurrency, orderData.Amount)
 
 	// Проверяем права пользователя
@@ -1912,7 +1912,7 @@ func (s *Service) sendOrderCreatedGroupNotification(order *model.Order, user *mo
 
 	// Формируем текст уведомления по шаблону со ссылкой на приложение
 	message := fmt.Sprintf(
-		"Пользователь <b>%s</b> создал новую заявку:\n\n💰 <b>%s %s %s</b>\n💎 Объем: <b>%.8f %s</b>\n💵 Курс: <b>%.2f %s</b> за 1 %s\n💸 Общая сумма: <b>%.2f %s</b>\n\n🚀 <i>Откликайтесь быстрее!</i>\n\n👉 <a href=\"%s/#orders\">Открыть приложение</a>",
+		"Пользователь <b>%s</b> создал новую заявку:\n\n💰 <b>%s %s %s</b>\n💎 Объем: <b>%.2f %s</b>\n💵 Курс: <b>%.2f %s</b> за 1 %s\n💸 Общая сумма: <b>%.2f %s</b>\n\n🚀 <i>Откликайтесь быстрее!</i>\n\n👉 <a href=\"%s/#orders\">Открыть приложение</a>",
 		userName,
 		operationType,
 		order.Cryptocurrency,

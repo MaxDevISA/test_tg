@@ -1445,20 +1445,40 @@ function applyOrdersFilter() {
     const cryptoFilter = document.querySelector('[data-filter="cryptocurrency"]')?.value || '';
     
     console.log('[DEBUG] Активные фильтры:', { type: typeFilter, crypto: cryptoFilter });
+    console.log('[DEBUG] Всего заявок для фильтрации:', allOrders.length);
+    
+    // Показываем примеры заявок для отладки
+    if (allOrders.length > 0) {
+        console.log('[DEBUG] Пример первой заявки:', {
+            id: allOrders[0].id,
+            type: allOrders[0].type,
+            cryptocurrency: allOrders[0].cryptocurrency
+        });
+    }
     
     // Фильтруем заявки
     let filteredOrders = allOrders.filter(order => {
+        let passesFilter = true;
+        
         // Проверяем фильтр по типу
-        if (typeFilter && order.type !== typeFilter) {
-            return false;
+        if (typeFilter) {
+            const typeMatches = order.type === typeFilter;
+            console.log('[DEBUG] Заявка', order.id, '- тип фильтра:', typeFilter, ', тип заявки:', order.type, ', совпадение:', typeMatches);
+            if (!typeMatches) {
+                passesFilter = false;
+            }
         }
         
         // Проверяем фильтр по криптовалюте
-        if (cryptoFilter && order.cryptocurrency !== cryptoFilter) {
-            return false;
+        if (cryptoFilter) {
+            const cryptoMatches = order.cryptocurrency === cryptoFilter;
+            console.log('[DEBUG] Заявка', order.id, '- крипто фильтр:', cryptoFilter, ', криптовалюта заявки:', order.cryptocurrency, ', совпадение:', cryptoMatches);
+            if (!cryptoMatches) {
+                passesFilter = false;
+            }
         }
         
-        return true;
+        return passesFilter;
     });
     
     console.log('[DEBUG] Заявок после фильтрации:', filteredOrders.length, 'из', allOrders.length);
@@ -3180,24 +3200,19 @@ async function confirmPayment(dealId, isAuthor) {
         });
         
         if (result.success) {
-            const message = isAuthor ? 
+            let message = isAuthor ? 
                 '✅ Вы подтвердили получение средств!' : 
                 '✅ Вы подтвердили отправку средств!';
+            
+            // Проверяем завершена ли сделка и объединяем сообщения
+            if (result.deal_completed) {
+                message += '\n\n🎉 Сделка успешно завершена!\n\nВы можете оставить отзыв о контрагенте.';
+            }
             
             showAlert(message);
             
             // Перезагружаем активные сделки
             await loadActiveDeals();
-            
-            // Проверяем завершена ли сделка
-            if (result.deal_completed) {
-                showAlert('🎉 Сделка успешно завершена!\n\nВы можете оставить отзыв о контрагенте.');
-                
-                // Можно добавить переход к форме отзыва
-                setTimeout(() => {
-                    // switchResponseTab('completed-deals'); // если будет такой таб
-                }, 2000);
-            }
             
         } else {
             showAlert('❌ ' + (result.message || 'Ошибка при подтверждении сделки'));
@@ -3409,12 +3424,16 @@ async function handleReviewSubmit(event) {
     
     console.log('[DEBUG] Данные отзыва для отправки:', reviewData);
     
+    // Получаем кнопку и сохраняем её исходный текст ВНЕ try блока
+    const submitButton = document.querySelector('#reviewForm button[type="submit"]');
+    const originalText = submitButton ? submitButton.textContent : 'Отправить отзыв';
+    
     try {
         // Блокируем кнопку отправки
-        const submitButton = document.querySelector('#reviewForm button[type="submit"]');
-        const originalText = submitButton.textContent;
-        submitButton.disabled = true;
-        submitButton.textContent = 'Отправка...';
+        if (submitButton) {
+            submitButton.disabled = true;
+            submitButton.textContent = 'Отправка...';
+        }
         
         // Отправляем отзыв через API
         const result = await apiRequest('/api/v1/reviews', 'POST', reviewData);
@@ -3425,6 +3444,10 @@ async function handleReviewSubmit(event) {
             
             // Обновляем активные сделки
             await loadActiveDeals();
+            
+            // Обновляем рейтинг в шапке приложения
+            await updateHeaderRatingFromServer();
+            
         } else {
             console.error('[ERROR] Ошибка создания отзыва:', result.message);
             showAlert('❌ Ошибка при отправке отзыва: ' + (result.message || 'Неизвестная ошибка'));
@@ -3435,7 +3458,6 @@ async function handleReviewSubmit(event) {
         showAlert('❌ Ошибка сети при отправке отзыва');
     } finally {
         // Разблокируем кнопку
-        const submitButton = document.querySelector('#reviewForm button[type="submit"]');
         if (submitButton) {
             submitButton.disabled = false;
             submitButton.textContent = originalText;
