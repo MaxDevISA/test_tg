@@ -1062,17 +1062,13 @@ func (r *FileRepository) CheckCanReview(dealID, fromUserID, toUserID int64) (boo
 		return false, fmt.Errorf("не удалось загрузить отзывы: %w", err)
 	}
 
-	log.Printf("[DEBUG] Всего отзывов в файле: %d", len(reviews))
-	for i, review := range reviews {
-		log.Printf("[DEBUG] Отзыв #%d: DealID=%d, FromUserID=%d, ToUserID=%d", i+1, review.DealID, review.FromUserID, review.ToUserID)
+	for _, review := range reviews {
 		if review.DealID == dealID && review.FromUserID == fromUserID && review.ToUserID == toUserID {
-			log.Printf("[WARN] Отзыв уже оставлен по сделке ID=%d от пользователя ID=%d к пользователю ID=%d", 
+			log.Printf("[WARN] Отзыв уже оставлен по сделке ID=%d от пользователя ID=%d к пользователю ID=%d",
 				dealID, fromUserID, toUserID)
 			return false, fmt.Errorf("отзыв по данной сделке уже оставлен")
 		}
 	}
-
-	log.Printf("[DEBUG] Отзыв для DealID=%d, FromUserID=%d, ToUserID=%d НЕ найден", dealID, fromUserID, toUserID)
 
 	log.Printf("[INFO] Отзыв можно оставить: Deal ID=%d, From=%d, To=%d", dealID, fromUserID, toUserID)
 	return true, nil

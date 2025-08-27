@@ -3184,19 +3184,13 @@ function createDealCard(deal) {
                                   ', userAlreadyReviewed:', userAlreadyReviewed);
                         
                         if (userAlreadyReviewed) {
-                            return '<div style="display: flex; gap: 4px;">' +
-                                '<button disabled style="background: var(--tg-theme-hint-color, #6c757d); color: var(--tg-theme-button-text-color, white); border: none; padding: 8px 12px; border-radius: 4px; font-size: 12px; flex: 1; cursor: not-allowed;">' +
-                                    '✅ Отзыв оставлен' +
-                                '</button>' +
-                                '<button onclick="debugReviews(' + deal.id + ')" style="background: #ff9800; color: white; border: none; padding: 8px; border-radius: 4px; font-size: 10px; width: 40px;">🐛</button>' +
-                            '</div>';
+                            return '<button disabled style="background: var(--tg-theme-hint-color, #6c757d); color: var(--tg-theme-button-text-color, white); border: none; padding: 8px 12px; border-radius: 4px; font-size: 12px; flex: 1; cursor: not-allowed;">' +
+                                '✅ Отзыв оставлен' +
+                                '</button>';
                         } else {
-                            return '<div style="display: flex; gap: 4px;">' +
-                                '<button onclick="openReviewModal(' + deal.id + ', ' + counterpartyUserId + ', \'' + counterpartyDisplayName + '\')" style="background: var(--tg-theme-button-color, #f59e0b); color: var(--tg-theme-button-text-color, white); border: none; padding: 8px 12px; border-radius: 4px; font-size: 12px; flex: 1;">' +
-                                    '⭐ Оставить отзыв' +
-                                '</button>' +
-                                '<button onclick="debugReviews(' + deal.id + ')" style="background: #ff9800; color: white; border: none; padding: 8px; border-radius: 4px; font-size: 10px; width: 40px;">🐛</button>' +
-                            '</div>';
+                            return '<button onclick="openReviewModal(' + deal.id + ', ' + counterpartyUserId + ', \'' + counterpartyDisplayName + '\')" style="background: var(--tg-theme-button-color, #f59e0b); color: var(--tg-theme-button-text-color, white); border: none; padding: 8px 12px; border-radius: 4px; font-size: 12px; flex: 1;">' +
+                                '⭐ Оставить отзыв' +
+                                '</button>';
                         }
                     })()}
                 ` : `
@@ -3558,26 +3552,3 @@ async function handleReviewSubmit(event) {
     }
 }
 
-// Отладочная функция для проверки отзывов по сделке
-async function debugReviews(dealId) {
-    console.log('[DEBUG] Отладка отзывов для сделки ID:', dealId);
-    
-    try {
-        const result = await apiRequest(`/api/v1/reviews/debug/${dealId}`, 'GET');
-        
-        if (result.success) {
-            showAlert(`🐛 Отладка отзывов для сделки #${dealId}\n\n${result.message}\n\nПодробные логи смотрите в консоли сервера.`);
-            
-            // Дополнительно вызываем CheckCanReview для текущего пользователя
-            console.log('[DEBUG] Вызван отладочный эндпоинт для сделки', dealId);
-            console.log('[DEBUG] Ответ сервера:', result);
-            
-        } else {
-            showAlert('❌ Ошибка отладки: ' + (result.message || 'Неизвестная ошибка'));
-        }
-        
-    } catch (error) {
-        console.error('[ERROR] Ошибка вызова отладки:', error);
-        showAlert('❌ Ошибка сети при отладке');
-    }
-}
