@@ -913,7 +913,11 @@ func (r *Repository) GetReviewsByUserID(userID int64, limit, offset int) ([]*mod
 		SELECT r.id, r.deal_id, r.from_user_id, r.to_user_id, r.rating,
 		       r.type, r.comment, r.is_anonymous, r.created_at, r.updated_at,
 		       r.is_visible, r.reported_count,
-		       CASE WHEN r.is_anonymous THEN 'Аноним' ELSE u.first_name END as reviewer_name
+		       CASE 
+			   WHEN r.is_anonymous THEN 'Аноним' 
+			   ELSE CONCAT(u.first_name, CASE WHEN u.last_name IS NOT NULL THEN ' ' || u.last_name ELSE '' END) 
+		       END as from_user_name,
+		       CASE WHEN r.is_anonymous THEN '' ELSE u.username END as from_user_username
 		FROM reviews r
 		LEFT JOIN users u ON u.id = r.from_user_id
 		WHERE r.to_user_id = $1 AND r.is_visible = true
@@ -931,7 +935,6 @@ func (r *Repository) GetReviewsByUserID(userID int64, limit, offset int) ([]*mod
 	var reviews []*model.Review
 	for rows.Next() {
 		review := &model.Review{}
-		var reviewerName string
 
 		err := rows.Scan(
 			&review.ID,
@@ -946,15 +949,11 @@ func (r *Repository) GetReviewsByUserID(userID int64, limit, offset int) ([]*mod
 			&review.UpdatedAt,
 			&review.IsVisible,
 			&review.ReportedCount,
-			&reviewerName,
+			&review.FromUserName,
+			&review.FromUserUsername,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("не удалось сканировать отзыв: %w", err)
-		}
-
-		// Дополняем отзыв информацией об авторе (если не анонимный)
-		if !review.IsAnonymous {
-			// Можно добавить дополнительную информацию об авторе отзыва
 		}
 
 		reviews = append(reviews, review)
