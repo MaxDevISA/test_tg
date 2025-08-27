@@ -889,14 +889,20 @@ func (s *Service) CreateReview(userID int64, reviewData *model.CreateReviewReque
 	log.Printf("[INFO] Создание отзыва от пользователя ID=%d для сделки ID=%d", userID, reviewData.DealID)
 
 	// Проверяем права на создание отзыва
+	log.Printf("[DEBUG] Проверяем права на отзыв: DealID=%d, FromUserID=%d, ToUserID=%d",
+		reviewData.DealID, userID, reviewData.ToUserID)
+
 	canReview, err := s.repo.CheckCanReview(reviewData.DealID, userID, reviewData.ToUserID)
 	if err != nil {
-		log.Printf("[WARN] Пользователь ID=%d не может оставить отзыв: %v", userID, err)
-		return nil, err
+		log.Printf("[WARN] Ошибка проверки прав на отзыв пользователя ID=%d: %v", userID, err)
+		return nil, fmt.Errorf("ошибка проверки прав на отзыв: %w", err)
 	}
 
+	log.Printf("[DEBUG] Результат проверки прав: canReview=%t", canReview)
+
 	if !canReview {
-		return nil, fmt.Errorf("отзыв не может быть создан")
+		log.Printf("[WARN] Пользователь ID=%d не может оставить отзыв для сделки ID=%d", userID, reviewData.DealID)
+		return nil, fmt.Errorf("отзыв уже оставлен или сделка не завершена")
 	}
 
 	// Валидируем данные отзыва

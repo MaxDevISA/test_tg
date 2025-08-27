@@ -730,6 +730,7 @@ func (h *Handler) handleCreateReview(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("[INFO] Создание отзыва: DealID=%d, ToUserID=%d, Rating=%d",
 		reviewData.DealID, reviewData.ToUserID, reviewData.Rating)
+	log.Printf("[DEBUG] Отправитель отзыва: TelegramID=%d, InternalID=%d", telegramID, user.ID)
 
 	// Создаем отзыв через сервис
 	review, err := h.service.CreateReview(user.ID, &reviewData)

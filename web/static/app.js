@@ -1357,33 +1357,7 @@ function updateStarRating(rating) {
     });
 }
 
-// Обработчик отправки отзыва
-function handleReviewSubmit() {
-    const modal = document.getElementById('reviewModal');
-    const dealId = parseInt(modal.dataset.dealId);
-    const toUserId = parseInt(modal.dataset.toUserId);
-    const rating = parseInt(document.getElementById('reviewRating').value);
-    const comment = document.getElementById('reviewComment').value.trim();
-    const isAnonymous = document.getElementById('reviewAnonymous').checked;
-    
-    // Валидация
-    if (rating < 1 || rating > 5) {
-        showError('Рейтинг должен быть от 1 до 5 звезд');
-        return;
-    }
-    
-    if (rating <= 2 && !comment) {
-        showError('Для оценки 1-2 звезды необходимо указать комментарий');
-        return;
-    }
-    
-    if (comment.length > 500) {
-        showError('Комментарий не должен превышать 500 символов');
-        return;
-    }
-    
-    createReview(dealId, toUserId, rating, comment, isAnonymous);
-}
+// Старая функция удалена - используем новую async функцию handleReviewSubmit
 
 // Инициализация приложения
 document.addEventListener('DOMContentLoaded', () => {
@@ -1671,7 +1645,7 @@ function initReviewModal() {
                                 style="background: #6c757d; color: white; border: none; padding: 8px 16px; border-radius: 4px; margin-right: 8px;">
                             Отмена
                         </button>
-                        <button type="button" onclick="handleReviewSubmit()" 
+                        <button type="submit" 
                                 style="background: #22c55e; color: white; border: none; padding: 8px 16px; border-radius: 4px;">
                             Отправить отзыв
                         </button>
@@ -3547,11 +3521,19 @@ async function handleReviewSubmit(event) {
             showAlert('✅ Отзыв успешно отправлен!\n\nСпасибо за ваше мнение.');
             closeReviewModal();
             
-            // Обновляем активные сделки
+            // Обновляем активные сделки (чтобы кнопка "Оставить отзыв" заблокировалась)
             await loadActiveDeals();
+            
+            // Если находимся в разделе "Мои заявки", обновляем и его
+            const myOrdersView = document.getElementById('my-ordersView');
+            if (myOrdersView && !myOrdersView.classList.contains('hidden')) {
+                await loadMyOrders();
+            }
             
             // Обновляем рейтинг в шапке приложения
             await updateHeaderRatingFromServer();
+            
+            console.log('[INFO] Отзыв успешно создан, все данные обновлены');
             
         } else {
             console.error('[ERROR] Ошибка создания отзыва:', result.message);
