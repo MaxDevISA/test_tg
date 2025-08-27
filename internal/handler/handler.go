@@ -198,6 +198,12 @@ func (h *Handler) handleGetOrders(w http.ResponseWriter, r *http.Request) {
 	filter.SortBy = r.URL.Query().Get("sort_by")
 	filter.SortOrder = r.URL.Query().Get("sort_order")
 
+	// Включить неактивные заявки (для фильтрации откликов)
+	if includeInactive := r.URL.Query().Get("include_inactive"); includeInactive == "true" {
+		filter.IncludeInactive = true
+		log.Printf("[DEBUG] Включены неактивные заявки для фильтрации")
+	}
+
 	// Получаем заявки через сервис
 	orders, err := h.service.GetOrders(filter)
 	if err != nil {

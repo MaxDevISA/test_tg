@@ -118,20 +118,21 @@ type Deal struct {
 // OrderFilter содержит параметры для фильтрации заявок
 // Используется при поиске подходящих заявок
 type OrderFilter struct {
-	Type           *OrderType   `json:"type"`            // Тип заявки
-	Cryptocurrency *string      `json:"cryptocurrency"`  // Криптовалюта
-	FiatCurrency   *string      `json:"fiat_currency"`   // Фиатная валюта
-	MinPrice       *float64     `json:"min_price"`       // Минимальная цена
-	MaxPrice       *float64     `json:"max_price"`       // Максимальная цена
-	MinAmount      *float64     `json:"min_amount"`      // Минимальная сумма
-	MaxAmount      *float64     `json:"max_amount"`      // Максимальная сумма
-	PaymentMethods []string     `json:"payment_methods"` // Способы оплаты
-	Status         *OrderStatus `json:"status"`          // Статус заявки
-	UserID         *int64       `json:"user_id"`         // ID пользователя
-	CreatedAfter   *time.Time   `json:"created_after"`   // Созданы после даты
-	CreatedBefore  *time.Time   `json:"created_before"`  // Созданы до даты
-	SortBy         string       `json:"sort_by"`         // Сортировка (price, created_at, amount)
-	SortOrder      string       `json:"sort_order"`      // Порядок сортировки (asc, desc)
-	Limit          int          `json:"limit"`           // Лимит результатов
-	Offset         int          `json:"offset"`          // Смещение для пагинации
+	Type            *OrderType   `json:"type"`             // Тип заявки
+	Cryptocurrency  *string      `json:"cryptocurrency"`   // Криптовалюта
+	FiatCurrency    *string      `json:"fiat_currency"`    // Фиатная валюта
+	MinPrice        *float64     `json:"min_price"`        // Минимальная цена
+	MaxPrice        *float64     `json:"max_price"`        // Максимальная цена
+	MinAmount       *float64     `json:"min_amount"`       // Минимальная сумма
+	MaxAmount       *float64     `json:"max_amount"`       // Максимальная сумма
+	PaymentMethods  []string     `json:"payment_methods"`  // Способы оплаты
+	Status          *OrderStatus `json:"status"`           // Статус заявки
+	UserID          *int64       `json:"user_id"`          // ID пользователя
+	IncludeInactive bool         `json:"include_inactive"` // Включить неактивные заявки (отмененные, истекшие)
+	CreatedAfter    *time.Time   `json:"created_after"`    // Созданы после даты
+	CreatedBefore   *time.Time   `json:"created_before"`   // Созданы до даты
+	SortBy          string       `json:"sort_by"`          // Сортировка (price, created_at, amount)
+	SortOrder       string       `json:"sort_order"`       // Порядок сортировки (asc, desc)
+	Limit           int          `json:"limit"`            // Лимит результатов
+	Offset          int          `json:"offset"`           // Смещение для пагинации
 }

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"p2pTG-crypto-exchange/internal/model"
@@ -233,8 +234,15 @@ func (r *Repository) GetOrdersByFilter(filter *model.OrderFilter) ([]*model.Orde
 		       payment_methods, description, status, created_at,
 		       updated_at, expires_at, matched_user_id, matched_at,
 		       completed_at, is_active, auto_match
-		FROM orders
-		WHERE is_active = true`
+		FROM orders`
+
+	// Условия WHERE
+	whereClauses := []string{}
+
+	// Проверяем активность (по умолчанию только активные, кроме случая включения неактивных)
+	if !filter.IncludeInactive {
+		whereClauses = append(whereClauses, "is_active = true")
+	}
 
 	// Параметры для подстановки в запрос
 	args := []interface{}{}
@@ -243,32 +251,37 @@ func (r *Repository) GetOrdersByFilter(filter *model.OrderFilter) ([]*model.Orde
 	// Динамически добавляем условия фильтрации
 	if filter.Type != nil {
 		argCount++
-		query += fmt.Sprintf(" AND type = $%d", argCount)
+		whereClauses = append(whereClauses, fmt.Sprintf("type = $%d", argCount))
 		args = append(args, *filter.Type)
 	}
 
 	if filter.Cryptocurrency != nil {
 		argCount++
-		query += fmt.Sprintf(" AND cryptocurrency = $%d", argCount)
+		whereClauses = append(whereClauses, fmt.Sprintf("cryptocurrency = $%d", argCount))
 		args = append(args, *filter.Cryptocurrency)
 	}
 
 	if filter.FiatCurrency != nil {
 		argCount++
-		query += fmt.Sprintf(" AND fiat_currency = $%d", argCount)
+		whereClauses = append(whereClauses, fmt.Sprintf("fiat_currency = $%d", argCount))
 		args = append(args, *filter.FiatCurrency)
 	}
 
 	if filter.Status != nil {
 		argCount++
-		query += fmt.Sprintf(" AND status = $%d", argCount)
+		whereClauses = append(whereClauses, fmt.Sprintf("status = $%d", argCount))
 		args = append(args, *filter.Status)
 	}
 
 	if filter.UserID != nil {
 		argCount++
-		query += fmt.Sprintf(" AND user_id = $%d", argCount)
+		whereClauses = append(whereClauses, fmt.Sprintf("user_id = $%d", argCount))
 		args = append(args, *filter.UserID)
+	}
+
+	// Собираем условия WHERE
+	if len(whereClauses) > 0 {
+		query += " WHERE " + strings.Join(whereClauses, " AND ")
 	}
 
 	// Добавляем сортировку

@@ -345,8 +345,8 @@ func (r *FileRepository) GetOrdersByFilter(filter *model.OrderFilter) ([]*model.
 
 // matchesFilter проверяет соответствует ли заявка фильтру
 func (r *FileRepository) matchesFilter(order *model.Order, filter *model.OrderFilter) bool {
-	// Проверяем активность (только активные заявки по умолчанию)
-	if !order.IsActive {
+	// Проверяем активность (только активные заявки по умолчанию, кроме случая включения неактивных)
+	if !order.IsActive && !filter.IncludeInactive {
 		return false
 	}
 

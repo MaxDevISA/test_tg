@@ -2634,9 +2634,10 @@ async function loadResponsesToMyOrders() {
     
     try {
         // Загружаем отклики, заявки и сделки параллельно для фильтрации
+        // ВАЖНО: загружаем ВСЕ заявки (включая отмененные) для корректной фильтрации
         const [responsesResult, ordersResult, dealsResult] = await Promise.all([
             apiRequest('/api/v1/responses/to-my', 'GET'),
-            apiRequest('/api/v1/orders/my', 'GET'),
+            apiRequest('/api/v1/orders?include_inactive=true', 'GET'), // Включаем неактивные заявки
             apiRequest('/api/v1/deals', 'GET')
         ]);
         
@@ -2647,14 +2648,35 @@ async function loadResponsesToMyOrders() {
             
             console.log('[DEBUG] Загружено откликов:', responses.length, 'заявок:', orders.length, 'сделок:', deals.length);
             
+            // Показываем примеры для отладки
+            if (responses.length > 0) {
+                console.log('[DEBUG] Пример первого отклика:', {
+                    id: responses[0].id,
+                    order_id: responses[0].order_id,
+                    status: responses[0].status
+                });
+            }
+            if (orders.length > 0) {
+                console.log('[DEBUG] Пример первой заявки:', {
+                    id: orders[0].id,
+                    status: orders[0].status
+                });
+            }
+            
             // Фильтруем отклики - убираем те, что относятся к завершенным/удаленным заявкам
             const activeResponses = responses.filter(response => {
                 // Ищем заявку для этого отклика
                 const order = orders.find(o => o.id === response.order_id);
                 
                 if (!order) {
-                    // Заявка удалена - убираем отклик
-                    console.log('[DEBUG] Убираем отклик к удаленной заявке:', response.order_id);
+                    // Заявка не найдена (удалена автором) - убираем отклик
+                    console.log('[DEBUG] Убираем отклик к удаленной заявке (автором):', response.order_id);
+                    return false;
+                }
+                
+                if (order.status === 'cancelled' || order.status === 'expired') {
+                    // Заявка отменена/истекла - убираем отклик
+                    console.log('[DEBUG] Убираем отклик к отмененной/истекшей заявке:', order.id, order.status);
                     return false;
                 }
                 
