@@ -314,6 +314,77 @@ func (s *Service) CreateOrder(userID int64, orderData *model.Order) (*model.Orde
 	return orderData, nil
 }
 
+// UpdateOrder обновляет существующую заявку
+func (s *Service) UpdateOrder(orderID, userID int64, orderData *model.Order) (*model.Order, error) {
+	log.Printf("[INFO] Обновление заявки ID=%d пользователем ID=%d: Type=%s, Crypto=%s, Amount=%.8f",
+		orderID, userID, orderData.Type, orderData.Cryptocurrency, orderData.Amount)
+
+	// Проверяем права пользователя
+	user, err := s.repo.GetUserByTelegramID(userID)
+	if err != nil {
+		log.Printf("[ERROR] Пользователь ID=%d не найден при обновлении заявки", userID)
+		return nil, fmt.Errorf("пользователь не найден")
+	}
+
+	if !user.IsActive || !user.ChatMember {
+		log.Printf("[WARN] Попытка обновления заявки неактивным пользователем ID=%d", userID)
+		return nil, fmt.Errorf("недостаточно прав для обновления заявки")
+	}
+
+	// Получаем существующую заявку
+	existingOrder, err := s.repo.GetOrderByID(orderID)
+	if err != nil {
+		log.Printf("[ERROR] Заявка ID=%d не найдена: %v", orderID, err)
+		return nil, fmt.Errorf("заявка не найдена")
+	}
+
+	// Проверяем что заявка принадлежит пользователю
+	if existingOrder.UserID != user.ID {
+		log.Printf("[WARN] Попытка редактирования чужой заявки ID=%d пользователем ID=%d", orderID, userID)
+		return nil, fmt.Errorf("нет прав на редактирование этой заявки")
+	}
+
+	// Проверяем что заявка может быть отредактирована (только активные заявки)
+	if existingOrder.Status != model.OrderStatusActive && existingOrder.Status != model.OrderStatusHasResponses {
+		log.Printf("[WARN] Попытка редактирования заявки ID=%d в статусе %s", orderID, existingOrder.Status)
+		return nil, fmt.Errorf("заявку в статусе '%s' нельзя редактировать", existingOrder.Status)
+	}
+
+	// Валидируем новые данные заявки
+	if err := s.validateOrderData(orderData); err != nil {
+		log.Printf("[WARN] Невалидные данные при обновлении заявки ID=%d: %v", orderID, err)
+		return nil, err
+	}
+
+	// Заполняем системные поля для обновления
+	orderData.ID = orderID
+	orderData.UserID = user.ID
+	orderData.Status = existingOrder.Status // Сохраняем текущий статус
+	orderData.IsActive = existingOrder.IsActive
+	orderData.TotalAmount = orderData.Amount * orderData.Price
+	orderData.CreatedAt = existingOrder.CreatedAt // Сохраняем дату создания
+	orderData.ExpiresAt = existingOrder.ExpiresAt // Сохраняем срок истечения
+
+	// Если не указан минимальный и максимальный лимит, устанавливаем их равными общей сумме
+	if orderData.MinAmount == 0 {
+		orderData.MinAmount = orderData.TotalAmount
+	}
+	if orderData.MaxAmount == 0 {
+		orderData.MaxAmount = orderData.TotalAmount
+	}
+
+	// Обновляем заявку в базе данных
+	if err := s.repo.UpdateOrder(orderData); err != nil {
+		log.Printf("[ERROR] Не удалось обновить заявку ID=%d: %v", orderID, err)
+		return nil, fmt.Errorf("не удалось обновить заявку: %w", err)
+	}
+
+	log.Printf("[INFO] Успешно обновлена заявка: ID=%d, UserID=%d, Type=%s",
+		orderData.ID, userID, orderData.Type)
+
+	return orderData, nil
+}
+
 // GetOrders получает список заявок с фильтрацией и пагинацией
 // Позволяет найти подходящие заявки для пользователя
 func (s *Service) GetOrders(filter *model.OrderFilter) ([]*model.Order, error) {
@@ -465,7 +536,7 @@ func (s *Service) validateOrderData(order *model.Order) error {
 		return fmt.Errorf("необходимо указать хотя бы один способ оплаты")
 	}
 
-	supportedPayments := []string{"bank_transfer", "sberbank", "tinkoff", "qiwi", "yandex_money", "cash"}
+	supportedPayments := []string{"bank_transfer", "sberbank", "tinkoff", "SPB", "yandex_money", "cash"}
 	for _, method := range order.PaymentMethods {
 		isValidPayment := false
 		for _, supported := range supportedPayments {

@@ -44,6 +44,7 @@ func (h *Handler) RegisterRoutes(router *mux.Router) {
 	api.HandleFunc("/orders", h.handleCreateOrder).Methods("POST")        // Создать новую заявку
 	api.HandleFunc("/orders/my", h.handleGetMyOrders).Methods("GET")      // Получить мои заявки (ВАЖНО: должно быть ДО {id})
 	api.HandleFunc("/orders/{id}", h.handleGetOrder).Methods("GET")       // Получить заявку по ID
+	api.HandleFunc("/orders/{id}", h.handleUpdateOrder).Methods("PUT")    // Обновить заявку
 	api.HandleFunc("/orders/{id}", h.handleCancelOrder).Methods("DELETE") // Отменить заявку
 
 	// Управление сделками
@@ -253,6 +254,58 @@ func (h *Handler) handleCreateOrder(w http.ResponseWriter, r *http.Request) {
 		"success": true,
 		"order":   order,
 		"message": "Заявка успешно создана",
+	})
+}
+
+// handleUpdateOrder обрабатывает обновление существующей заявки
+func (h *Handler) handleUpdateOrder(w http.ResponseWriter, r *http.Request) {
+	log.Println("[INFO] Обработка запроса обновления заявки")
+
+	// Получаем ID заявки из URL
+	vars := mux.Vars(r)
+	orderID, err := strconv.ParseInt(vars["id"], 10, 64)
+	if err != nil {
+		log.Printf("[WARN] Неверный ID заявки: %v", err)
+		h.sendErrorResponse(w, "Неверный ID заявки", http.StatusBadRequest)
+		return
+	}
+
+	// Получаем Telegram ID пользователя из заголовка
+	telegramIDStr := r.Header.Get("X-Telegram-User-ID")
+	if telegramIDStr == "" {
+		log.Printf("[WARN] Не передан Telegram ID пользователя")
+		h.sendErrorResponse(w, "Требуется авторизация", http.StatusUnauthorized)
+		return
+	}
+
+	telegramID, err := strconv.ParseInt(telegramIDStr, 10, 64)
+	if err != nil {
+		log.Printf("[WARN] Неверный формат Telegram ID: %v", err)
+		h.sendErrorResponse(w, "Неверный ID пользователя", http.StatusBadRequest)
+		return
+	}
+
+	// Читаем данные заявки из тела запроса
+	var orderData model.Order
+	if err := json.NewDecoder(r.Body).Decode(&orderData); err != nil {
+		log.Printf("[WARN] Неверный формат данных заявки: %v", err)
+		h.sendErrorResponse(w, "Неверный формат данных заявки", http.StatusBadRequest)
+		return
+	}
+
+	// Обновляем заявку через сервис
+	order, err := h.service.UpdateOrder(orderID, telegramID, &orderData)
+	if err != nil {
+		log.Printf("[WARN] Ошибка обновления заявки: %v", err)
+		h.sendErrorResponse(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	log.Printf("[INFO] Заявка успешно обновлена: ID=%d", order.ID)
+	h.sendJSONResponse(w, map[string]interface{}{
+		"success": true,
+		"order":   order,
+		"message": "Заявка успешно обновлена",
 	})
 }
 

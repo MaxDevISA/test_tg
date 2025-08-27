@@ -114,6 +114,8 @@ function initModal() {
     const form = document.getElementById('createOrderForm');
     
     createBtn.addEventListener('click', () => {
+        // Сбрасываем форму в исходное состояние перед открытием
+        resetOrderForm(form);
         modal.classList.add('show');
     });
     
@@ -158,34 +160,91 @@ async function handleCreateOrder(e) {
         auto_match: formData.has('auto_match')
     };
     
+    // Проверяем режим редактирования
+    const editId = e.target.dataset.editId;
+    const isEditMode = editId && editId !== '';
+    
+    console.log('[DEBUG] Режим обработки заявки:', isEditMode ? 'Редактирование ID=' + editId : 'Создание новой');
+    
     try {
-        const response = await fetch('/api/v1/orders', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Telegram-User-ID': currentUser.id.toString()
-            },
-            body: JSON.stringify(orderData)
-        });
+        let response;
+        
+        if (isEditMode) {
+            // Режим редактирования - делаем PUT запрос
+            response = await fetch(`/api/v1/orders/${editId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Telegram-User-ID': currentUser.id.toString()
+                },
+                body: JSON.stringify(orderData)
+            });
+        } else {
+            // Режим создания - делаем POST запрос
+            response = await fetch('/api/v1/orders', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Telegram-User-ID': currentUser.id.toString()
+                },
+                body: JSON.stringify(orderData)
+            });
+        }
         
         const result = await response.json();
         
         // Отладочная информация
-        console.log('[DEBUG] Результат создания заявки:', result);
+        console.log('[DEBUG] Результат обработки заявки:', result);
         
         if (result.success) {
-            console.log('[DEBUG] Заявка создана успешно, перезагружаем список...');
-            showSuccess('Заявка успешно создана!');
+            const successMessage = isEditMode ? 'Заявка успешно обновлена!' : 'Заявка успешно создана!';
+            console.log('[DEBUG] Операция успешна, перезагружаем список...');
+            
+            showSuccess(successMessage);
+            
+            // Закрываем модальное окно и сбрасываем форму
             document.getElementById('createOrderModal').classList.remove('show');
-            e.target.reset();
-            loadOrders(); // Перезагружаем список заявок
+            resetOrderForm(e.target);
+            
+            // Перезагружаем соответствующий список заявок
+            if (isEditMode) {
+                loadMyOrders(); // Если редактировали, обновляем "Мои заявки"
+            } else {
+                loadOrders(); // Если создали новую, обновляем "Рынок"  
+            }
         } else {
-            showError(result.error || 'Ошибка создания заявки');
+            const errorMessage = isEditMode ? 'Ошибка обновления заявки' : 'Ошибка создания заявки';
+            showError(result.error || errorMessage);
         }
     } catch (error) {
-        console.error('[ERROR] Ошибка создания заявки:', error);
+        console.error('[ERROR] Ошибка обработки заявки:', error);
         showError('Ошибка сети. Попробуйте позже.');
     }
+}
+
+// Сброс формы заявки в исходное состояние
+function resetOrderForm(form) {
+    console.log('[DEBUG] Сброс формы заявки в исходное состояние');
+    
+    // Очищаем данные формы
+    form.reset();
+    
+    // Убираем ID редактирования
+    delete form.dataset.editId;
+    
+    // Возвращаем исходный заголовок и текст кнопки
+    const modalTitle = document.querySelector('.modal-title');
+    const submitBtn = document.querySelector('#createOrderForm button[type="submit"]');
+    
+    if (modalTitle) {
+        modalTitle.textContent = 'Создать заявку';
+    }
+    
+    if (submitBtn) {
+        submitBtn.textContent = 'Создать заявку';
+    }
+    
+    console.log('[DEBUG] Форма сброшена в режим создания новой заявки');
 }
 
 // Загрузка заявок
@@ -216,112 +275,14 @@ async function loadOrders() {
 
 // Отображение заявок
 function displayOrders(orders) {
-    const content = document.getElementById('ordersContent');
-    
-    // Отладочная информация
     console.log('[DEBUG] Отображение заявок:', orders);
     
-    // Фильтруем только заявки, доступные для откликов на рынке
-    const marketOrders = orders.filter(order => {
-        // Показываем заявки со статусами: active (без откликов) и has_responses (есть отклики, но автор еще не выбрал)
-        return order.status === 'active' || order.status === 'has_responses';
-    });
+    // Сохраняем все заявки для фильтрации
+    allOrders = orders || [];
+    console.log('[DEBUG] Сохранено заявок для фильтрации:', allOrders.length);
     
-    console.log('[DEBUG] Заявки после фильтрации для рынка:', marketOrders);
-    
-    if (marketOrders.length === 0) {
-        console.log('[DEBUG] Нет заявок доступных на рынке');
-        content.innerHTML = '<p class="text-center text-muted">Заявок пока нет</p>';
-        return;
-    }
-    
-    const ordersHTML = marketOrders.map((order, index) => {
-        console.log(`[DEBUG] Обработка заявки ${index}:`, order);
-        
-        // Проверяем критические поля
-        if (!order.type || !order.amount || !order.cryptocurrency || !order.price || !order.fiat_currency) {
-            console.log(`[DEBUG] Заявка ${index} имеет пустые обязательные поля:`, {
-                type: order.type,
-                amount: order.amount, 
-                cryptocurrency: order.cryptocurrency,
-                price: order.price,
-                fiat_currency: order.fiat_currency
-            });
-        }
-        
-        // Проверяем не наша ли это заявка
-        const isMyOrder = currentInternalUserId && order.user_id === currentInternalUserId;
-        
-        // Подсчитываем общую сумму сделки
-        const totalAmount = order.total_amount || (order.amount * order.price);
-        
-        // Определяем отображение автора
-        const authorName = order.user_name || order.first_name || `Пользователь ${order.user_id}`;
-        const authorUsername = order.username; 
-        console.log('[DEBUG] Данные автора заявки:', { 
-            authorName, 
-            authorUsername, 
-            user_name: order.user_name,
-            first_name: order.first_name,
-            username: order.username 
-        });
-        
-        const authorDisplay = authorUsername ? 
-            `<span onclick="openTelegramProfile('${authorUsername}')" style="color: #1DB954; cursor: pointer; text-decoration: underline; font-weight: 500;">@${authorUsername}</span>` :
-            `<span style="color: #ffffff; font-weight: 500;">${authorName}</span>`;
-        
-        return '<div class="order-card">' +
-            '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">' +
-                '<span style="font-weight: 600; color: ' + (order.type === 'buy' ? '#22c55e' : '#ef4444') + ';">' +
-                    (order.type === 'buy' ? '🟢 Покупка' : '🔴 Продажа') +
-                '</span>' +
-                '<span style="font-size: 12px; color: rgba(255, 255, 255, 0.5);">' +
-                    (order.created_at ? new Date(order.created_at).toLocaleString('ru') : 'Дата неизвестна') +
-                '</span>' +
-            '</div>' +
-            
-            '<div style="margin-bottom: 10px;">' +
-                '<div style="font-size: 14px; margin-bottom: 4px; color: #ffffff;">👤 Автор: ' + authorDisplay + '</div>' +
-            '</div>' +
-            
-            '<div style="background: rgba(30, 30, 40, 0.6); border: 1px solid rgba(255, 255, 255, 0.1); padding: 10px; border-radius: 6px; margin-bottom: 10px;">' +
-                '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px;">' +
-                    '<div>' +
-                        '<span style="color: rgba(255, 255, 255, 0.6);">📊 Объем:</span><br>' +
-                        '<strong style="color: #ffffff;">' + (order.amount || '?') + ' ' + (order.cryptocurrency || '?') + '</strong>' +
-                    '</div>' +
-                    '<div>' +
-                        '<span style="color: rgba(255, 255, 255, 0.6);">💰 Курс:</span><br>' +
-                        '<strong style="color: #ffffff;">' + (order.price || '?') + ' ' + (order.fiat_currency || '?') + ' за 1' + (order.cryptocurrency || '?') + '</strong>' +
-                    '</div>' +
-                '</div>' +
-                '<div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255, 255, 255, 0.15); font-size: 13px;">' +
-                    '<span style="color: rgba(255, 255, 255, 0.6);">💵 Общая сумма:</span> ' +
-                    '<strong style="color: #ffffff; font-size: 15px;">' + totalAmount.toLocaleString('ru') + ' ' + (order.fiat_currency || '?') + '</strong>' +
-                '</div>' +
-            '</div>' +
-            
-            '<div style="font-size: 12px; color: rgba(255, 255, 255, 0.6); margin-bottom: 10px;">' +
-                '💳 Способы оплаты: <span style="color: #ffffff;">' + ((order.payment_methods || []).join(', ') || 'Не указано') + '</span>' +
-            '</div>' +
-            
-            (order.description ? '<div style="font-size: 12px; margin-bottom: 10px; color: #ffffff;">' + order.description + '</div>' : '') +
-            
-            (!isMyOrder ? 
-                '<div style="display: flex; gap: 6px; margin-top: 12px;">' +
-                    '<button onclick="openUserProfile(' + (order.user_id || 0) + ')" class="btn btn-compact btn-secondary" style="flex: 1;">👤 Профиль</button>' +
-                    '<button onclick="respondToOrder(' + (order.id || 0) + ')" class="btn btn-compact btn-primary" style="flex: 2;">🤝 Откликнуться</button>' +
-                '</div>' : 
-                '<div style="display: flex; gap: 6px; margin-top: 12px;">' +
-                    '<div style="background: rgba(43, 228, 126, 0.1); border: 1px solid #2BE47E; border-radius: 6px; padding: 6px 10px; font-size: 11px; color: #2BE47E; flex: 1; text-align: center; font-weight: 600; min-height: 28px; display: flex; align-items: center; justify-content: center;">Моя заявка</div>' +
-                    '<button onclick="editOrder(' + (order.id || 0) + ')" class="btn btn-compact btn-success" style="flex: 1;">Редактировать</button>' +
-                    '<button onclick="viewOrderResponses(' + (order.id || 0) + ')" class="btn btn-compact btn-info" style="flex: 1;">Отклики (' + (order.response_count || 0) + ')</button>' +
-                '</div>'
-            ) +
-        '</div>';
-    }).join('');
-    
-    content.innerHTML = ordersHTML;
+    // Применяем текущие фильтры
+    applyOrdersFilter();
 }
 
 // Уведомления
@@ -539,6 +500,9 @@ function displayMyOrders(orders) {
         
         // Добавляем обработчик для кнопки создания первой заявки
         document.getElementById('createFirstOrderBtn').addEventListener('click', () => {
+            const form = document.getElementById('createOrderForm');
+            // Сбрасываем форму в исходное состояние перед открытием
+            resetOrderForm(form);
             document.getElementById('createOrderModal').classList.add('show');
         });
         return;
@@ -851,9 +815,70 @@ async function loadProfile() {
         console.log('[DEBUG] Вызываем displayMyProfile...');
         displayMyProfile(userData, userStats, userReviews);
         console.log('[DEBUG] displayMyProfile завершена');
+        
+        // Обновляем рейтинг в шапке с актуальными данными
+        updateHeaderRating(userStats, userData);
     } catch (error) {
         console.error('[ERROR] Ошибка загрузки профиля:', error);
         displayMyProfile(currentUser, null, []);
+    }
+}
+
+// Обновление рейтинга в шапке приложения
+function updateHeaderRating(userStats, userData) {
+    const userInfoElement = document.querySelector('.user-info');
+    if (!userInfoElement || !userData) return;
+    
+    // Получаем актуальный рейтинг из статистики или оставляем старый
+    const rating = (userStats && userStats.average_rating !== undefined) 
+        ? userStats.average_rating 
+        : userData.rating || 0;
+    
+    // Формируем отображаемое имя пользователя
+    const userName = userData.first_name + (userData.last_name ? ` ${userData.last_name}` : '');
+    
+    // Обновляем текст в шапке с актуальным рейтингом
+    userInfoElement.textContent = `👤 ${userName} ⭐${rating.toFixed(1)}`;
+    
+    console.log('[DEBUG] Рейтинг в шапке обновлен:', rating.toFixed(1));
+}
+
+// Обновление рейтинга в шапке загрузкой данных с сервера
+async function updateHeaderRatingFromServer() {
+    if (!currentUser) return;
+    
+    try {
+        console.log('[DEBUG] Обновление рейтинга в шапке с сервера...');
+        
+        // Получаем актуальную статистику и данные пользователя
+        const [userResponse, statsResponse] = await Promise.all([
+            fetch('/api/v1/auth/me', {
+                headers: { 'X-Telegram-User-ID': currentUser.id.toString() }
+            }).catch(() => null),
+            fetch('/api/v1/auth/stats', {
+                headers: { 'X-Telegram-User-ID': currentUser.id.toString() }
+            }).catch(() => null)
+        ]);
+
+        let userData = currentUser;
+        let userStats = null;
+
+        // Парсим ответы
+        if (userResponse && userResponse.ok) {
+            const userResult = await userResponse.json();
+            userData = userResult.user || currentUser;
+        }
+
+        if (statsResponse && statsResponse.ok) {
+            const statsResult = await statsResponse.json();
+            userStats = statsResult.stats;
+        }
+
+        // Обновляем рейтинг в шапке
+        updateHeaderRating(userStats, userData);
+        
+    } catch (error) {
+        console.error('[ERROR] Ошибка обновления рейтинга в шапке:', error);
     }
 }
 
@@ -1278,6 +1303,9 @@ async function createReview(dealId, toUserId, rating, comment, isAnonymous) {
             showSuccess('Отзыв успешно создан!');
             loadDeals(); // Обновляем список сделок
             closeReviewModal();
+            
+            // Обновляем рейтинг в шапке после создания отзыва
+            updateHeaderRatingFromServer();
         } else {
             showError('Ошибка создания отзыва: ' + (result.error || 'Неизвестная ошибка'));
         }
@@ -1374,7 +1402,187 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('[DEBUG] Изменение хэша обнаружено');
         handleHashNavigation();
     });
+    
+    // Инициализируем фильтры заявок
+    initOrdersFilters();
 });
+
+// Инициализация фильтров заявок
+function initOrdersFilters() {
+    console.log('[DEBUG] Инициализация фильтров заявок');
+    
+    // Найдем все селекты фильтров
+    const filterSelects = document.querySelectorAll('.filter-select');
+    console.log('[DEBUG] Найдено фильтров:', filterSelects.length);
+    
+    // Добавляем обработчики событий для всех фильтров
+    filterSelects.forEach(select => {
+        select.addEventListener('change', () => {
+            console.log('[DEBUG] Фильтр изменен:', select.dataset.filter, '=', select.value);
+            applyOrdersFilter();
+        });
+    });
+    
+    // Применяем фильтры при инициализации (если есть предустановленные значения)
+    setTimeout(() => {
+        const hasActiveFilters = Array.from(filterSelects).some(select => select.value !== '');
+        if (hasActiveFilters) {
+            console.log('[DEBUG] Найдены предустановленные фильтры, применяем');
+            applyOrdersFilter();
+        }
+    }, 500);
+}
+
+// Переменная для хранения всех заявок (без фильтрации)
+let allOrders = [];
+
+// Применение фильтров к заявкам
+function applyOrdersFilter() {
+    console.log('[DEBUG] Применение фильтров к заявкам');
+    
+    // Получаем значения всех фильтров
+    const typeFilter = document.querySelector('[data-filter="type"]')?.value || '';
+    const cryptoFilter = document.querySelector('[data-filter="cryptocurrency"]')?.value || '';
+    
+    console.log('[DEBUG] Активные фильтры:', { type: typeFilter, crypto: cryptoFilter });
+    
+    // Фильтруем заявки
+    let filteredOrders = allOrders.filter(order => {
+        // Проверяем фильтр по типу
+        if (typeFilter && order.type !== typeFilter) {
+            return false;
+        }
+        
+        // Проверяем фильтр по криптовалюте
+        if (cryptoFilter && order.cryptocurrency !== cryptoFilter) {
+            return false;
+        }
+        
+        return true;
+    });
+    
+    console.log('[DEBUG] Заявок после фильтрации:', filteredOrders.length, 'из', allOrders.length);
+    
+    // Отображаем отфильтрованные заявки
+    displayFilteredOrders(filteredOrders);
+}
+
+// Отображение отфильтрованных заявок
+function displayFilteredOrders(orders) {
+    const content = document.getElementById('ordersContent');
+    
+    // Фильтруем только заявки, доступные для откликов на рынке
+    const marketOrders = orders.filter(order => {
+        // Показываем заявки со статусами: active (без откликов) и has_responses (есть отклики, но автор еще не выбрал)
+        return order.status === 'active' || order.status === 'has_responses';
+    });
+    
+    console.log('[DEBUG] Отображение отфильтрованных заявок:', marketOrders.length);
+    
+    if (marketOrders.length === 0) {
+        content.innerHTML = '<p class="text-center text-muted">Заявки с выбранными фильтрами не найдены</p>';
+        return;
+    }
+    
+    // Отображаем заявки точно так же как в оригинальной функции
+    const ordersHTML = marketOrders
+        .filter(order => !order.user_id || order.user_id !== currentInternalUserId)
+        .map(order => createOrderCardHTML(order))
+        .join('');
+    
+    if (!ordersHTML) {
+        content.innerHTML = '<p class="text-center text-muted">Нет заявок для отображения</p>';
+    } else {
+        content.innerHTML = ordersHTML;
+    }
+}
+
+// Создание HTML карточки заявки
+function createOrderCardHTML(order) {
+    console.log(`[DEBUG] Создание карточки для заявки:`, order);
+    
+    // Проверяем критические поля
+    if (!order.type || !order.amount || !order.cryptocurrency || !order.price || !order.fiat_currency) {
+        console.log(`[DEBUG] Заявка имеет пустые обязательные поля:`, {
+            type: order.type,
+            amount: order.amount, 
+            cryptocurrency: order.cryptocurrency,
+            price: order.price,
+            fiat_currency: order.fiat_currency
+        });
+    }
+    
+    // Проверяем не наша ли это заявка
+    const isMyOrder = currentInternalUserId && order.user_id === currentInternalUserId;
+    
+    // Подсчитываем общую сумму сделки
+    const totalAmount = order.total_amount || (order.amount * order.price);
+    
+    // Определяем отображение автора
+    const authorName = order.user_name || order.first_name || `Пользователь ${order.user_id}`;
+    const authorUsername = order.username; 
+    console.log('[DEBUG] Данные автора заявки:', { 
+        authorName, 
+        authorUsername, 
+        user_name: order.user_name,
+        first_name: order.first_name,
+        username: order.username 
+    });
+    
+    const authorDisplay = authorUsername ? 
+        `<span onclick="openTelegramProfile('${authorUsername}')" style="color: #1DB954; cursor: pointer; text-decoration: underline; font-weight: 500;">@${authorUsername}</span>` :
+        `<span style="color: #ffffff; font-weight: 500;">${authorName}</span>`;
+    
+    return '<div class="order-card">' +
+        '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">' +
+            '<span style="font-weight: 600; color: ' + (order.type === 'buy' ? '#22c55e' : '#ef4444') + ';">' +
+                (order.type === 'buy' ? '🟢 Покупка' : '🔴 Продажа') +
+            '</span>' +
+            '<span style="font-size: 12px; color: rgba(255, 255, 255, 0.5);">' +
+                (order.created_at ? new Date(order.created_at).toLocaleString('ru') : 'Дата неизвестна') +
+            '</span>' +
+        '</div>' +
+        
+        '<div style="margin-bottom: 10px;">' +
+            '<div style="font-size: 14px; margin-bottom: 4px; color: #ffffff;">👤 Автор: ' + authorDisplay + '</div>' +
+        '</div>' +
+        
+        '<div style="background: rgba(30, 30, 40, 0.6); border: 1px solid rgba(255, 255, 255, 0.1); padding: 10px; border-radius: 6px; margin-bottom: 10px;">' +
+            '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px;">' +
+                '<div>' +
+                    '<span style="color: rgba(255, 255, 255, 0.6);">📊 Объем:</span><br>' +
+                    '<strong style="color: #ffffff;">' + (order.amount || '?') + ' ' + (order.cryptocurrency || '?') + '</strong>' +
+                '</div>' +
+                '<div>' +
+                    '<span style="color: rgba(255, 255, 255, 0.6);">💰 Курс:</span><br>' +
+                    '<strong style="color: #ffffff;">' + (order.price || '?') + ' ' + (order.fiat_currency || '?') + ' за 1' + (order.cryptocurrency || '?') + '</strong>' +
+                '</div>' +
+            '</div>' +
+            '<div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255, 255, 255, 0.15); font-size: 13px;">' +
+                '<span style="color: rgba(255, 255, 255, 0.6);">💵 Общая сумма:</span> ' +
+                '<strong style="color: #ffffff; font-size: 15px;">' + totalAmount.toLocaleString('ru') + ' ' + (order.fiat_currency || '?') + '</strong>' +
+            '</div>' +
+        '</div>' +
+        
+        '<div style="font-size: 12px; color: rgba(255, 255, 255, 0.6); margin-bottom: 10px;">' +
+            '💳 Способы оплаты: <span style="color: #ffffff;">' + ((order.payment_methods || []).join(', ') || 'Не указано') + '</span>' +
+        '</div>' +
+        
+        (order.description ? '<div style="font-size: 12px; margin-bottom: 10px; color: #ffffff;">' + order.description + '</div>' : '') +
+        
+        (!isMyOrder ? 
+            '<div style="display: flex; gap: 6px; margin-top: 12px;">' +
+                '<button onclick="openUserProfile(' + (order.user_id || 0) + ')" class="btn btn-compact btn-secondary" style="flex: 1;">👤 Профиль</button>' +
+                '<button onclick="respondToOrder(' + (order.id || 0) + ')" class="btn btn-compact btn-primary" style="flex: 2;">🤝 Откликнуться</button>' +
+            '</div>' : 
+            '<div style="display: flex; gap: 6px; margin-top: 12px;">' +
+                '<div style="background: rgba(43, 228, 126, 0.1); border: 1px solid #2BE47E; border-radius: 6px; padding: 6px 10px; font-size: 11px; color: #2BE47E; flex: 1; text-align: center; font-weight: 600; min-height: 28px; display: flex; align-items: center; justify-content: center;">Моя заявка</div>' +
+                '<button onclick="editOrder(' + (order.id || 0) + ')" class="btn btn-compact btn-success" style="flex: 1;">Редактировать</button>' +
+                '<button onclick="viewOrderResponses(' + (order.id || 0) + ')" class="btn btn-compact btn-info" style="flex: 1;">Отклики (' + (order.response_count || 0) + ')</button>' +
+            '</div>'
+        ) +
+    '</div>';
+}
 
 // Инициализация модального окна для отзывов
 function initReviewModal() {

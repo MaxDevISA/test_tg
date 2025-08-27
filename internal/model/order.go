@@ -31,7 +31,7 @@ const (
 	PaymentMethodBank        PaymentMethod = "bank_transfer" // Банковский перевод
 	PaymentMethodSberbank    PaymentMethod = "sberbank"      // Сбербанк
 	PaymentMethodTinkoff     PaymentMethod = "tinkoff"       // Тинькофф
-	PaymentMethodQIWI        PaymentMethod = "qiwi"          // QIWI кошелек
+	PaymentMethodSPB         PaymentMethod = "SPB"           // Система быстрых платежей
 	PaymentMethodYandexMoney PaymentMethod = "yandex_money"  // ЮMoney
 	PaymentMethodCash        PaymentMethod = "cash"          // Наличные
 	PaymentMethodOther       PaymentMethod = "other"         // Другие способы
@@ -60,12 +60,12 @@ type Order struct {
 	IsActive           bool        `json:"is_active" db:"is_active"`                       // Активна ли заявка
 	ResponseCount      int         `json:"response_count" db:"response_count"`             // Количество откликов на заявку
 	AcceptedResponseID *int64      `json:"accepted_response_id" db:"accepted_response_id"` // ID принятого отклика (если есть)
-	
+
 	// Дополнительные поля для фронтенда (не сохраняются в БД)
-	UserName   string `json:"user_name,omitempty"`   // Полное имя пользователя 
-	Username   string `json:"username,omitempty"`    // Telegram username
-	FirstName  string `json:"first_name,omitempty"`  // Имя пользователя
-	LastName   string `json:"last_name,omitempty"`   // Фамилия пользователя
+	UserName  string `json:"user_name,omitempty"`  // Полное имя пользователя
+	Username  string `json:"username,omitempty"`   // Telegram username
+	FirstName string `json:"first_name,omitempty"` // Имя пользователя
+	LastName  string `json:"last_name,omitempty"`  // Фамилия пользователя
 }
 
 // DealStatus определяет статус сделки в новой логике
@@ -105,12 +105,12 @@ type Deal struct {
 	CounterProof     string     `json:"counter_proof" db:"counter_proof"`         // Доказательство перевода от контрагента
 	Notes            string     `json:"notes" db:"notes"`                         // Заметки по сделке
 	DisputeReason    string     `json:"dispute_reason" db:"dispute_reason"`       // Причина спора (если есть)
-	
+
 	// Дополнительные поля для фронтенда (не сохраняются в БД)
-	AuthorUsername      string `json:"author_username,omitempty"`      // Telegram username автора
-	AuthorName          string `json:"author_name,omitempty"`          // Полное имя автора
-	CounterpartyUsername string `json:"counterparty_username,omitempty"` // Telegram username контрагента  
-	CounterpartyName    string `json:"counterparty_name,omitempty"`    // Полное имя контрагента
+	AuthorUsername       string `json:"author_username,omitempty"`       // Telegram username автора
+	AuthorName           string `json:"author_name,omitempty"`           // Полное имя автора
+	CounterpartyUsername string `json:"counterparty_username,omitempty"` // Telegram username контрагента
+	CounterpartyName     string `json:"counterparty_name,omitempty"`     // Полное имя контрагента
 }
 
 // OrderFilter содержит параметры для фильтрации заявок
