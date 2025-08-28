@@ -1193,6 +1193,59 @@ func (r *Repository) ConfirmDealWithRole(dealID int64, userID int64, isAuthor bo
 		return fmt.Errorf("сделка с ID=%d не найдена", dealID)
 	}
 
+	// Проверяем завершилась ли сделка (обновляем счетчики только при завершении)
+	var completedStatus string
+	checkQuery := `SELECT status FROM deals WHERE id = $1`
+	err = r.db.QueryRow(checkQuery, dealID).Scan(&completedStatus)
+	if err != nil {
+		log.Printf("[WARN] Не удалось проверить статус сделки ID=%d: %v", dealID, err)
+	} else if completedStatus == "completed" {
+		// Получаем участников сделки для обновления их счетчиков
+		var authorID, counterpartyID int64
+		participantsQuery := `SELECT author_id, counterparty_id FROM deals WHERE id = $1`
+		err = r.db.QueryRow(participantsQuery, dealID).Scan(&authorID, &counterpartyID)
+		if err != nil {
+			log.Printf("[WARN] Не удалось получить участников сделки ID=%d: %v", dealID, err)
+		} else {
+			// Начинаем транзакцию для обновления счетчиков
+			tx, err := r.db.Begin()
+			if err != nil {
+				log.Printf("[WARN] Не удалось начать транзакцию для обновления счетчиков: %v", err)
+			} else {
+				// Обновляем счетчики обеих сторон
+				updateStatsQuery := `
+					UPDATE users 
+					SET 
+						total_deals = total_deals + 1,
+						successful_deals = successful_deals + 1,
+						updated_at = NOW()
+					WHERE id = $1`
+
+				// Обновляем автора
+				_, err = tx.Exec(updateStatsQuery, authorID)
+				if err != nil {
+					tx.Rollback()
+					log.Printf("[WARN] Не удалось обновить счетчик автора ID=%d: %v", authorID, err)
+				} else {
+					// Обновляем контрагента
+					_, err = tx.Exec(updateStatsQuery, counterpartyID)
+					if err != nil {
+						tx.Rollback()
+						log.Printf("[WARN] Не удалось обновить счетчик контрагента ID=%d: %v", counterpartyID, err)
+					} else {
+						// Фиксируем транзакцию
+						err = tx.Commit()
+						if err != nil {
+							log.Printf("[WARN] Не удалось зафиксировать обновление счетчиков: %v", err)
+						} else {
+							log.Printf("[INFO] Обновлены счетчики сделок для пользователей ID=%d и ID=%d", authorID, counterpartyID)
+						}
+					}
+				}
+			}
+		}
+	}
+
 	log.Printf("[INFO] Сделка ID=%d подтверждена пользователем ID=%d как %s", dealID, userID,
 		map[bool]string{true: "автор", false: "контрагент"}[isAuthor])
 

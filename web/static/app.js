@@ -1767,6 +1767,8 @@ function displayUserProfileModal(profileData, reviews) {
     const positivePercent = stats.positive_percent || 0;
     const stars = '⭐'.repeat(Math.floor(rating)) + '☆'.repeat(5 - Math.floor(rating));
     
+
+    
     // Формируем отображаемое имя пользователя
     let userDisplayName = `Пользователь #${userId}`;
     if (user.username) {
@@ -1807,10 +1809,11 @@ function displayUserProfileModal(profileData, reviews) {
                 <div class="profile-stat-label">Положительных</div>
             </div>
             <div class="profile-stat-card">
-                <div class="profile-stat-number" style="color: #3b82f6;">${user.total_deals || 0}</div>
+                <div class="profile-stat-number" style="color: #22c55e;">${user.total_deals || 0}</div>
                 <div class="profile-stat-label">Всего сделок</div>
             </div>
             <div class="profile-stat-card">
+                <div class="profile-stat-label" style="margin-bottom: 8px; color: #6b7280; font-size: 12px;">В проекте с</div>
                 <div class="profile-stat-number" style="color: #6b7280; font-size: 14px;">
                     ${user.created_at ? new Date(user.created_at).toLocaleDateString('ru', {
                         year: 'numeric',
@@ -1818,7 +1821,6 @@ function displayUserProfileModal(profileData, reviews) {
                         day: 'numeric'
                     }) : 'Не указано'}
                 </div>
-                <div class="profile-stat-label">В проекте с</div>
             </div>
         </div>
     `;

@@ -827,6 +827,17 @@ func (r *FileRepository) ConfirmDealWithRole(dealID int64, userID int64, isAutho
 				now := time.Now()
 				deals[i].CompletedAt = &now
 				log.Printf("[INFO] Сделка ID=%d завершена - оба участника подтвердили", dealID)
+
+				// Обновляем счетчики сделок для обеих сторон
+				err := r.updateUserDealsCount(deals[i].AuthorID)
+				if err != nil {
+					log.Printf("[WARN] Не удалось обновить счетчик сделок автора ID=%d: %v", deals[i].AuthorID, err)
+				}
+
+				err = r.updateUserDealsCount(deals[i].CounterpartyID)
+				if err != nil {
+					log.Printf("[WARN] Не удалось обновить счетчик сделок контрагента ID=%d: %v", deals[i].CounterpartyID, err)
+				}
 			}
 
 			// UpdatedAt поле отсутствует в модели Deal
@@ -844,6 +855,39 @@ func (r *FileRepository) ConfirmDealWithRole(dealID int64, userID int64, isAutho
 	}
 
 	log.Printf("[INFO] Сделка ID=%d успешно подтверждена пользователем ID=%d", dealID, userID)
+	return nil
+}
+
+// updateUserDealsCount обновляет счетчик сделок пользователя в файловом хранилище
+func (r *FileRepository) updateUserDealsCount(userID int64) error {
+	// Загружаем пользователей
+	var users []model.User
+	if err := r.loadFromFile("users.json", &users); err != nil {
+		return fmt.Errorf("не удалось загрузить пользователей: %w", err)
+	}
+
+	// Ищем пользователя и обновляем счетчики
+	var userFound = false
+	for i := range users {
+		if users[i].ID == userID {
+			userFound = true
+			users[i].TotalDeals++
+			users[i].SuccessfulDeals++
+			users[i].UpdatedAt = time.Now()
+			log.Printf("[INFO] Обновлены счетчики сделок для пользователя ID=%d: total_deals=%d", userID, users[i].TotalDeals)
+			break
+		}
+	}
+
+	if !userFound {
+		return fmt.Errorf("пользователь ID=%d не найден", userID)
+	}
+
+	// Сохраняем обновленных пользователей
+	if err := r.saveToFile("users.json", users); err != nil {
+		return fmt.Errorf("не удалось сохранить пользователей: %w", err)
+	}
+
 	return nil
 }
 
