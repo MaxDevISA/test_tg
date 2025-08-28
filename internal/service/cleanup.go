@@ -94,6 +94,9 @@ func (cs *CleanupService) cleanupExpiredOrders() int {
 	// Вычисляем пороговое время (текущее время - таймаут)
 	cutoffTime := time.Now().Add(-cs.orderTimeout)
 
+	log.Printf("[DEBUG] Пороговое время для заявок: %v (сейчас: %v, таймаут: %v)",
+		cutoffTime, time.Now(), cs.orderTimeout)
+
 	// Получаем все активные заявки созданные до порогового времени
 	filter := &model.OrderFilter{
 		Status:        (*model.OrderStatus)(&[]model.OrderStatus{model.OrderStatusActive}[0]),
@@ -151,8 +154,8 @@ func (cs *CleanupService) cleanupExpiredDeals() int {
 
 // expireOrder помечает заявку как истекшую и отправляет уведомление
 func (cs *CleanupService) expireOrder(order *model.Order) bool {
-	log.Printf("[INFO] Истекает заявка ID=%d (создана %v назад)",
-		order.ID, time.Since(order.CreatedAt))
+	log.Printf("[INFO] Истекает заявка ID=%d (создана: %v, назад: %v, пороговое время: %v)",
+		order.ID, order.CreatedAt, time.Since(order.CreatedAt), time.Now().Add(-cs.orderTimeout))
 
 	// Обновляем статус заявки на "истекла"
 	err := cs.service.repo.UpdateOrderStatus(order.ID, model.OrderStatusExpired)

@@ -285,6 +285,19 @@ func (r *Repository) GetOrdersByFilter(filter *model.OrderFilter) ([]*model.Orde
 		args = append(args, *filter.UserID)
 	}
 
+	// Фильтр по дате создания (КРИТИЧЕСКИ ВАЖНО для CleanupService!)
+	if filter.CreatedAfter != nil {
+		argCount++
+		whereClauses = append(whereClauses, fmt.Sprintf("created_at > $%d", argCount))
+		args = append(args, *filter.CreatedAfter)
+	}
+
+	if filter.CreatedBefore != nil {
+		argCount++
+		whereClauses = append(whereClauses, fmt.Sprintf("created_at < $%d", argCount))
+		args = append(args, *filter.CreatedBefore)
+	}
+
 	// Собираем условия WHERE
 	if len(whereClauses) > 0 {
 		query += " WHERE " + strings.Join(whereClauses, " AND ")
@@ -1257,11 +1270,10 @@ func (r *Repository) GetExpiredDeals(cutoffTime time.Time) ([]*model.Deal, error
 	log.Printf("[INFO] Поиск сделок созданных до %v", cutoffTime)
 
 	query := `
-		SELECT id, response_id, order_id, author_id, counterparty_id, 
-		       cryptocurrency, fiat_currency, amount, price, total_amount, 
-		       payment_methods, order_type, status, created_at, expires_at,
-		       completed_at, author_confirmed, counter_confirmed, author_proof, 
-		       counter_proof, notes, dispute_reason
+		SELECT id, buy_order_id, sell_order_id, buyer_id, seller_id,
+		       cryptocurrency, fiat_currency, amount, price, total_amount,
+		       payment_method, status, created_at, completed_at,
+		       author_confirmed, counter_confirmed, author_proof, notes
 		FROM deals 
 		WHERE (status = $1 OR status = $2) 
 		AND created_at < $3
@@ -1279,27 +1291,40 @@ func (r *Repository) GetExpiredDeals(cutoffTime time.Time) ([]*model.Deal, error
 	var deals []*model.Deal
 	for rows.Next() {
 		deal := &model.Deal{}
-		var paymentMethodsJSON []byte
+		var paymentMethodStr string           // Временная переменная для сканирования payment_method
+		var authorProof, notes sql.NullString // Переменные для NULL-значений
 
 		err := rows.Scan(
-			&deal.ID, &deal.ResponseID, &deal.OrderID, &deal.AuthorID,
-			&deal.CounterpartyID, &deal.Cryptocurrency, &deal.FiatCurrency,
-			&deal.Amount, &deal.Price, &deal.TotalAmount, &paymentMethodsJSON,
-			&deal.OrderType, &deal.Status, &deal.CreatedAt, &deal.ExpiresAt,
-			&deal.CompletedAt, &deal.AuthorConfirmed, &deal.CounterConfirmed,
-			&deal.AuthorProof, &deal.CounterProof, &deal.Notes, &deal.DisputeReason)
+			&deal.ID,
+			&deal.ResponseID,     // buy_order_id
+			&deal.OrderID,        // sell_order_id
+			&deal.AuthorID,       // buyer_id
+			&deal.CounterpartyID, // seller_id
+			&deal.Cryptocurrency,
+			&deal.FiatCurrency,
+			&deal.Amount,
+			&deal.Price,
+			&deal.TotalAmount,
+			&paymentMethodStr, // payment_method как строка
+			&deal.Status,
+			&deal.CreatedAt,
+			&deal.CompletedAt,
+			&deal.AuthorConfirmed,
+			&deal.CounterConfirmed,
+			&authorProof, // NULL-safe сканирование
+			&notes,       // NULL-safe сканирование
+		)
 		if err != nil {
 			log.Printf("[ERROR] Ошибка сканирования сделки: %v", err)
 			continue
 		}
 
-		// Декодируем JSON массив способов оплаты
-		if len(paymentMethodsJSON) > 0 {
-			if err := json.Unmarshal(paymentMethodsJSON, &deal.PaymentMethods); err != nil {
-				log.Printf("[WARN] Не удалось декодировать способы оплаты для сделки ID=%d: %v", deal.ID, err)
-				deal.PaymentMethods = []string{}
-			}
-		}
+		// Конвертируем payment_method string в []string для совместимости с моделью
+		deal.PaymentMethods = []string{paymentMethodStr}
+
+		// Конвертируем NULL-значения в строки
+		deal.AuthorProof = authorProof.String // sql.NullString.String возвращает "" если NULL
+		deal.Notes = notes.String             // sql.NullString.String возвращает "" если NULL
 
 		deals = append(deals, deal)
 	}
