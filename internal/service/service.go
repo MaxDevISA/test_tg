@@ -259,7 +259,7 @@ func (s *Service) checkChatMembership(userTelegramID int64) (bool, error) {
 // CreateOrder создает новую заявку на покупку или продажу криптовалюты
 // Проверяет валидность данных и сохраняет заявку в базе данных
 func (s *Service) CreateOrder(userID int64, orderData *model.Order) (*model.Order, error) {
-	log.Printf("[INFO] Создание заявки пользователем ID=%d: Type=%s, Crypto=%s, Amount=%.8f",
+	log.Printf("[INFO] Создание заявки пользователем ID=%d: Type=%s, Crypto=%s, Amount=%.2f",
 		userID, orderData.Type, orderData.Cryptocurrency, orderData.Amount)
 
 	// Проверяем права пользователя на создание заявки
@@ -310,6 +310,77 @@ func (s *Service) CreateOrder(userID int64, orderData *model.Order) (*model.Orde
 
 	// Отправляем групповое уведомление о новой заявке
 	go s.sendOrderCreatedGroupNotification(orderData, user)
+
+	return orderData, nil
+}
+
+// UpdateOrder обновляет существующую заявку
+func (s *Service) UpdateOrder(orderID, userID int64, orderData *model.Order) (*model.Order, error) {
+	log.Printf("[INFO] Обновление заявки ID=%d пользователем ID=%d: Type=%s, Crypto=%s, Amount=%.2f",
+		orderID, userID, orderData.Type, orderData.Cryptocurrency, orderData.Amount)
+
+	// Проверяем права пользователя
+	user, err := s.repo.GetUserByTelegramID(userID)
+	if err != nil {
+		log.Printf("[ERROR] Пользователь ID=%d не найден при обновлении заявки", userID)
+		return nil, fmt.Errorf("пользователь не найден")
+	}
+
+	if !user.IsActive || !user.ChatMember {
+		log.Printf("[WARN] Попытка обновления заявки неактивным пользователем ID=%d", userID)
+		return nil, fmt.Errorf("недостаточно прав для обновления заявки")
+	}
+
+	// Получаем существующую заявку
+	existingOrder, err := s.repo.GetOrderByID(orderID)
+	if err != nil {
+		log.Printf("[ERROR] Заявка ID=%d не найдена: %v", orderID, err)
+		return nil, fmt.Errorf("заявка не найдена")
+	}
+
+	// Проверяем что заявка принадлежит пользователю
+	if existingOrder.UserID != user.ID {
+		log.Printf("[WARN] Попытка редактирования чужой заявки ID=%d пользователем ID=%d", orderID, userID)
+		return nil, fmt.Errorf("нет прав на редактирование этой заявки")
+	}
+
+	// Проверяем что заявка может быть отредактирована (только активные заявки)
+	if existingOrder.Status != model.OrderStatusActive && existingOrder.Status != model.OrderStatusHasResponses {
+		log.Printf("[WARN] Попытка редактирования заявки ID=%d в статусе %s", orderID, existingOrder.Status)
+		return nil, fmt.Errorf("заявку в статусе '%s' нельзя редактировать", existingOrder.Status)
+	}
+
+	// Валидируем новые данные заявки
+	if err := s.validateOrderData(orderData); err != nil {
+		log.Printf("[WARN] Невалидные данные при обновлении заявки ID=%d: %v", orderID, err)
+		return nil, err
+	}
+
+	// Заполняем системные поля для обновления
+	orderData.ID = orderID
+	orderData.UserID = user.ID
+	orderData.Status = existingOrder.Status // Сохраняем текущий статус
+	orderData.IsActive = existingOrder.IsActive
+	orderData.TotalAmount = orderData.Amount * orderData.Price
+	orderData.CreatedAt = existingOrder.CreatedAt // Сохраняем дату создания
+	orderData.ExpiresAt = existingOrder.ExpiresAt // Сохраняем срок истечения
+
+	// Если не указан минимальный и максимальный лимит, устанавливаем их равными общей сумме
+	if orderData.MinAmount == 0 {
+		orderData.MinAmount = orderData.TotalAmount
+	}
+	if orderData.MaxAmount == 0 {
+		orderData.MaxAmount = orderData.TotalAmount
+	}
+
+	// Обновляем заявку в базе данных
+	if err := s.repo.UpdateOrder(orderData); err != nil {
+		log.Printf("[ERROR] Не удалось обновить заявку ID=%d: %v", orderID, err)
+		return nil, fmt.Errorf("не удалось обновить заявку: %w", err)
+	}
+
+	log.Printf("[INFO] Успешно обновлена заявка: ID=%d, UserID=%d, Type=%s",
+		orderData.ID, userID, orderData.Type)
 
 	return orderData, nil
 }
@@ -465,7 +536,7 @@ func (s *Service) validateOrderData(order *model.Order) error {
 		return fmt.Errorf("необходимо указать хотя бы один способ оплаты")
 	}
 
-	supportedPayments := []string{"bank_transfer", "sberbank", "tinkoff", "qiwi", "yandex_money", "cash"}
+	supportedPayments := []string{"bank_transfer", "sberbank", "tinkoff", "SPB", "yandex_money", "cash"}
 	for _, method := range order.PaymentMethods {
 		isValidPayment := false
 		for _, supported := range supportedPayments {
@@ -660,6 +731,51 @@ func (s *Service) GetUserDeals(userID int64) ([]*model.Deal, error) {
 			log.Printf("[WARN] Не удалось получить данные контрагента ID=%d для сделки ID=%d: %v",
 				deal.CounterpartyID, deal.ID, err)
 		}
+
+		// Проверяем статус отзывов для завершенных сделок
+		if deal.Status == model.DealStatusCompleted {
+			log.Printf("[DEBUG] Проверяем статус отзывов для завершенной сделки ID=%d", deal.ID)
+
+			// Проверяем, оставил ли автор отзыв о контрагенте
+			if canReview, err := s.repo.CheckCanReview(deal.ID, deal.AuthorID, deal.CounterpartyID); err == nil {
+				// Если НЕ может оставить отзыв, значит уже оставил
+				deal.AuthorReviewGiven = !canReview
+				log.Printf("[DEBUG] Автор сделки ID=%d: canReview=%t, reviewGiven=%t", deal.ID, canReview, deal.AuthorReviewGiven)
+			} else {
+				// Если ошибка содержит "отзыв по данной сделке уже оставлен", значит отзыв оставлен
+				if strings.Contains(err.Error(), "отзыв по данной сделке уже оставлен") {
+					deal.AuthorReviewGiven = true
+					log.Printf("[DEBUG] Автор сделки ID=%d: отзыв УЖЕ оставлен (из ошибки), reviewGiven=%t", deal.ID, deal.AuthorReviewGiven)
+				} else {
+					deal.AuthorReviewGiven = false
+					log.Printf("[WARN] Не удалось проверить отзыв автора для сделки ID=%d: %v", deal.ID, err)
+				}
+			}
+
+			// Проверяем, оставил ли контрагент отзыв об авторе
+			if canReview, err := s.repo.CheckCanReview(deal.ID, deal.CounterpartyID, deal.AuthorID); err == nil {
+				// Если НЕ может оставить отзыв, значит уже оставил
+				deal.CounterpartyReviewGiven = !canReview
+				log.Printf("[DEBUG] Контрагент сделки ID=%d: canReview=%t, reviewGiven=%t", deal.ID, canReview, deal.CounterpartyReviewGiven)
+			} else {
+				// Если ошибка содержит "отзыв по данной сделке уже оставлен", значит отзыв оставлен
+				if strings.Contains(err.Error(), "отзыв по данной сделке уже оставлен") {
+					deal.CounterpartyReviewGiven = true
+					log.Printf("[DEBUG] Контрагент сделки ID=%d: отзыв УЖЕ оставлен (из ошибки), reviewGiven=%t", deal.ID, deal.CounterpartyReviewGiven)
+				} else {
+					deal.CounterpartyReviewGiven = false
+					log.Printf("[WARN] Не удалось проверить отзыв контрагента для сделки ID=%d: %v", deal.ID, err)
+				}
+			}
+
+			log.Printf("[INFO] Сделка ID=%d - статус отзывов: автор=%t, контрагент=%t",
+				deal.ID, deal.AuthorReviewGiven, deal.CounterpartyReviewGiven)
+		} else {
+			log.Printf("[DEBUG] Сделка ID=%d не завершена (статус: %s), отзывы не проверяем", deal.ID, deal.Status)
+			// Для незавершенных сделок явно устанавливаем false, чтобы поля были в JSON
+			deal.AuthorReviewGiven = false
+			deal.CounterpartyReviewGiven = false
+		}
 	}
 
 	log.Printf("[INFO] Найдено сделок для пользователя ID=%d: %d", userID, len(deals))
@@ -785,14 +901,20 @@ func (s *Service) CreateReview(userID int64, reviewData *model.CreateReviewReque
 	log.Printf("[INFO] Создание отзыва от пользователя ID=%d для сделки ID=%d", userID, reviewData.DealID)
 
 	// Проверяем права на создание отзыва
+	log.Printf("[DEBUG] Проверяем права на отзыв: DealID=%d, FromUserID=%d, ToUserID=%d",
+		reviewData.DealID, userID, reviewData.ToUserID)
+
 	canReview, err := s.repo.CheckCanReview(reviewData.DealID, userID, reviewData.ToUserID)
 	if err != nil {
-		log.Printf("[WARN] Пользователь ID=%d не может оставить отзыв: %v", userID, err)
-		return nil, err
+		log.Printf("[WARN] Ошибка проверки прав на отзыв пользователя ID=%d: %v", userID, err)
+		return nil, fmt.Errorf("ошибка проверки прав на отзыв: %w", err)
 	}
 
+	log.Printf("[DEBUG] Результат проверки прав: canReview=%t", canReview)
+
 	if !canReview {
-		return nil, fmt.Errorf("отзыв не может быть создан")
+		log.Printf("[WARN] Пользователь ID=%d не может оставить отзыв для сделки ID=%d", userID, reviewData.DealID)
+		return nil, fmt.Errorf("отзыв уже оставлен или сделка не завершена")
 	}
 
 	// Валидируем данные отзыва
@@ -1841,7 +1963,7 @@ func (s *Service) sendOrderCreatedGroupNotification(order *model.Order, user *mo
 
 	// Формируем текст уведомления по шаблону со ссылкой на приложение
 	message := fmt.Sprintf(
-		"Пользователь <b>%s</b> создал новую заявку:\n\n💰 <b>%s %s %s</b>\n💎 Объем: <b>%.8f %s</b>\n💵 Курс: <b>%.2f %s</b> за 1 %s\n💸 Общая сумма: <b>%.2f %s</b>\n\n🚀 <i>Откликайтесь быстрее!</i>\n\n👉 <a href=\"%s/#orders\">Открыть приложение</a>",
+		"Пользователь <b>%s</b> создал новую заявку:\n\n💰 <b>%s %s %s</b>\n💎 Объем: <b>%.2f %s</b>\n💵 Курс: <b>%.2f %s</b> за 1 %s\n💸 Общая сумма: <b>%.2f %s</b>\n\n🚀 <i>Откликайтесь быстрее!</i>\n\n👉 <a href=\"%s/#orders\">Открыть приложение</a>",
 		userName,
 		operationType,
 		order.Cryptocurrency,

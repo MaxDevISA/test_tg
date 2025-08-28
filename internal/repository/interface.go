@@ -18,6 +18,8 @@ type RepositoryInterface interface {
 	// Методы для работы с заявками
 	CreateOrder(order *model.Order) error
 	GetOrdersByFilter(filter *model.OrderFilter) ([]*model.Order, error)
+	GetOrderByID(orderID int64) (*model.Order, error)
+	UpdateOrder(order *model.Order) error
 	UpdateOrderStatus(orderID int64, status model.OrderStatus) error
 	GetMatchingOrders(order *model.Order) ([]*model.Order, error)
 	MatchOrders(orderID1, orderID2 int64) error

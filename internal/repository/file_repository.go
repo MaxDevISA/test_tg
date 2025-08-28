@@ -345,8 +345,8 @@ func (r *FileRepository) GetOrdersByFilter(filter *model.OrderFilter) ([]*model.
 
 // matchesFilter проверяет соответствует ли заявка фильтру
 func (r *FileRepository) matchesFilter(order *model.Order, filter *model.OrderFilter) bool {
-	// Проверяем активность (только активные заявки по умолчанию)
-	if !order.IsActive {
+	// Проверяем активность (только активные заявки по умолчанию, кроме случая включения неактивных)
+	if !order.IsActive && !filter.IncludeInactive {
 		return false
 	}
 
@@ -454,6 +454,60 @@ func (r *FileRepository) UpdateOrderStatus(orderID int64, status model.OrderStat
 	}
 
 	log.Printf("[INFO] Обновлен статус заявки ID=%d: %s", orderID, status)
+	return nil
+}
+
+// GetOrderByID получает заявку по ID
+func (r *FileRepository) GetOrderByID(orderID int64) (*model.Order, error) {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+
+	return r.getOrderByID(orderID)
+}
+
+// UpdateOrder обновляет существующую заявку
+func (r *FileRepository) UpdateOrder(order *model.Order) error {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	// Загружаем заявки
+	var orders []model.Order
+	if err := r.loadFromFile("orders.json", &orders); err != nil {
+		return fmt.Errorf("не удалось загрузить заявки: %w", err)
+	}
+
+	// Находим и обновляем заявку
+	found := false
+	for i, existingOrder := range orders {
+		if existingOrder.ID == order.ID {
+			// Обновляем все поля кроме системных
+			orders[i].Type = order.Type
+			orders[i].Cryptocurrency = order.Cryptocurrency
+			orders[i].FiatCurrency = order.FiatCurrency
+			orders[i].Amount = order.Amount
+			orders[i].Price = order.Price
+			orders[i].TotalAmount = order.TotalAmount
+			orders[i].MinAmount = order.MinAmount
+			orders[i].MaxAmount = order.MaxAmount
+			orders[i].PaymentMethods = order.PaymentMethods
+			orders[i].Description = order.Description
+			orders[i].UpdatedAt = time.Now()
+
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return fmt.Errorf("заявка с ID %d не найдена", order.ID)
+	}
+
+	// Сохраняем изменения
+	if err := r.saveToFile("orders.json", orders); err != nil {
+		return fmt.Errorf("не удалось сохранить заявки: %w", err)
+	}
+
+	log.Printf("[INFO] Обновлена заявка ID=%d: Type=%s, Amount=%.8f", order.ID, order.Type, order.Amount)
 	return nil
 }
 
@@ -1010,7 +1064,8 @@ func (r *FileRepository) CheckCanReview(dealID, fromUserID, toUserID int64) (boo
 
 	for _, review := range reviews {
 		if review.DealID == dealID && review.FromUserID == fromUserID && review.ToUserID == toUserID {
-			log.Printf("[WARN] Отзыв уже оставлен по сделке ID=%d от пользователя ID=%d", dealID, fromUserID)
+			log.Printf("[WARN] Отзыв уже оставлен по сделке ID=%d от пользователя ID=%d к пользователю ID=%d",
+				dealID, fromUserID, toUserID)
 			return false, fmt.Errorf("отзыв по данной сделке уже оставлен")
 		}
 	}

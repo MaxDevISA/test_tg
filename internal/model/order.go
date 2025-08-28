@@ -31,7 +31,7 @@ const (
 	PaymentMethodBank        PaymentMethod = "bank_transfer" // Банковский перевод
 	PaymentMethodSberbank    PaymentMethod = "sberbank"      // Сбербанк
 	PaymentMethodTinkoff     PaymentMethod = "tinkoff"       // Тинькофф
-	PaymentMethodQIWI        PaymentMethod = "qiwi"          // QIWI кошелек
+	PaymentMethodSPB         PaymentMethod = "SPB"           // Система быстрых платежей
 	PaymentMethodYandexMoney PaymentMethod = "yandex_money"  // ЮMoney
 	PaymentMethodCash        PaymentMethod = "cash"          // Наличные
 	PaymentMethodOther       PaymentMethod = "other"         // Другие способы
@@ -60,12 +60,12 @@ type Order struct {
 	IsActive           bool        `json:"is_active" db:"is_active"`                       // Активна ли заявка
 	ResponseCount      int         `json:"response_count" db:"response_count"`             // Количество откликов на заявку
 	AcceptedResponseID *int64      `json:"accepted_response_id" db:"accepted_response_id"` // ID принятого отклика (если есть)
-	
+
 	// Дополнительные поля для фронтенда (не сохраняются в БД)
-	UserName   string `json:"user_name,omitempty"`   // Полное имя пользователя 
-	Username   string `json:"username,omitempty"`    // Telegram username
-	FirstName  string `json:"first_name,omitempty"`  // Имя пользователя
-	LastName   string `json:"last_name,omitempty"`   // Фамилия пользователя
+	UserName  string `json:"user_name,omitempty"`  // Полное имя пользователя
+	Username  string `json:"username,omitempty"`   // Telegram username
+	FirstName string `json:"first_name,omitempty"` // Имя пользователя
+	LastName  string `json:"last_name,omitempty"`  // Фамилия пользователя
 }
 
 // DealStatus определяет статус сделки в новой логике
@@ -105,31 +105,34 @@ type Deal struct {
 	CounterProof     string     `json:"counter_proof" db:"counter_proof"`         // Доказательство перевода от контрагента
 	Notes            string     `json:"notes" db:"notes"`                         // Заметки по сделке
 	DisputeReason    string     `json:"dispute_reason" db:"dispute_reason"`       // Причина спора (если есть)
-	
+
 	// Дополнительные поля для фронтенда (не сохраняются в БД)
-	AuthorUsername      string `json:"author_username,omitempty"`      // Telegram username автора
-	AuthorName          string `json:"author_name,omitempty"`          // Полное имя автора
-	CounterpartyUsername string `json:"counterparty_username,omitempty"` // Telegram username контрагента  
-	CounterpartyName    string `json:"counterparty_name,omitempty"`    // Полное имя контрагента
+	AuthorUsername          string `json:"author_username,omitempty"`       // Telegram username автора
+	AuthorName              string `json:"author_name,omitempty"`           // Полное имя автора
+	CounterpartyUsername    string `json:"counterparty_username,omitempty"` // Telegram username контрагента
+	CounterpartyName        string `json:"counterparty_name,omitempty"`     // Полное имя контрагента
+	AuthorReviewGiven       bool   `json:"author_review_given"`             // Оставил ли автор отзыв о контрагенте
+	CounterpartyReviewGiven bool   `json:"counterparty_review_given"`       // Оставил ли контрагент отзыв об авторе
 }
 
 // OrderFilter содержит параметры для фильтрации заявок
 // Используется при поиске подходящих заявок
 type OrderFilter struct {
-	Type           *OrderType   `json:"type"`            // Тип заявки
-	Cryptocurrency *string      `json:"cryptocurrency"`  // Криптовалюта
-	FiatCurrency   *string      `json:"fiat_currency"`   // Фиатная валюта
-	MinPrice       *float64     `json:"min_price"`       // Минимальная цена
-	MaxPrice       *float64     `json:"max_price"`       // Максимальная цена
-	MinAmount      *float64     `json:"min_amount"`      // Минимальная сумма
-	MaxAmount      *float64     `json:"max_amount"`      // Максимальная сумма
-	PaymentMethods []string     `json:"payment_methods"` // Способы оплаты
-	Status         *OrderStatus `json:"status"`          // Статус заявки
-	UserID         *int64       `json:"user_id"`         // ID пользователя
-	CreatedAfter   *time.Time   `json:"created_after"`   // Созданы после даты
-	CreatedBefore  *time.Time   `json:"created_before"`  // Созданы до даты
-	SortBy         string       `json:"sort_by"`         // Сортировка (price, created_at, amount)
-	SortOrder      string       `json:"sort_order"`      // Порядок сортировки (asc, desc)
-	Limit          int          `json:"limit"`           // Лимит результатов
-	Offset         int          `json:"offset"`          // Смещение для пагинации
+	Type            *OrderType   `json:"type"`             // Тип заявки
+	Cryptocurrency  *string      `json:"cryptocurrency"`   // Криптовалюта
+	FiatCurrency    *string      `json:"fiat_currency"`    // Фиатная валюта
+	MinPrice        *float64     `json:"min_price"`        // Минимальная цена
+	MaxPrice        *float64     `json:"max_price"`        // Максимальная цена
+	MinAmount       *float64     `json:"min_amount"`       // Минимальная сумма
+	MaxAmount       *float64     `json:"max_amount"`       // Максимальная сумма
+	PaymentMethods  []string     `json:"payment_methods"`  // Способы оплаты
+	Status          *OrderStatus `json:"status"`           // Статус заявки
+	UserID          *int64       `json:"user_id"`          // ID пользователя
+	IncludeInactive bool         `json:"include_inactive"` // Включить неактивные заявки (отмененные, истекшие)
+	CreatedAfter    *time.Time   `json:"created_after"`    // Созданы после даты
+	CreatedBefore   *time.Time   `json:"created_before"`   // Созданы до даты
+	SortBy          string       `json:"sort_by"`          // Сортировка (price, created_at, amount)
+	SortOrder       string       `json:"sort_order"`       // Порядок сортировки (asc, desc)
+	Limit           int          `json:"limit"`            // Лимит результатов
+	Offset          int          `json:"offset"`           // Смещение для пагинации
 }
