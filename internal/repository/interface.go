@@ -11,6 +11,7 @@ type RepositoryInterface interface {
 
 	// Методы для работы с пользователями
 	CreateUser(user *model.User) error
+	GetUserByID(userID int64) (*model.User, error)
 	GetUserByTelegramID(telegramID int64) (*model.User, error)
 	UpdateUserChatMembership(telegramID int64, isMember bool) error
 

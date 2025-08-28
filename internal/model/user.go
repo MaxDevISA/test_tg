@@ -46,3 +46,21 @@ type TelegramAuthData struct {
 	AuthDate  int64  `json:"auth_date"`  // Unix timestamp авторизации
 	Hash      string `json:"hash"`       // Хеш для валидации данных
 }
+
+// UserStats содержит подробную статистику пользователя для отображения в профиле
+type UserStats struct {
+	UserID           int64      `json:"user_id"`            // ID пользователя
+	TotalOrders      int        `json:"total_orders"`       // Всего заявок создано
+	ActiveOrders     int        `json:"active_orders"`      // Активных заявок
+	CompletedOrders  int        `json:"completed_orders"`   // Завершенных заявок
+	TotalDeals       int        `json:"total_deals"`        // Всего сделок
+	CompletedDeals   int        `json:"completed_deals"`    // Завершенных сделок
+	CancelledDeals   int        `json:"cancelled_deals"`    // Отмененных сделок
+	TotalTradeVolume float64    `json:"total_trade_volume"` // Общий объем торгов в USD
+	AvgDealTime      int        `json:"avg_deal_time"`      // Среднее время сделки в минутах
+	FirstDealDate    *time.Time `json:"first_deal_date"`    // Дата первой сделки
+	LastActivityDate *time.Time `json:"last_activity_date"` // Дата последней активности
+	SuccessRate      float32    `json:"success_rate"`       // Процент успешных сделок
+	AverageRating    float32    `json:"average_rating"`     // Средний рейтинг из отзывов
+	TotalReviews     int        `json:"total_reviews"`      // Общее количество отзывов
+}

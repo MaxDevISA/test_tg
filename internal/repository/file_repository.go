@@ -175,6 +175,10 @@ func (r *FileRepository) CreateUser(user *model.User) error {
 	}
 
 	log.Printf("[INFO] Создан пользователь в JSON: ID=%d, TelegramID=%d", user.ID, user.TelegramID)
+
+	// Принудительно синхронизируем файловую систему
+	time.Sleep(10 * time.Millisecond)
+
 	return nil
 }
 
@@ -197,6 +201,27 @@ func (r *FileRepository) GetUserByTelegramID(telegramID int64) (*model.User, err
 	}
 
 	return nil, fmt.Errorf("пользователь с Telegram ID %d не найден", telegramID)
+}
+
+// GetUserByID находит пользователя по внутреннему ID
+func (r *FileRepository) GetUserByID(userID int64) (*model.User, error) {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+
+	// Загружаем пользователей
+	var users []model.User
+	if err := r.loadFromFile("users.json", &users); err != nil {
+		return nil, fmt.Errorf("не удалось загрузить пользователей: %w", err)
+	}
+
+	// Ищем пользователя по ID
+	for _, user := range users {
+		if user.ID == userID {
+			return &user, nil
+		}
+	}
+
+	return nil, fmt.Errorf("пользователь с ID %d не найден", userID)
 }
 
 // UpdateUserChatMembership обновляет статус членства в чате
@@ -449,37 +474,262 @@ func (r *FileRepository) HealthCheck() error {
 }
 
 // =====================================================
-// ЗАГЛУШКИ ДЛЯ ОСТАЛЬНЫХ МЕТОДОВ (ПОКА НЕ РЕАЛИЗОВАНЫ)
+// АВТОМАТИЧЕСКОЕ СОПОСТАВЛЕНИЕ ЗАЯВОК
 // =====================================================
 
-// GetMatchingOrders - заглушка для совместимости
+// GetMatchingOrders ищет заявки противоположного типа для автосопоставления
 func (r *FileRepository) GetMatchingOrders(order *model.Order) ([]*model.Order, error) {
-	log.Printf("[WARN] GetMatchingOrders не реализован для файлового хранилища")
-	return []*model.Order{}, nil
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+
+	log.Printf("[INFO] Поиск подходящих заявок для Order ID=%d, Type=%s", order.ID, order.Type)
+
+	// Загружаем все заявки
+	var orders []model.Order
+	if err := r.loadFromFile("orders.json", &orders); err != nil {
+		return nil, fmt.Errorf("не удалось загрузить заявки для сопоставления: %w", err)
+	}
+
+	// Определяем противоположный тип заявки
+	var oppositeType model.OrderType
+	if order.Type == model.OrderTypeBuy {
+		oppositeType = model.OrderTypeSell
+	} else {
+		oppositeType = model.OrderTypeBuy
+	}
+
+	var matchingOrders []*model.Order
+	currentTime := time.Now()
+
+	// Фильтруем подходящие заявки
+	for _, candidateOrder := range orders {
+		// Проверяем все критерии для сопоставления
+		if candidateOrder.Type == oppositeType && // Противоположный тип
+			candidateOrder.Cryptocurrency == order.Cryptocurrency && // Та же криптовалюта
+			candidateOrder.FiatCurrency == order.FiatCurrency && // Та же фиатная валюта
+			candidateOrder.Status == model.OrderStatusActive && // Активная заявка
+			candidateOrder.IsActive && // Не отключена
+			candidateOrder.AutoMatch && // Разрешено автосопоставление
+			candidateOrder.UserID != order.UserID && // Не наша заявка
+			candidateOrder.ExpiresAt.After(currentTime) { // Не истекла
+
+			// Проверяем совместимость цен
+			if r.isPriceCompatible(order, &candidateOrder) {
+				orderCopy := candidateOrder
+				matchingOrders = append(matchingOrders, &orderCopy)
+			}
+		}
+	}
+
+	// Сортируем по лучшим ценам
+	r.sortMatchingOrders(matchingOrders, order.Type)
+
+	// Ограничиваем результат (максимум 10 заявок)
+	if len(matchingOrders) > 10 {
+		matchingOrders = matchingOrders[:10]
+	}
+
+	log.Printf("[INFO] Найдено подходящих заявок для Order ID=%d: %d", order.ID, len(matchingOrders))
+	return matchingOrders, nil
 }
 
-// MatchOrders - заглушка для совместимости
+// isPriceCompatible проверяет совместимость цен для автосопоставления
+func (r *FileRepository) isPriceCompatible(order1, order2 *model.Order) bool {
+	// Для покупки: цена покупки должна быть >= цены продажи
+	// Для продажи: цена продажи должна быть <= цены покупки
+	if order1.Type == model.OrderTypeBuy {
+		return order1.Price >= order2.Price // Готовы купить по цене >= цены продажи
+	} else {
+		return order1.Price <= order2.Price // Готовы продать по цене <= цены покупки
+	}
+}
+
+// sortMatchingOrders сортирует подходящие заявки по оптимальным ценам
+func (r *FileRepository) sortMatchingOrders(orders []*model.Order, orderType model.OrderType) {
+	sort.Slice(orders, func(i, j int) bool {
+		// Для заявки покупки: сначала самые дешевые продажи
+		if orderType == model.OrderTypeBuy {
+			if orders[i].Price != orders[j].Price {
+				return orders[i].Price < orders[j].Price
+			}
+		} else {
+			// Для заявки продажи: сначала самые дорогие покупки
+			if orders[i].Price != orders[j].Price {
+				return orders[i].Price > orders[j].Price
+			}
+		}
+
+		// При равной цене: сначала более старые заявки (по времени создания)
+		return orders[i].CreatedAt.Before(orders[j].CreatedAt)
+	})
+}
+
+// MatchOrders создает сделку между двумя сопоставленными заявками
 func (r *FileRepository) MatchOrders(orderID1, orderID2 int64) error {
-	log.Printf("[WARN] MatchOrders не реализован для файлового хранилища")
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	log.Printf("[INFO] Сопоставление заявок: Order1 ID=%d, Order2 ID=%d", orderID1, orderID2)
+
+	// Загружаем все заявки
+	var orders []model.Order
+	if err := r.loadFromFile("orders.json", &orders); err != nil {
+		return fmt.Errorf("не удалось загрузить заявки для сопоставления: %w", err)
+	}
+
+	// Находим обе заявки
+	var order1, order2 *model.Order
+	for i := range orders {
+		if orders[i].ID == orderID1 {
+			order1 = &orders[i]
+		} else if orders[i].ID == orderID2 {
+			order2 = &orders[i]
+		}
+	}
+
+	if order1 == nil || order2 == nil {
+		return fmt.Errorf("не удалось найти одну или обе заявки для сопоставления")
+	}
+
+	// Проверяем что заявки можно сопоставить
+	if order1.Type == order2.Type {
+		return fmt.Errorf("нельзя сопоставить заявки одинакового типа")
+	}
+
+	if order1.Cryptocurrency != order2.Cryptocurrency || order1.FiatCurrency != order2.FiatCurrency {
+		return fmt.Errorf("заявки имеют разные валюты")
+	}
+
+	// Обновляем статусы заявок на "matched" (сопоставлено)
+	now := time.Now()
+
+	// Обновляем первую заявку
+	for i := range orders {
+		if orders[i].ID == orderID1 {
+			orders[i].Status = model.OrderStatusMatched
+			orders[i].MatchedUserID = &order2.UserID
+			orders[i].MatchedAt = &now
+			orders[i].UpdatedAt = now
+			break
+		}
+	}
+
+	// Обновляем вторую заявку
+	for i := range orders {
+		if orders[i].ID == orderID2 {
+			orders[i].Status = model.OrderStatusMatched
+			orders[i].MatchedUserID = &order1.UserID
+			orders[i].MatchedAt = &now
+			orders[i].UpdatedAt = now
+			break
+		}
+	}
+
+	// Сохраняем обновленные заявки
+	if err := r.saveToFile("orders.json", orders); err != nil {
+		return fmt.Errorf("не удалось сохранить сопоставленные заявки: %w", err)
+	}
+
+	log.Printf("[INFO] Заявки успешно сопоставлены: Order1 ID=%d, Order2 ID=%d", orderID1, orderID2)
 	return nil
 }
 
-// CreateDeal - заглушка для совместимости
+// =====================================================
+// УПРАВЛЕНИЕ СДЕЛКАМИ
+// =====================================================
+
+// CreateDeal создает новую сделку между пользователями
 func (r *FileRepository) CreateDeal(deal *model.Deal) error {
-	log.Printf("[WARN] CreateDeal не реализован для файлового хранилища")
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	log.Printf("[INFO] Создание сделки: Buyer ID=%d, Seller ID=%d, Amount=%.8f %s",
+		deal.BuyerID, deal.SellerID, deal.Amount, deal.Cryptocurrency)
+
+	// Загружаем существующие сделки
+	var deals []model.Deal
+	if err := r.loadFromFile("deals.json", &deals); err != nil {
+		return fmt.Errorf("не удалось загрузить сделки: %w", err)
+	}
+
+	// Генерируем новый ID для сделки
+	dealID, err := r.generateID("deals")
+	if err != nil {
+		return fmt.Errorf("не удалось сгенерировать ID для сделки: %w", err)
+	}
+
+	// Устанавливаем ID и временные метки
+	deal.ID = dealID
+	deal.Status = "pending" // Статус "ожидает подтверждения"
+	deal.CreatedAt = time.Now()
+
+	// Добавляем сделку в список
+	deals = append(deals, *deal)
+
+	// Сохраняем обновленный список сделок
+	if err := r.saveToFile("deals.json", deals); err != nil {
+		return fmt.Errorf("не удалось сохранить сделки: %w", err)
+	}
+
+	log.Printf("[INFO] Сделка успешно создана: ID=%d", deal.ID)
 	return nil
 }
 
-// GetDealsByUserID - заглушка для совместимости
+// GetDealsByUserID получает все сделки пользователя (как покупателя и продавца)
 func (r *FileRepository) GetDealsByUserID(userID int64) ([]*model.Deal, error) {
-	log.Printf("[WARN] GetDealsByUserID не реализован для файлового хранилища")
-	return []*model.Deal{}, nil
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+
+	log.Printf("[INFO] Получение сделок для пользователя ID=%d", userID)
+
+	// Загружаем все сделки
+	var deals []model.Deal
+	if err := r.loadFromFile("deals.json", &deals); err != nil {
+		return nil, fmt.Errorf("не удалось загрузить сделки: %w", err)
+	}
+
+	// Фильтруем сделки пользователя
+	var userDeals []*model.Deal
+	for _, deal := range deals {
+		// Пользователь участвует в сделке если он покупатель или продавец
+		if deal.BuyerID == userID || deal.SellerID == userID {
+			dealCopy := deal
+			userDeals = append(userDeals, &dealCopy)
+		}
+	}
+
+	// Сортируем по дате создания (новые сначала)
+	sort.Slice(userDeals, func(i, j int) bool {
+		return userDeals[i].CreatedAt.After(userDeals[j].CreatedAt)
+	})
+
+	log.Printf("[INFO] Найдено сделок для пользователя ID=%d: %d", userID, len(userDeals))
+	return userDeals, nil
 }
 
-// GetDealByID - заглушка для совместимости
+// GetDealByID получает сделку по её ID
 func (r *FileRepository) GetDealByID(dealID int64) (*model.Deal, error) {
-	log.Printf("[WARN] GetDealByID не реализован для файлового хранилища")
-	return nil, fmt.Errorf("метод не реализован")
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+
+	log.Printf("[INFO] Получение сделки по ID=%d", dealID)
+
+	// Загружаем все сделки
+	var deals []model.Deal
+	if err := r.loadFromFile("deals.json", &deals); err != nil {
+		return nil, fmt.Errorf("не удалось загрузить сделки: %w", err)
+	}
+
+	// Ищем сделку с нужным ID
+	for _, deal := range deals {
+		if deal.ID == dealID {
+			log.Printf("[INFO] Сделка найдена: ID=%d, Status=%s", deal.ID, deal.Status)
+			return &deal, nil
+		}
+	}
+
+	log.Printf("[WARN] Сделка с ID=%d не найдена", dealID)
+	return nil, fmt.Errorf("сделка с ID=%d не найдена", dealID)
 }
 
 // ConfirmDeal - заглушка для совместимости
@@ -488,38 +738,411 @@ func (r *FileRepository) ConfirmDeal(dealID int64, userID int64, isPaymentProof 
 	return nil
 }
 
-// CreateReview - заглушка для совместимости
+// =====================================================
+// УПРАВЛЕНИЕ ОТЗЫВАМИ И РЕЙТИНГАМИ
+// =====================================================
+
+// CreateReview создает новый отзыв и обновляет рейтинг пользователя
 func (r *FileRepository) CreateReview(review *model.Review) error {
-	log.Printf("[WARN] CreateReview не реализован для файлового хранилища")
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	log.Printf("[INFO] Создание отзыва от пользователя ID=%d к пользователю ID=%d",
+		review.FromUserID, review.ToUserID)
+
+	// Загружаем существующие отзывы
+	var reviews []model.Review
+	if err := r.loadFromFile("reviews.json", &reviews); err != nil {
+		return fmt.Errorf("не удалось загрузить отзывы: %w", err)
+	}
+
+	// Генерируем новый ID для отзыва
+	reviewID, err := r.generateID("reviews")
+	if err != nil {
+		return fmt.Errorf("не удалось сгенерировать ID для отзыва: %w", err)
+	}
+
+	// Устанавливаем поля отзыва
+	review.ID = reviewID
+	review.CreatedAt = time.Now()
+	review.UpdatedAt = time.Now()
+	review.IsVisible = true
+	review.ReportedCount = 0
+
+	// Определяем тип отзыва по рейтингу
+	if review.Rating >= 4 {
+		review.Type = model.ReviewTypePositive
+	} else if review.Rating == 3 {
+		review.Type = model.ReviewTypeNeutral
+	} else {
+		review.Type = model.ReviewTypeNegative
+	}
+
+	// Добавляем отзыв в список
+	reviews = append(reviews, *review)
+
+	// Сохраняем отзывы
+	if err := r.saveToFile("reviews.json", reviews); err != nil {
+		return fmt.Errorf("не удалось сохранить отзывы: %w", err)
+	}
+
+	// Обновляем рейтинг пользователя
+	if err := r.updateUserRating(review.ToUserID); err != nil {
+		log.Printf("[WARN] Не удалось обновить рейтинг пользователя ID=%d: %v", review.ToUserID, err)
+	}
+
+	log.Printf("[INFO] Отзыв успешно создан: ID=%d, рейтинг=%d", review.ID, review.Rating)
 	return nil
 }
 
-// GetReviewsByUserID - заглушка для совместимости
+// GetReviewsByUserID получает отзывы о пользователе с пагинацией
 func (r *FileRepository) GetReviewsByUserID(userID int64, limit, offset int) ([]*model.Review, error) {
-	log.Printf("[WARN] GetReviewsByUserID не реализован для файлового хранилища")
-	return []*model.Review{}, nil
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+
+	log.Printf("[INFO] Получение отзывов для пользователя ID=%d (limit=%d, offset=%d)", userID, limit, offset)
+
+	// Загружаем все отзывы
+	var allReviews []model.Review
+	if err := r.loadFromFile("reviews.json", &allReviews); err != nil {
+		return nil, fmt.Errorf("не удалось загрузить отзывы: %w", err)
+	}
+
+	// Фильтруем отзывы для данного пользователя (видимые отзывы)
+	var userReviews []*model.Review
+	for _, review := range allReviews {
+		if review.ToUserID == userID && review.IsVisible {
+			reviewCopy := review
+			userReviews = append(userReviews, &reviewCopy)
+		}
+	}
+
+	// Сортируем по дате создания (новые сначала)
+	sort.Slice(userReviews, func(i, j int) bool {
+		return userReviews[i].CreatedAt.After(userReviews[j].CreatedAt)
+	})
+
+	// Применяем пагинацию
+	totalReviews := len(userReviews)
+	if offset >= totalReviews {
+		return []*model.Review{}, nil
+	}
+
+	end := offset + limit
+	if end > totalReviews {
+		end = totalReviews
+	}
+
+	paginatedReviews := userReviews[offset:end]
+
+	log.Printf("[INFO] Найдено отзывов для пользователя ID=%d: %d (показано %d)", userID, totalReviews, len(paginatedReviews))
+	return paginatedReviews, nil
 }
 
-// GetUserRating - заглушка для совместимости
+// GetUserRating получает агрегированный рейтинг пользователя
 func (r *FileRepository) GetUserRating(userID int64) (*model.Rating, error) {
-	log.Printf("[WARN] GetUserRating не реализован для файлового хранилища")
-	return &model.Rating{UserID: userID, AverageRating: 0.0}, nil
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+
+	log.Printf("[INFO] Получение рейтинга пользователя ID=%d", userID)
+
+	// Загружаем рейтинги
+	var ratings []model.Rating
+	if err := r.loadFromFile("ratings.json", &ratings); err != nil {
+		return nil, fmt.Errorf("не удалось загрузить рейтинги: %w", err)
+	}
+
+	// Ищем рейтинг пользователя
+	for _, rating := range ratings {
+		if rating.UserID == userID {
+			log.Printf("[INFO] Найден рейтинг пользователя ID=%d: %.2f (%d отзывов)",
+				userID, rating.AverageRating, rating.TotalReviews)
+			return &rating, nil
+		}
+	}
+
+	// Если рейтинг не найден, создаем пустой
+	emptyRating := &model.Rating{
+		UserID:          userID,
+		AverageRating:   0.0,
+		TotalReviews:    0,
+		PositiveReviews: 0,
+		NeutralReviews:  0,
+		NegativeReviews: 0,
+		FiveStars:       0,
+		FourStars:       0,
+		ThreeStars:      0,
+		TwoStars:        0,
+		OneStar:         0,
+		UpdatedAt:       time.Now(),
+	}
+
+	log.Printf("[INFO] Рейтинг пользователя ID=%d не найден, возвращен пустой", userID)
+	return emptyRating, nil
 }
 
-// CheckCanReview - заглушка для совместимости
+// CheckCanReview проверяет можно ли пользователю оставить отзыв о другом пользователе по сделке
 func (r *FileRepository) CheckCanReview(dealID, fromUserID, toUserID int64) (bool, error) {
-	log.Printf("[WARN] CheckCanReview не реализован для файлового хранилища")
-	return false, fmt.Errorf("метод не реализован")
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+
+	log.Printf("[INFO] Проверка возможности оставить отзыв: Deal ID=%d, From=%d, To=%d",
+		dealID, fromUserID, toUserID)
+
+	// 1. Проверяем что сделка существует и завершена
+	deal, err := r.getDealByIDInternal(dealID)
+	if err != nil {
+		log.Printf("[WARN] Сделка не найдена: %v", err)
+		return false, fmt.Errorf("сделка не найдена")
+	}
+
+	// 2. Проверяем что пользователь участвовал в сделке
+	if deal.BuyerID != fromUserID && deal.SellerID != fromUserID {
+		log.Printf("[WARN] Пользователь ID=%d не участвовал в сделке ID=%d", fromUserID, dealID)
+		return false, fmt.Errorf("вы не участвовали в данной сделке")
+	}
+
+	// 3. Проверяем что отзыв оставляется корректному участнику
+	if deal.BuyerID == fromUserID && deal.SellerID != toUserID {
+		return false, fmt.Errorf("неверный получатель отзыва")
+	}
+	if deal.SellerID == fromUserID && deal.BuyerID != toUserID {
+		return false, fmt.Errorf("неверный получатель отзыва")
+	}
+
+	// 4. Проверяем что сделка завершена
+	if deal.Status != "completed" {
+		log.Printf("[WARN] Сделка ID=%d не завершена (статус: %s)", dealID, deal.Status)
+		return false, fmt.Errorf("отзыв можно оставить только по завершенным сделкам")
+	}
+
+	// 5. Проверяем что отзыв еще не был оставлен
+	var reviews []model.Review
+	if err := r.loadFromFile("reviews.json", &reviews); err != nil {
+		return false, fmt.Errorf("не удалось загрузить отзывы: %w", err)
+	}
+
+	for _, review := range reviews {
+		if review.DealID == dealID && review.FromUserID == fromUserID && review.ToUserID == toUserID {
+			log.Printf("[WARN] Отзыв уже оставлен по сделке ID=%d от пользователя ID=%d", dealID, fromUserID)
+			return false, fmt.Errorf("отзыв по данной сделке уже оставлен")
+		}
+	}
+
+	log.Printf("[INFO] Отзыв можно оставить: Deal ID=%d, From=%d, To=%d", dealID, fromUserID, toUserID)
+	return true, nil
 }
 
-// ReportReview - заглушка для совместимости
+// ReportReview создает жалобу на отзыв
 func (r *FileRepository) ReportReview(report *model.ReviewReport) error {
-	log.Printf("[WARN] ReportReview не реализован для файлового хранилища")
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	log.Printf("[INFO] Создание жалобы на отзыв ID=%d от пользователя ID=%d", report.ReviewID, report.UserID)
+
+	// Загружаем жалобы
+	var reports []model.ReviewReport
+	if err := r.loadFromFile("review_reports.json", &reports); err != nil {
+		return fmt.Errorf("не удалось загрузить жалобы: %w", err)
+	}
+
+	// Генерируем ID для жалобы
+	reportID, err := r.generateID("reports")
+	if err != nil {
+		return fmt.Errorf("не удалось сгенерировать ID для жалобы: %w", err)
+	}
+
+	// Устанавливаем поля жалобы
+	report.ID = reportID
+	report.Status = "pending"
+	report.CreatedAt = time.Now()
+
+	// Добавляем жалобу
+	reports = append(reports, *report)
+
+	// Сохраняем жалобы
+	if err := r.saveToFile("review_reports.json", reports); err != nil {
+		return fmt.Errorf("не удалось сохранить жалобы: %w", err)
+	}
+
+	log.Printf("[INFO] Жалоба успешно создана: ID=%d", report.ID)
 	return nil
 }
 
-// GetUserReviewStats - заглушка для совместимости
+// GetUserReviewStats получает детальную статистику отзывов пользователя
 func (r *FileRepository) GetUserReviewStats(userID int64) (*model.ReviewStats, error) {
-	log.Printf("[WARN] GetUserReviewStats не реализован для файлового хранилища")
-	return &model.ReviewStats{UserID: userID, AverageRating: 0.0}, nil
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+
+	log.Printf("[INFO] Получение статистики отзывов пользователя ID=%d", userID)
+
+	// Получаем рейтинг пользователя
+	rating, err := r.GetUserRating(userID)
+	if err != nil {
+		return nil, fmt.Errorf("не удалось получить рейтинг: %w", err)
+	}
+
+	// Получаем последние отзывы (максимум 5)
+	recentReviews, err := r.GetReviewsByUserID(userID, 5, 0)
+	if err != nil {
+		return nil, fmt.Errorf("не удалось получить отзывы: %w", err)
+	}
+
+	// Конвертируем указатели в значения для ReviewStats
+	var recentReviewsValues []model.Review
+	for _, review := range recentReviews {
+		recentReviewsValues = append(recentReviewsValues, *review)
+	}
+
+	// Создаем распределение по звездам
+	ratingDistribution := map[int]int{
+		1: rating.OneStar,
+		2: rating.TwoStars,
+		3: rating.ThreeStars,
+		4: rating.FourStars,
+		5: rating.FiveStars,
+	}
+
+	// Вычисляем процент положительных отзывов
+	positivePercent := float32(0.0)
+	if rating.TotalReviews > 0 {
+		positivePercent = float32(rating.PositiveReviews) / float32(rating.TotalReviews) * 100
+	}
+
+	stats := &model.ReviewStats{
+		UserID:             userID,
+		AverageRating:      rating.AverageRating,
+		TotalReviews:       rating.TotalReviews,
+		PositivePercent:    positivePercent,
+		RecentReviews:      recentReviewsValues,
+		RatingDistribution: ratingDistribution,
+	}
+
+	log.Printf("[INFO] Статистика отзывов пользователя ID=%d: %.2f рейтинг, %d отзывов",
+		userID, stats.AverageRating, stats.TotalReviews)
+	return stats, nil
+}
+
+// getDealByIDInternal внутренний метод получения сделки (без блокировки мьютекса)
+func (r *FileRepository) getDealByIDInternal(dealID int64) (*model.Deal, error) {
+	var deals []model.Deal
+	if err := r.loadFromFile("deals.json", &deals); err != nil {
+		return nil, fmt.Errorf("не удалось загрузить сделки: %w", err)
+	}
+
+	for _, deal := range deals {
+		if deal.ID == dealID {
+			return &deal, nil
+		}
+	}
+
+	return nil, fmt.Errorf("сделка с ID=%d не найдена", dealID)
+}
+
+// updateUserRating пересчитывает рейтинг пользователя на основе всех его отзывов
+func (r *FileRepository) updateUserRating(userID int64) error {
+	log.Printf("[INFO] Обновление рейтинга пользователя ID=%d", userID)
+
+	// Загружаем все отзывы пользователя
+	var allReviews []model.Review
+	if err := r.loadFromFile("reviews.json", &allReviews); err != nil {
+		return fmt.Errorf("не удалось загрузить отзывы: %w", err)
+	}
+
+	// Фильтруем отзывы для данного пользователя
+	var userReviews []model.Review
+	for _, review := range allReviews {
+		if review.ToUserID == userID && review.IsVisible {
+			userReviews = append(userReviews, review)
+		}
+	}
+
+	// Если отзывов нет, удаляем рейтинг из файла
+	if len(userReviews) == 0 {
+		return r.removeUserRating(userID)
+	}
+
+	// Вычисляем статистику
+	var totalRating int
+	rating := model.Rating{
+		UserID:    userID,
+		UpdatedAt: time.Now(),
+	}
+
+	for _, review := range userReviews {
+		totalRating += review.Rating
+
+		// Подсчитываем по типам
+		switch review.Type {
+		case model.ReviewTypePositive:
+			rating.PositiveReviews++
+		case model.ReviewTypeNeutral:
+			rating.NeutralReviews++
+		case model.ReviewTypeNegative:
+			rating.NegativeReviews++
+		}
+
+		// Подсчитываем по звездам
+		switch review.Rating {
+		case 1:
+			rating.OneStar++
+		case 2:
+			rating.TwoStars++
+		case 3:
+			rating.ThreeStars++
+		case 4:
+			rating.FourStars++
+		case 5:
+			rating.FiveStars++
+		}
+	}
+
+	rating.TotalReviews = len(userReviews)
+	rating.AverageRating = float32(totalRating) / float32(len(userReviews))
+
+	// Сохраняем рейтинг
+	return r.saveUserRating(&rating)
+}
+
+// removeUserRating удаляет рейтинг пользователя
+func (r *FileRepository) removeUserRating(userID int64) error {
+	var ratings []model.Rating
+	if err := r.loadFromFile("ratings.json", &ratings); err != nil {
+		return fmt.Errorf("не удалось загрузить рейтинги: %w", err)
+	}
+
+	// Фильтруем рейтинги, удаляя целевого пользователя
+	var filteredRatings []model.Rating
+	for _, rating := range ratings {
+		if rating.UserID != userID {
+			filteredRatings = append(filteredRatings, rating)
+		}
+	}
+
+	return r.saveToFile("ratings.json", filteredRatings)
+}
+
+// saveUserRating сохраняет или обновляет рейтинг пользователя
+func (r *FileRepository) saveUserRating(newRating *model.Rating) error {
+	var ratings []model.Rating
+	if err := r.loadFromFile("ratings.json", &ratings); err != nil {
+		return fmt.Errorf("не удалось загрузить рейтинги: %w", err)
+	}
+
+	// Ищем существующий рейтинг
+	found := false
+	for i, rating := range ratings {
+		if rating.UserID == newRating.UserID {
+			ratings[i] = *newRating
+			found = true
+			break
+		}
+	}
+
+	// Если не найден, добавляем новый
+	if !found {
+		ratings = append(ratings, *newRating)
+	}
+
+	return r.saveToFile("ratings.json", ratings)
 }
