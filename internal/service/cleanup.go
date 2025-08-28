@@ -27,7 +27,7 @@ func NewCleanupService(service *Service) *CleanupService {
 	return &CleanupService{
 		service:       service,
 		checkInterval: 30 * time.Minute,   // Проверяем каждые 30 минут
-		orderTimeout:  7 * 24 * time.Hour, // Заявки истекают через 7 дней
+		orderTimeout:  1 * 24 * time.Hour, // Заявки истекают через 7 дней
 		dealTimeout:   24 * time.Hour,     // Сделки истекают через 1 день
 		ctx:           ctx,
 		cancel:        cancel,
