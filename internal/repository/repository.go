@@ -1252,6 +1252,66 @@ func (r *Repository) ConfirmDealWithRole(dealID int64, userID int64, isAuthor bo
 	return nil
 }
 
+// GetExpiredDeals получает активные сделки старше указанного времени (PostgreSQL)
+func (r *Repository) GetExpiredDeals(cutoffTime time.Time) ([]*model.Deal, error) {
+	log.Printf("[INFO] Поиск сделок созданных до %v", cutoffTime)
+
+	query := `
+		SELECT id, response_id, order_id, author_id, counterparty_id, 
+		       cryptocurrency, fiat_currency, amount, price, total_amount, 
+		       payment_methods, order_type, status, created_at, expires_at,
+		       completed_at, author_confirmed, counter_confirmed, author_proof, 
+		       counter_proof, notes, dispute_reason
+		FROM deals 
+		WHERE (status = $1 OR status = $2) 
+		AND created_at < $3
+		ORDER BY created_at ASC`
+
+	rows, err := r.db.Query(query,
+		model.DealStatusInProgress,
+		model.DealStatusWaitingConfirmation,
+		cutoffTime)
+	if err != nil {
+		return nil, fmt.Errorf("не удалось найти устаревшие сделки: %w", err)
+	}
+	defer rows.Close()
+
+	var deals []*model.Deal
+	for rows.Next() {
+		deal := &model.Deal{}
+		var paymentMethodsJSON []byte
+
+		err := rows.Scan(
+			&deal.ID, &deal.ResponseID, &deal.OrderID, &deal.AuthorID,
+			&deal.CounterpartyID, &deal.Cryptocurrency, &deal.FiatCurrency,
+			&deal.Amount, &deal.Price, &deal.TotalAmount, &paymentMethodsJSON,
+			&deal.OrderType, &deal.Status, &deal.CreatedAt, &deal.ExpiresAt,
+			&deal.CompletedAt, &deal.AuthorConfirmed, &deal.CounterConfirmed,
+			&deal.AuthorProof, &deal.CounterProof, &deal.Notes, &deal.DisputeReason)
+		if err != nil {
+			log.Printf("[ERROR] Ошибка сканирования сделки: %v", err)
+			continue
+		}
+
+		// Декодируем JSON массив способов оплаты
+		if len(paymentMethodsJSON) > 0 {
+			if err := json.Unmarshal(paymentMethodsJSON, &deal.PaymentMethods); err != nil {
+				log.Printf("[WARN] Не удалось декодировать способы оплаты для сделки ID=%d: %v", deal.ID, err)
+				deal.PaymentMethods = []string{}
+			}
+		}
+
+		deals = append(deals, deal)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("ошибка при чтении сделок: %w", err)
+	}
+
+	log.Printf("[INFO] Найдено %d устаревших сделок", len(deals))
+	return deals, nil
+}
+
 // GetUserByID получает пользователя по его внутреннему ID (PostgreSQL)
 func (r *Repository) GetUserByID(userID int64) (*model.User, error) {
 	log.Printf("[INFO] Получение пользователя по ID=%d", userID)

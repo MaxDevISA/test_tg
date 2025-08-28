@@ -891,6 +891,80 @@ func (r *FileRepository) updateUserDealsCount(userID int64) error {
 	return nil
 }
 
+// UpdateDealStatus обновляет статус сделки (файловое хранилище)
+func (r *FileRepository) UpdateDealStatus(dealID int64, status string) error {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	log.Printf("[INFO] Обновление статуса сделки ID=%d на %s", dealID, status)
+
+	// Загружаем сделки
+	var deals []model.Deal
+	if err := r.loadFromFile("deals.json", &deals); err != nil {
+		return fmt.Errorf("не удалось загрузить сделки: %w", err)
+	}
+
+	// Ищем и обновляем сделку
+	var dealFound = false
+	for i := range deals {
+		if deals[i].ID == dealID {
+			dealFound = true
+			deals[i].Status = model.DealStatus(status)
+
+			// Обновляем время завершения для финальных статусов
+			if status == string(model.DealStatusCompleted) ||
+				status == string(model.DealStatusExpired) ||
+				status == string(model.DealStatusCancelled) {
+				now := time.Now()
+				deals[i].CompletedAt = &now
+			}
+
+			log.Printf("[INFO] Статус сделки ID=%d обновлен на %s", dealID, status)
+			break
+		}
+	}
+
+	if !dealFound {
+		return fmt.Errorf("сделка ID=%d не найдена", dealID)
+	}
+
+	// Сохраняем обновленные сделки
+	if err := r.saveToFile("deals.json", deals); err != nil {
+		return fmt.Errorf("не удалось сохранить сделки: %w", err)
+	}
+
+	return nil
+}
+
+// GetExpiredDeals получает активные сделки старше указанного времени (файловое хранилище)
+func (r *FileRepository) GetExpiredDeals(cutoffTime time.Time) ([]*model.Deal, error) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	log.Printf("[INFO] Поиск сделок созданных до %v", cutoffTime)
+
+	// Загружаем сделки
+	var allDeals []model.Deal
+	if err := r.loadFromFile("deals.json", &allDeals); err != nil {
+		return nil, fmt.Errorf("не удалось загрузить сделки: %w", err)
+	}
+
+	var expiredDeals []*model.Deal
+	for i := range allDeals {
+		deal := &allDeals[i]
+
+		// Проверяем статус и время создания
+		if (deal.Status == model.DealStatusInProgress ||
+			deal.Status == model.DealStatusWaitingConfirmation) &&
+			deal.CreatedAt.Before(cutoffTime) {
+			expiredDeals = append(expiredDeals, deal)
+		}
+	}
+
+	log.Printf("[INFO] Найдено %d устаревших сделок", len(expiredDeals))
+	return expiredDeals, nil
+}
+
 // =====================================================
 // УПРАВЛЕНИЕ ОТЗЫВАМИ И РЕЙТИНГАМИ
 // =====================================================

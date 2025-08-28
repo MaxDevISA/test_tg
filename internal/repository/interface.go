@@ -1,5 +1,9 @@
 package repository
 
+import (
+	"time"
+)
+
 import "p2pTG-crypto-exchange/internal/model"
 
 // RepositoryInterface определяет методы для работы с хранилищем данных
@@ -28,8 +32,10 @@ type RepositoryInterface interface {
 	CreateDeal(deal *model.Deal) error
 	GetDealsByUserID(userID int64) ([]*model.Deal, error)
 	GetDealByID(dealID int64) (*model.Deal, error)
+	UpdateDealStatus(dealID int64, status string) error
 	ConfirmDeal(dealID int64, userID int64, isPaymentProof bool, paymentProof string) error
 	ConfirmDealWithRole(dealID int64, userID int64, isAuthor bool, paymentProof string) error
+	GetExpiredDeals(cutoffTime time.Time) ([]*model.Deal, error)
 
 	// Методы для работы с откликами
 	CreateResponse(response *model.Response) error

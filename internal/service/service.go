@@ -37,6 +37,7 @@ type Service struct {
 	groupTopicID        string                         // ID темы в групповом чате (необязательно)
 	httpClient          *http.Client                   // HTTP клиент для запросов к Telegram Bot API
 	notificationService *NotificationService           // Сервис уведомлений для отправки сообщений в Telegram
+	cleanupService      *CleanupService                // Сервис автоматической очистки устаревших заявок и сделок
 }
 
 // NewService создает новый экземпляр сервиса (для обратной совместимости)
@@ -61,7 +62,8 @@ func NewServiceWithGroup(repo repository.RepositoryInterface, telegramToken, cha
 	// Инициализируем сервис уведомлений с переданными параметрами
 	notificationService := NewNotificationServiceWithBotURL(telegramToken, webAppURL, groupChatID, groupTopicID, botURL)
 
-	return &Service{
+	// Создаем основной сервис
+	service := &Service{
 		repo:                repo,
 		telegramToken:       telegramToken,
 		chatID:              chatID,
@@ -69,6 +71,32 @@ func NewServiceWithGroup(repo repository.RepositoryInterface, telegramToken, cha
 		groupTopicID:        groupTopicID,
 		httpClient:          &http.Client{Timeout: 10 * time.Second}, // HTTP клиент с таймаутом 10 сек
 		notificationService: notificationService,
+	}
+
+	// Инициализируем сервис автоматической очистки
+	service.cleanupService = NewCleanupService(service)
+
+	log.Println("[INFO] Сервис автоматической очистки инициализирован")
+
+	return service
+}
+
+// StartCleanupService запускает сервис автоматической очистки в фоновом режиме
+// Безопасно для вызова - не блокирует выполнение
+func (s *Service) StartCleanupService() {
+	if s.cleanupService != nil {
+		log.Println("[INFO] Запуск сервиса автоматической очистки...")
+		go s.cleanupService.Start() // Запускаем в отдельной горутине
+	} else {
+		log.Printf("[WARN] Сервис автоматической очистки не инициализирован")
+	}
+}
+
+// StopCleanupService останавливает сервис автоматической очистки
+func (s *Service) StopCleanupService() {
+	if s.cleanupService != nil {
+		log.Println("[INFO] Остановка сервиса автоматической очистки...")
+		s.cleanupService.Stop()
 	}
 }
 
