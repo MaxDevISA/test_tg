@@ -70,13 +70,40 @@ function initNavigation() {
                 loadOrders();
             } else if (viewName === 'my-orders') {
                 loadMyOrders();
-            } else if (viewName === 'deals') {
-                loadDeals();
+            } else if (viewName === 'responses') {
+                loadResponses();
+                initResponseTabs();
             } else if (viewName === 'profile') {
                 loadProfile();
             }
         });
     });
+}
+
+// Обработка навигации по хэшу URL  
+function handleHashNavigation() {
+    console.log('[DEBUG] Проверка хэша URL для навигации');
+    
+    const hash = window.location.hash.replace('#', '');
+    console.log('[DEBUG] Найден хэш:', hash);
+    
+    if (hash) {
+        // Ищем соответствующую кнопку навигации
+        const targetButton = document.querySelector(`[data-view="${hash}"]`);
+        
+        if (targetButton) {
+            console.log('[DEBUG] Найдена кнопка для хэша:', hash);
+            // Автоматически кликаем на нужную кнопку через небольшую задержку
+            setTimeout(() => {
+                targetButton.click();
+                console.log('[DEBUG] Автоматический переход на страницу:', hash);
+            }, 500); // Даем время для инициализации приложения
+        } else {
+            console.log('[DEBUG] Кнопка для хэша не найдена:', hash);
+        }
+    } else {
+        console.log('[DEBUG] Хэш отсутствует, остаемся на главной странице');
+    }
 }
 
 // Модальное окно
@@ -167,7 +194,8 @@ async function loadOrders() {
     content.innerHTML = '<div class="loading"><div class="spinner"></div><p>Загрузка заявок...</p></div>';
     
     try {
-        const response = await fetch('/api/v1/orders');
+        // Добавляем фильтр status=active чтобы показывались только активные заявки
+        const response = await fetch('/api/v1/orders'); // Получаем все заявки, фильтруем на фронтенде
         const result = await response.json();
         
         // Отладочная информация
@@ -193,13 +221,21 @@ function displayOrders(orders) {
     // Отладочная информация
     console.log('[DEBUG] Отображение заявок:', orders);
     
-    if (orders.length === 0) {
-        console.log('[DEBUG] Массив заявок пуст');
+    // Фильтруем только заявки, доступные для откликов на рынке
+    const marketOrders = orders.filter(order => {
+        // Показываем заявки со статусами: active (без откликов) и has_responses (есть отклики, но автор еще не выбрал)
+        return order.status === 'active' || order.status === 'has_responses';
+    });
+    
+    console.log('[DEBUG] Заявки после фильтрации для рынка:', marketOrders);
+    
+    if (marketOrders.length === 0) {
+        console.log('[DEBUG] Нет заявок доступных на рынке');
         content.innerHTML = '<p class="text-center text-muted">Заявок пока нет</p>';
         return;
     }
     
-    const ordersHTML = orders.map((order, index) => {
+    const ordersHTML = marketOrders.map((order, index) => {
         console.log(`[DEBUG] Обработка заявки ${index}:`, order);
         
         // Проверяем критические поля
@@ -216,34 +252,71 @@ function displayOrders(orders) {
         // Проверяем не наша ли это заявка
         const isMyOrder = currentInternalUserId && order.user_id === currentInternalUserId;
         
-        return '<div style="border: 1px solid var(--tg-theme-section-separator-color, #e1e8ed); ' +
-                    'border-radius: 8px; padding: 12px; margin-bottom: 8px; ' +
-                    'background: var(--tg-theme-secondary-bg-color, #f8f9fa);">' +
-            '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">' +
+        // Подсчитываем общую сумму сделки
+        const totalAmount = order.total_amount || (order.amount * order.price);
+        
+        // Определяем отображение автора
+        const authorName = order.user_name || order.first_name || `Пользователь ${order.user_id}`;
+        const authorUsername = order.username; 
+        console.log('[DEBUG] Данные автора заявки:', { 
+            authorName, 
+            authorUsername, 
+            user_name: order.user_name,
+            first_name: order.first_name,
+            username: order.username 
+        });
+        
+        const authorDisplay = authorUsername ? 
+            `<span onclick="openTelegramProfile('${authorUsername}')" style="color: #1DB954; cursor: pointer; text-decoration: underline; font-weight: 500;">@${authorUsername}</span>` :
+            `<span style="color: #ffffff; font-weight: 500;">${authorName}</span>`;
+        
+        return '<div class="order-card">' +
+            '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">' +
                 '<span style="font-weight: 600; color: ' + (order.type === 'buy' ? '#22c55e' : '#ef4444') + ';">' +
                     (order.type === 'buy' ? '🟢 Покупка' : '🔴 Продажа') +
                 '</span>' +
-                '<span style="font-size: 12px; color: var(--tg-theme-hint-color, #708499);">' +
+                '<span style="font-size: 12px; color: rgba(255, 255, 255, 0.5);">' +
                     (order.created_at ? new Date(order.created_at).toLocaleString('ru') : 'Дата неизвестна') +
                 '</span>' +
             '</div>' +
-            '<div style="margin-bottom: 8px;">' +
-                '<strong>' + (order.amount || '?') + ' ' + (order.cryptocurrency || '?') + '</strong> за <strong>' + (order.price || '?') + ' ' + (order.fiat_currency || '?') + '</strong>' +
+            
+            '<div style="margin-bottom: 10px;">' +
+                '<div style="font-size: 14px; margin-bottom: 4px; color: #ffffff;">👤 Автор: ' + authorDisplay + '</div>' +
             '</div>' +
-            '<div style="font-size: 12px; color: var(--tg-theme-hint-color, #708499); margin-bottom: 8px;">' +
-                'Способы оплаты: ' + ((order.payment_methods || []).join(', ') || 'Не указано') +
+            
+            '<div style="background: rgba(30, 30, 40, 0.6); border: 1px solid rgba(255, 255, 255, 0.1); padding: 10px; border-radius: 6px; margin-bottom: 10px;">' +
+                '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px;">' +
+                    '<div>' +
+                        '<span style="color: rgba(255, 255, 255, 0.6);">📊 Объем:</span><br>' +
+                        '<strong style="color: #ffffff;">' + (order.amount || '?') + ' ' + (order.cryptocurrency || '?') + '</strong>' +
+                    '</div>' +
+                    '<div>' +
+                        '<span style="color: rgba(255, 255, 255, 0.6);">💰 Курс:</span><br>' +
+                        '<strong style="color: #ffffff;">' + (order.price || '?') + ' ' + (order.fiat_currency || '?') + ' за 1' + (order.cryptocurrency || '?') + '</strong>' +
+                    '</div>' +
+                '</div>' +
+                '<div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255, 255, 255, 0.15); font-size: 13px;">' +
+                    '<span style="color: rgba(255, 255, 255, 0.6);">💵 Общая сумма:</span> ' +
+                    '<strong style="color: #ffffff; font-size: 15px;">' + totalAmount.toLocaleString('ru') + ' ' + (order.fiat_currency || '?') + '</strong>' +
+                '</div>' +
             '</div>' +
-            (order.description ? '<div style="font-size: 12px; margin-bottom: 8px;">' + order.description + '</div>' : '') +
+            
+            '<div style="font-size: 12px; color: rgba(255, 255, 255, 0.6); margin-bottom: 10px;">' +
+                '💳 Способы оплаты: <span style="color: #ffffff;">' + ((order.payment_methods || []).join(', ') || 'Не указано') + '</span>' +
+            '</div>' +
+            
+            (order.description ? '<div style="font-size: 12px; margin-bottom: 10px; color: #ffffff;">' + order.description + '</div>' : '') +
+            
             (!isMyOrder ? 
-                '<div style="display: flex; gap: 8px; margin-top: 12px;">' +
-                    '<button onclick="openUserProfile(' + (order.user_id || 0) + ')" ' +
-                           'style="background: #6c757d; color: white; border: none; padding: 6px 12px; ' +
-                           'border-radius: 4px; font-size: 12px; flex: 1;">👤 Профиль</button>' +
-                    '<button onclick="respondToOrder(' + (order.id || 0) + ')" ' +
-                           'style="background: #22c55e; color: white; border: none; padding: 6px 12px; ' +
-                           'border-radius: 4px; font-size: 12px; flex: 2;">🤝 Откликнуться</button>' +
+                '<div style="display: flex; gap: 6px; margin-top: 12px;">' +
+                    '<button onclick="openUserProfile(' + (order.user_id || 0) + ')" class="btn btn-compact btn-secondary" style="flex: 1;">👤 Профиль</button>' +
+                    '<button onclick="respondToOrder(' + (order.id || 0) + ')" class="btn btn-compact btn-primary" style="flex: 2;">🤝 Откликнуться</button>' +
                 '</div>' : 
-                '<div style="margin-top: 8px; font-size: 12px; color: #007bff;">📝 Это ваша заявка</div>'
+                '<div style="display: flex; gap: 6px; margin-top: 12px;">' +
+                    '<div style="background: rgba(43, 228, 126, 0.1); border: 1px solid #2BE47E; border-radius: 6px; padding: 6px 10px; font-size: 11px; color: #2BE47E; flex: 1; text-align: center; font-weight: 600; min-height: 28px; display: flex; align-items: center; justify-content: center;">Моя заявка</div>' +
+                    '<button onclick="editOrder(' + (order.id || 0) + ')" class="btn btn-compact btn-success" style="flex: 1;">Редактировать</button>' +
+                    '<button onclick="viewOrderResponses(' + (order.id || 0) + ')" class="btn btn-compact btn-info" style="flex: 1;">Отклики (' + (order.response_count || 0) + ')</button>' +
+                '</div>'
             ) +
         '</div>';
     }).join('');
@@ -265,6 +338,44 @@ function showError(message) {
         tg.showAlert('❌ ' + message);
     } else {
         alert('❌ ' + message);
+    }
+}
+
+// Универсальная функция для показа уведомлений
+function showAlert(message) {
+    if (tg) {
+        tg.showAlert(message);
+    } else {
+        alert(message);
+    }
+}
+
+// Универсальная функция для HTTP запросов
+async function apiRequest(url, method = 'GET', data = null) {
+    const options = {
+        method: method,
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    };
+    
+    // Добавляем Telegram User ID в заголовки для авторизации
+    if (currentUser && currentUser.id) {
+        options.headers['X-Telegram-User-ID'] = currentUser.id.toString();
+    }
+    
+    // Добавляем данные для POST/PUT запросов
+    if (data && (method === 'POST' || method === 'PUT')) {
+        options.body = JSON.stringify(data);
+    }
+    
+    try {
+        const response = await fetch(url, options);
+        const result = await response.json();
+        return result;
+    } catch (error) {
+        console.error('[ERROR] Ошибка HTTP запроса:', error);
+        throw error;
     }
 }
 
@@ -355,20 +466,41 @@ async function loadMyOrders() {
     content.innerHTML = '<div class="loading"><div class="spinner"></div><p>Загрузка ваших заявок...</p></div>';
     
     try {
-        const response = await fetch('/api/v1/orders/my', {
-            headers: {
-                'X-Telegram-User-ID': currentUser.id.toString()
-            }
-        });
+        // Загружаем заявки и сделки параллельно
+        const [ordersResult, dealsResult] = await Promise.all([
+            fetch('/api/v1/orders/my', {
+                headers: { 'X-Telegram-User-ID': currentUser.id.toString() }
+            }).then(r => r.json()),
+            fetch('/api/v1/deals', {
+                headers: { 'X-Telegram-User-ID': currentUser.id.toString() }
+            }).then(r => r.json())
+        ]);
         
-        const result = await response.json();
-        console.log('[DEBUG] loadMyOrders: Ответ сервера:', result);
+        console.log('[DEBUG] loadMyOrders: Заявки:', ordersResult);
+        console.log('[DEBUG] loadMyOrders: Сделки:', dealsResult);
         
-        if (result.success) {
-            console.log('[DEBUG] loadMyOrders: Успешно, передаю заявки в displayMyOrders:', result.orders);
-            displayMyOrders(result.orders || []);
+        if (ordersResult.success) {
+            const orders = ordersResult.orders || [];
+            const deals = dealsResult.success ? dealsResult.deals || [] : [];
+            
+            // Фильтруем заявки: убираем те, у которых сделки завершены
+            const activeOrders = orders.filter(order => {
+                if (order.status === 'in_deal') {
+                    // Ищем сделку для этой заявки
+                    const deal = deals.find(d => d.order_id === order.id);
+                    if (deal && deal.status === 'completed') {
+                        // Если сделка завершена - не показываем заявку
+                        return false;
+                    }
+                }
+                // Показываем только активные заявки или заявки с активными сделками
+                return order.status === 'active' || order.status === 'has_responses' || order.status === 'in_deal';
+            });
+            
+            console.log('[DEBUG] loadMyOrders: Отфильтровано заявок:', activeOrders.length, 'из', orders.length);
+            displayMyOrders(activeOrders);
         } else {
-            console.error('[ERROR] loadMyOrders: Ошибка от сервера:', result.error);
+            console.error('[ERROR] loadMyOrders: Ошибка от сервера:', ordersResult.error);
             content.innerHTML = '<p class="text-center text-muted">Ошибка загрузки заявок</p>';
         }
     } catch (error) {
@@ -394,13 +526,12 @@ function displayMyOrders(orders) {
         content.innerHTML = `
             <div style="text-align: center; padding: 40px 20px;">
                 <div style="font-size: 48px; margin-bottom: 16px;">📋</div>
-                <h3 style="margin-bottom: 12px; color: var(--tg-theme-text-color, #000000);">Мои заявки</h3>
                 <p style="color: var(--tg-theme-hint-color, #708499); margin-bottom: 20px; line-height: 1.4;">
                     У вас пока нет заявок.<br/>
                     Создайте первую заявку на покупку или продажу криптовалюты!
                 </p>
                 <button class="btn btn-primary" id="createFirstOrderBtn" 
-                        style="background: var(--tg-theme-button-color, #2481cc); color: var(--tg-theme-button-text-color, #ffffff); border: none; border-radius: 8px; padding: 12px 24px; font-size: 14px; cursor: pointer;">
+                        style="background: var(--tg-theme-button-color, #2BE47E); color: black; border: none; border-radius: 8px; padding: 12px 24px; font-size: 14px; cursor: pointer; font-weight: 700;">
                     🚀 Создать заявку
                 </button>
             </div>
@@ -415,47 +546,19 @@ function displayMyOrders(orders) {
     
     console.log('[DEBUG] displayMyOrders: Переходим к группировке заявок...');
     
-    // Группируем заявки по статусу
-    const activeOrders = orders.filter(o => o.status === 'active');
-    const inDealOrders = orders.filter(o => o.status === 'matched' || o.status === 'in_progress');
+    // Группируем заявки по статусу (завершенные уже отфильтрованы)
+    const activeOrders = orders.filter(o => o.status === 'active' || o.status === 'has_responses');
+    const inDealOrders = orders.filter(o => o.status === 'in_deal');
     
     console.log('[DEBUG] displayMyOrders: activeOrders =', activeOrders.length);
-    console.log('[DEBUG] displayMyOrders: inDealOrders =', inDealOrders.length);  
-    const completedOrders = orders.filter(o => o.status === 'completed');
-    const cancelledOrders = orders.filter(o => o.status === 'cancelled');
-    
-    console.log('[DEBUG] displayMyOrders: completedOrders =', completedOrders.length);
-    console.log('[DEBUG] displayMyOrders: cancelledOrders =', cancelledOrders.length);
+    console.log('[DEBUG] displayMyOrders: inDealOrders =', inDealOrders.length);
     console.log('[DEBUG] displayMyOrders: Начинаем формировать HTML...');
     
     let html = `
         <div style="padding: 20px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h2 style="margin: 0; color: var(--tg-theme-text-color, #000000);">📋 Мои заявки</h2>
-                <button class="btn btn-primary" onclick="document.getElementById('createOrderModal').classList.add('show')" 
-                        style="background: var(--tg-theme-button-color, #2481cc); color: var(--tg-theme-button-text-color, #ffffff); border: none; border-radius: 6px; padding: 8px 16px; font-size: 12px;">
-                    ➕ Создать
-                </button>
-            </div>
     `;
     
-    // Статистика
-    html += `
-        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 20px;">
-            <div style="text-align: center; padding: 12px; background: var(--tg-theme-secondary-bg-color, #f8f9fa); border-radius: 8px;">
-                <div style="font-size: 18px; font-weight: 600; color: #22c55e;">${activeOrders.length}</div>
-                <div style="font-size: 11px; color: var(--tg-theme-hint-color, #708499);">Активные</div>
-            </div>
-            <div style="text-align: center; padding: 12px; background: var(--tg-theme-secondary-bg-color, #f8f9fa); border-radius: 8px;">
-                <div style="font-size: 18px; font-weight: 600; color: #f59e0b;">${inDealOrders.length}</div>
-                <div style="font-size: 11px; color: var(--tg-theme-hint-color, #708499);">В сделке</div>
-            </div>
-            <div style="text-align: center; padding: 12px; background: var(--tg-theme-secondary-bg-color, #f8f9fa); border-radius: 8px;">
-                <div style="font-size: 18px; font-weight: 600; color: #3b82f6;">${completedOrders.length}</div>
-                <div style="font-size: 11px; color: var(--tg-theme-hint-color, #708499);">Завершено</div>
-            </div>
-        </div>
-    `;
+    // Убираем метрики - они работают некорректно с завершенными сделками
     
     // Активные заявки
     if (activeOrders.length > 0) {
@@ -479,16 +582,7 @@ function displayMyOrders(orders) {
         html += `</div>`;
     }
     
-    // Завершенные заявки
-    if (completedOrders.length > 0) {
-        html += `<div style="margin-bottom: 20px;">
-            <h3 style="font-size: 16px; margin-bottom: 12px; color: #3b82f6;">✅ Завершенные</h3>`;
-        
-        completedOrders.slice(0, 3).forEach(order => { // Показываем только последние 3
-            html += createOrderCard(order, 'completed');
-        });
-        html += `</div>`;
-    }
+    // Завершенные заявки убираем - показываем только актуальные
     
     html += `</div>`;
     
@@ -510,7 +604,7 @@ function createOrderCard(order, category) {
         active: '#22c55e',
         matched: '#f59e0b', 
         in_progress: '#f59e0b',
-        completed: '#3b82f6',
+        completed: '#2BE47E',
         cancelled: '#6b7280'
     };
     
@@ -521,27 +615,27 @@ function createOrderCard(order, category) {
     switch (category) {
         case 'active':
             actions = `
-                <div style="display: flex; gap: 8px; margin-top: 12px;">
-                    <button onclick="editOrder(${order.id})" class="btn-small btn-secondary">
-                        ✏️ Редактировать
+                <div style="display: flex; gap: 6px; margin-top: 12px;">
+                    <button onclick="editOrder(${order.id})" class="btn btn-compact btn-success" style="flex: 1;">
+                        Редактировать
                     </button>
-                    <button onclick="viewOrderResponses(${order.id})" class="btn-small btn-info">
-                        👀 Отклики
+                    <button onclick="viewOrderResponses(${order.id})" class="btn btn-compact btn-info" style="flex: 1;">
+                        Отклики
                     </button>
-                    <button onclick="cancelOrder(${order.id})" class="btn-small btn-danger">
-                        ❌ Удалить
+                    <button onclick="cancelOrder(${order.id})" class="btn btn-compact btn-danger" style="flex: 1;">
+                        Удалить
                     </button>
                 </div>
             `;
             break;
         case 'in_deal':
             actions = `
-                <div style="display: flex; gap: 8px; margin-top: 12px;">
-                    <button onclick="viewActiveDeals(${order.id})" class="btn-small btn-primary">
-                        🤝 Перейти к сделке
+                <div style="display: flex; gap: 6px; margin-top: 12px;">
+                    <button onclick="viewActiveDeals(${order.id})" class="btn btn-compact btn-primary" style="flex: 1;">
+                        Перейти к сделке
                     </button>
-                    <button onclick="viewOrderResponses(${order.id})" class="btn-small btn-info">
-                        👀 Все отклики
+                    <button onclick="viewOrderResponses(${order.id})" class="btn btn-compact btn-info" style="flex: 1;">
+                        Все отклики
                     </button>
                 </div>
             `;
@@ -549,8 +643,8 @@ function createOrderCard(order, category) {
         case 'completed':
             actions = `
                 <div style="margin-top: 12px;">
-                    <button onclick="viewOrderHistory(${order.id})" class="btn-small btn-secondary">
-                        📊 История
+                    <button onclick="viewOrderHistory(${order.id})" class="btn btn-compact btn-secondary" style="width: 100%;">
+                        История
                     </button>
                 </div>
             `;
@@ -813,7 +907,7 @@ function displayProfileWithReviews(user, reviews, stats) {
             <!-- Статистика -->
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px;">
                 <div style="text-align: center; padding: 12px; border: 1px solid var(--tg-theme-section-separator-color, #e1e8ed); border-radius: 8px;">
-                    <div style="font-size: 18px; font-weight: 600; color: var(--tg-theme-link-color, #2481cc);">
+                    <div style="font-size: 18px; font-weight: 600; color: var(--tg-theme-link-color, #2BE47E);">
                         ${user.total_deals || 0}
                     </div>
                     <div style="font-size: 11px; color: var(--tg-theme-hint-color, #708499);">
@@ -857,9 +951,13 @@ function displayProfileWithReviews(user, reviews, stats) {
                         ${review.comment}
                     </div>
                     ` : ''}
-                    ${!review.is_anonymous ? `
+                    ${!review.is_anonymous && review.from_user_name ? `
                     <div style="font-size: 11px; color: var(--tg-theme-hint-color, #708499); margin-top: 6px;">
-                        От: Пользователь #${review.from_user_id}
+                        От: ${review.from_user_username ? '@' + review.from_user_username : review.from_user_name}
+                    </div>
+                    ` : review.is_anonymous ? `
+                    <div style="font-size: 11px; color: var(--tg-theme-hint-color, #708499); margin-top: 6px;">
+                        Анонимный отзыв
                     </div>
                     ` : ''}
                 </div>
@@ -931,8 +1029,8 @@ function displayMyProfile(user, stats, reviews) {
                 <!-- Аватар -->
                 <div style="margin-bottom: 16px;">
                     ${avatarUrl ? 
-                        `<img src="${avatarUrl}" style="width: 80px; height: 80px; border-radius: 50%; border: 3px solid var(--tg-theme-link-color, #2481cc);" alt="Аватар">` :
-                        `<div style="width: 80px; height: 80px; border-radius: 50%; background: var(--tg-theme-link-color, #2481cc); display: flex; align-items: center; justify-content: center; margin: 0 auto; font-size: 32px; color: white;">
+                        `<img src="${avatarUrl}" style="width: 80px; height: 80px; border-radius: 50%; border: 3px solid var(--tg-theme-link-color, #2BE47E);" alt="Аватар">` :
+                        `<div style="width: 80px; height: 80px; border-radius: 50%; background: var(--tg-theme-link-color, #2BE47E); display: flex; align-items: center; justify-content: center; margin: 0 auto; font-size: 32px; color: white;">
                             ${user.first_name ? user.first_name[0].toUpperCase() : '👤'}
                         </div>`
                     }
@@ -970,43 +1068,34 @@ function displayMyProfile(user, stats, reviews) {
                     <div class="profile-stat-label">Активных заявок</div>
                 </div>
                 <div class="profile-stat-card">
-                    <div class="profile-stat-number" style="color: #3b82f6;">${stats?.total_orders || 0}</div>
+                    <div class="profile-stat-number" style="color: #2BE47E;">${stats?.total_orders || 0}</div>
                     <div class="profile-stat-label">Всего заявок</div>
                 </div>
                 <div class="profile-stat-card">
-                    <div class="profile-stat-number" style="color: #8b5cf6;">
+                    <div class="profile-stat-number" style="color: #2BE47E;">
                         ${stats?.success_rate ? stats.success_rate.toFixed(0) + '%' : '0%'}
                     </div>
                     <div class="profile-stat-label">Успешность</div>
                 </div>
             </div>` : `
-            <div style="background: linear-gradient(135deg, var(--tg-theme-secondary-bg-color, #f8f9fa) 0%, var(--tg-theme-bg-color, #ffffff) 100%); border-radius: 16px; padding: 24px; margin-bottom: 24px; text-align: center; border: 1px solid var(--tg-theme-section-separator-color, #e1e8ed);">
+            <div style="background: rgba(18, 18, 18, 0.9); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 6px; padding: 24px; margin-bottom: 24px; text-align: center; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);">
                 <div style="font-size: 32px; margin-bottom: 12px;">🚀</div>
-                <div style="font-size: 18px; font-weight: 600; margin-bottom: 8px; color: var(--tg-theme-text-color, #000000);">
+                <div style="font-size: 18px; font-weight: 600; margin-bottom: 8px; color: #ffffff;">
                     Добро пожаловать на биржу!
                 </div>
-                <div style="font-size: 14px; color: var(--tg-theme-hint-color, #708499); line-height: 1.4;">
+                <div style="font-size: 14px; color: rgba(255, 255, 255, 0.7); line-height: 1.4;">
                     Пока у вас нет заявок и сделок.<br/>
                     Создайте первую заявку и начните торговать!
                 </div>
                 <div style="margin-top: 16px;">
-                    <button onclick="showView('orders')" style="background: var(--tg-theme-button-color, #2481cc); color: var(--tg-theme-button-text-color, #ffffff); border: none; border-radius: 8px; padding: 10px 20px; font-size: 14px; cursor: pointer;">
+                    <button onclick="goToOrders()" class="btn btn-primary">
                         📋 Перейти к заявкам
                     </button>
                 </div>
             </div>
             `}
             
-            <!-- Объем торгов -->
-            ${stats?.total_trade_volume > 0 ? `
-            <div style="background: var(--tg-theme-secondary-bg-color, #f8f9fa); border-radius: 12px; padding: 16px; margin-bottom: 24px; text-align: center;">
-                <div style="font-size: 14px; color: var(--tg-theme-hint-color, #708499); margin-bottom: 4px;">
-                    Общий объем торгов
-                </div>
-                <div style="font-size: 24px; font-weight: 700; color: #22c55e;">
-                    $${stats.total_trade_volume.toLocaleString('ru')}
-                </div>
-            </div>` : ''}
+
     `;
     
     // Отзывы
@@ -1029,6 +1118,15 @@ function displayMyProfile(user, stats, reviews) {
                     ${review.comment ? `
                     <div class="profile-review-comment">
                         ${review.comment}
+                    </div>
+                    ` : ''}
+                    ${!review.is_anonymous && review.from_user_name ? `
+                    <div class="profile-review-author" style="font-size: 11px; color: var(--tg-theme-hint-color, #708499); margin-top: 6px;">
+                        От: ${review.from_user_username ? '@' + review.from_user_username : review.from_user_name}
+                    </div>
+                    ` : review.is_anonymous ? `
+                    <div class="profile-review-author" style="font-size: 11px; color: var(--tg-theme-hint-color, #708499); margin-top: 6px;">
+                        Анонимный отзыв
                     </div>
                     ` : ''}
                 </div>
@@ -1265,6 +1363,17 @@ document.addEventListener('DOMContentLoaded', () => {
     initNavigation();
     initModal();
     initReviewModal();
+    
+    // Обрабатываем хэш URL после полной инициализации
+    setTimeout(() => {
+        handleHashNavigation();
+    }, 1000); // Даем больше времени для полной загрузки
+    
+    // Обрабатываем изменение хэша в реальном времени
+    window.addEventListener('hashchange', () => {
+        console.log('[DEBUG] Изменение хэша обнаружено');
+        handleHashNavigation();
+    });
 });
 
 // Инициализация модального окна для отзывов
@@ -1451,7 +1560,7 @@ function displayUserProfileModal(profileData, reviews) {
         <div class="text-center" style="margin-bottom: 20px;">
             <div style="font-size: 18px; font-weight: 600; margin-bottom: 8px; color: var(--tg-theme-text-color, #000000);">
                 ${user.username ? 
-                    `<a href="https://t.me/${user.username}" target="_blank" style="color: var(--tg-theme-link-color, #2481cc); text-decoration: none;">
+                    `<a href="https://t.me/${user.username}" target="_blank" style="color: var(--tg-theme-link-color, #2BE47E); text-decoration: none;">
                         ${userDisplayName}
                     </a>` : 
                     userDisplayName
@@ -1500,6 +1609,15 @@ function displayUserProfileModal(profileData, reviews) {
                     ${review.comment ? `
                     <div class="profile-review-comment">
                         ${review.comment}
+                    </div>
+                    ` : ''}
+                    ${!review.is_anonymous && review.from_user_name ? `
+                    <div class="profile-review-author" style="font-size: 11px; color: var(--tg-theme-hint-color, #708499); margin-top: 6px;">
+                        От: ${review.from_user_username ? '@' + review.from_user_username : review.from_user_name}
+                    </div>
+                    ` : review.is_anonymous ? `
+                    <div class="profile-review-author" style="font-size: 11px; color: var(--tg-theme-hint-color, #708499); margin-top: 6px;">
+                        Анонимный отзыв
                     </div>
                     ` : ''}
                 </div>
@@ -1613,20 +1731,19 @@ function displayOrderDetails(order) {
     `;
 }
 
-// Отправка отклика
+// Отправка отклика (обновлено для новой логики)
 async function submitResponse() {
     const modal = document.getElementById('respondModal');
     const orderId = parseInt(modal.dataset.orderId);
     const message = document.getElementById('respondMessage').value.trim();
-    const autoAccept = document.getElementById('respondAutoAccept').checked;
     
     if (!currentUser) {
-        showError('Требуется авторизация');
+        showAlert('❌ Требуется авторизация');
         return;
     }
     
     if (!orderId || orderId === 0) {
-        showError('Неверный ID заявки');
+        showAlert('❌ Неверный ID заявки');
         return;
     }
     
@@ -1637,44 +1754,40 @@ async function submitResponse() {
     submitBtn.textContent = 'Отправка...';
     
     try {
-        console.log('[DEBUG] Отправка отклика на заявку:', { orderId, message, autoAccept });
+        console.log('[DEBUG] Создание отклика на заявку:', { orderId, message });
         
-        // Создаем сделку на основе заявки
-        const dealData = {
+        // Создаем отклик через новый API
+        const result = await apiRequest('/api/v1/responses', 'POST', {
             order_id: orderId,
-            message: message,
-            auto_accept: autoAccept
-        };
-        
-        const response = await fetch('/api/v1/deals', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Telegram-User-ID': currentUser.id.toString()
-            },
-            body: JSON.stringify(dealData)
+            message: message
         });
         
-        const result = await response.json();
-        
-        if (response.ok && result.success) {
-            console.log('[INFO] Сделка создана:', result.deal);
-            showSuccess(`✅ Отклик отправлен! Сделка #${result.deal.id} создана`);
+        if (result.success) {
+            console.log('[INFO] Отклик создан:', result.response);
+            
+            if (tg) {
+                tg.showPopup({
+                    message: 'Отклик отправлен!\n\nВы откликнулись на заявку. Автор заявки рассмотрит ваш отклик и примет решение.'
+                });
+            } else {
+                showAlert('✅ Отклик успешно отправлен! Автор заявки рассмотрит ваш отклик.');
+            }
+            
             closeRespondModal();
             
-            // Обновляем список заявок и сделок
+            // Переходим на страницу "Мои отклики"
+            goToMyResponses();
+            
+            // Обновляем список заявок
             loadOrders();
-            if (document.querySelector('.nav-item[onclick*="deals"]').classList.contains('active')) {
-                loadDeals();
-            }
+            
         } else {
-            console.warn('[WARN] Ошибка создания сделки:', result.error);
-            showError(result.error || 'Не удалось создать сделку');
+            showAlert('❌ ' + (result.message || 'Не удалось создать отклик'));
         }
         
     } catch (error) {
-        console.error('[ERROR] Ошибка отправки отклика:', error);
-        showError('Ошибка сети при отправке отклика');
+        console.error('[ERROR] Ошибка создания отклика:', error);
+        showAlert('❌ Ошибка сети при отправке отклика');
     } finally {
         // Восстанавливаем кнопку
         submitBtn.disabled = false;
@@ -1726,12 +1839,7 @@ function createRespondModal() {
                                   placeholder="Например: Готов к сделке, жду контакта"></textarea>
                     </div>
                     
-                    <div class="form-group">
-                        <label style="display: flex; align-items: center; font-size: 14px; cursor: pointer;">
-                            <input type="checkbox" id="respondAutoAccept" checked style="margin-right: 8px;">
-                            Автоматически принять условия
-                        </label>
-                    </div>
+                    <!-- Автоматическое принятие отключено в новой логике откликов -->
                     
                     <div class="modal-footer">
                         <button type="button" onclick="closeRespondModal()" class="btn btn-secondary">
@@ -1757,12 +1865,25 @@ function closeProfileModal() {
 }
 
 function closeRespondModal() {
-    const modal = document.getElementById('respondModal');
-    if (modal) {
-        modal.classList.remove('show');
-        // Очищаем форму
-        document.getElementById('respondMessage').value = '';
-        document.getElementById('respondAutoAccept').checked = true;
+    console.log('[DEBUG] Закрываем модальное окно отклика');
+    try {
+        const modal = document.getElementById('respondModal');
+        if (modal) {
+            modal.classList.remove('show');
+            
+            // Безопасно очищаем форму
+            const messageField = document.getElementById('respondMessage');
+            if (messageField && messageField.value !== undefined) {
+                messageField.value = '';
+                console.log('[DEBUG] Очистили поле сообщения');
+            }
+            
+            console.log('[DEBUG] Модальное окно закрыто успешно');
+        } else {
+            console.log('[DEBUG] Модальное окно не найдено');
+        }
+    } catch (error) {
+        console.error('[ERROR] Ошибка при закрытии модального окна:', error);
     }
 }
 
@@ -1920,13 +2041,14 @@ function displayOrderResponses(orderId, responses) {
 
 // Переход к активным сделкам по заявке
 async function viewActiveDeals(orderId) {
-    // Переключаемся на вкладку сделок
-    const dealsTab = document.querySelector('[data-view="deals"]');
-    if (dealsTab) {
-        dealsTab.click();
+    // Переключаемся на вкладку откликов
+    const responsesTab = document.querySelector('[data-view="responses"]');
+    if (responsesTab) {
+        responsesTab.click();
         
-        // Ждем загрузки и подсвечиваем связанные сделки
+        // Переключаемся на вкладку активных сделок
         setTimeout(() => {
+            switchResponseTab('active-deals');
             highlightDealsByOrder(orderId);
         }, 500);
     }
@@ -2098,11 +2220,1017 @@ function showInfo(message) {
                     border-radius: 12px; padding: 20px; z-index: 10000; min-width: 280px; text-align: center;">
             <div style="font-size: 32px; margin-bottom: 12px;">ℹ️</div>
             <div style="font-size: 14px; margin-bottom: 16px;">${message}</div>
-            <button onclick="this.parentElement.remove()" style="background: var(--tg-theme-button-color, #2481cc); color: var(--tg-theme-button-text-color, #ffffff); border: none; border-radius: 6px; padding: 8px 16px; cursor: pointer;">
+            <button onclick="this.parentElement.remove()" style="background: var(--tg-theme-button-color, #2BE47E); color: black; border: none; border-radius: 6px; padding: 8px 16px; cursor: pointer; font-weight: 700;">
                 Понятно
             </button>
         </div>
     `;
     
     document.body.insertAdjacentHTML('beforeend', alertHTML);
+}
+
+// =====================================================
+// ФУНКЦИИ ДЛЯ РАБОТЫ С ОТКЛИКАМИ
+// =====================================================
+
+// Основная функция загрузки раздела откликов
+async function loadResponses() {
+    console.log('[DEBUG] Загрузка раздела откликов');
+    
+    // По умолчанию загружаем мои отклики
+    await loadMyResponses();
+}
+
+// Инициализация табов откликов
+function initResponseTabs() {
+    console.log('[DEBUG] Инициализация табов откликов');
+    
+    const tabs = document.querySelectorAll('.response-tab');
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            const tabName = tab.dataset.tab;
+            switchResponseTab(tabName);
+        });
+    });
+}
+
+// Переключение между табами откликов
+async function switchResponseTab(tabName) {
+    console.log('[DEBUG] Переключение на таб:', tabName);
+    
+    // Обновляем активные табы
+    const tabs = document.querySelectorAll('.response-tab');
+    const contents = document.querySelectorAll('.response-tab-content');
+    
+    tabs.forEach(tab => {
+        if (tab.dataset.tab === tabName) {
+            tab.classList.add('active');
+        } else {
+            tab.classList.remove('active');
+        }
+    });
+    
+    contents.forEach(content => {
+        if (content.id === tabName + '-content') {
+            content.classList.add('active');
+        } else {
+            content.classList.remove('active');
+        }
+    });
+    
+    // Загружаем данные для активного таба
+    switch(tabName) {
+        case 'my-responses':
+            await loadMyResponses();
+            break;
+        case 'responses-to-my':
+            await loadResponsesToMyOrders();
+            break;
+        case 'active-deals':
+            await loadActiveDeals();
+            break;
+    }
+}
+
+// Загрузка моих откликов
+async function loadMyResponses() {
+    console.log('[DEBUG] Загрузка моих откликов');
+    
+    const container = document.getElementById('myResponsesList');
+    container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+    
+    try {
+        // Загружаем отклики и сделки параллельно
+        const [responsesResult, dealsResult] = await Promise.all([
+            apiRequest('/api/v1/responses/my', 'GET'),
+            apiRequest('/api/v1/deals', 'GET')
+        ]);
+        
+        if (responsesResult.success) {
+            const responses = responsesResult.responses || [];
+            const deals = dealsResult.success ? dealsResult.deals || [] : [];
+            
+            // Дополняем отклики информацией о статусе сделки
+            const responsesWithDeals = responses.map(response => {
+                if (response.status === 'accepted') {
+                    // Ищем сделку для этого принятого отклика
+                    const deal = deals.find(d => d.response_id === response.id);
+                    if (deal) {
+                        response.deal_status = deal.status;
+                        response.deal_id = deal.id;
+                    }
+                }
+                return response;
+            });
+            
+            displayMyResponses(responsesWithDeals);
+        } else {
+            container.innerHTML = `<div class="error-message">❌ ${responsesResult.message}</div>`;
+        }
+    } catch (error) {
+        console.error('[ERROR] Ошибка загрузки моих откликов:', error);
+        container.innerHTML = '<div class="error-message">❌ Ошибка загрузки откликов</div>';
+    }
+}
+
+// Загрузка откликов на мои заявки
+async function loadResponsesToMyOrders() {
+    console.log('[DEBUG] Загрузка откликов на мои заявки');
+    
+    const container = document.getElementById('responsesToMyList');
+    container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+    
+    try {
+        // Загружаем отклики, заявки и сделки параллельно для фильтрации
+        const [responsesResult, ordersResult, dealsResult] = await Promise.all([
+            apiRequest('/api/v1/responses/to-my', 'GET'),
+            apiRequest('/api/v1/orders/my', 'GET'),
+            apiRequest('/api/v1/deals', 'GET')
+        ]);
+        
+        if (responsesResult.success) {
+            const responses = responsesResult.responses || [];
+            const orders = ordersResult.success ? ordersResult.orders || [] : [];
+            const deals = dealsResult.success ? dealsResult.deals || [] : [];
+            
+            console.log('[DEBUG] Загружено откликов:', responses.length, 'заявок:', orders.length, 'сделок:', deals.length);
+            
+            // Фильтруем отклики - убираем те, что относятся к завершенным/удаленным заявкам
+            const activeResponses = responses.filter(response => {
+                // Ищем заявку для этого отклика
+                const order = orders.find(o => o.id === response.order_id);
+                
+                if (!order) {
+                    // Заявка удалена - убираем отклик
+                    console.log('[DEBUG] Убираем отклик к удаленной заявке:', response.order_id);
+                    return false;
+                }
+                
+                // Если заявка в сделке, проверяем статус сделки
+                if (order.status === 'in_deal') {
+                    const deal = deals.find(d => d.order_id === order.id);
+                    if (deal && deal.status === 'completed') {
+                        // Сделка завершена - убираем отклик
+                        console.log('[DEBUG] Убираем отклик к завершенной сделке:', order.id, deal.id);
+                        return false;
+                    }
+                }
+                
+                return true; // Оставляем отклик
+            });
+            
+            console.log('[DEBUG] Отфильтровано откликов:', activeResponses.length, 'из', responses.length);
+            displayResponsesToMyOrders(activeResponses);
+        } else {
+            container.innerHTML = `<div class="error-message">❌ ${responsesResult.message}</div>`;
+        }
+    } catch (error) {
+        console.error('[ERROR] Ошибка загрузки откликов на заявки:', error);
+        container.innerHTML = '<div class="error-message">❌ Ошибка загрузки откликов</div>';
+    }
+}
+
+// Загрузка активных сделок
+async function loadActiveDeals() {
+    console.log('[DEBUG] Загрузка активных сделок');
+    
+    const container = document.getElementById('activeDealsList');
+    container.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+    
+    try {
+        const result = await apiRequest('/api/v1/deals', 'GET');
+        
+        if (result.success) {
+            displayActiveDeals(result.deals || []);
+        } else {
+            container.innerHTML = `<div class="error-message">❌ ${result.message}</div>`;
+        }
+    } catch (error) {
+        console.error('[ERROR] Ошибка загрузки активных сделок:', error);
+        container.innerHTML = '<div class="error-message">❌ Ошибка загрузки сделок</div>';
+    }
+}
+
+// Отображение моих откликов
+function displayMyResponses(responses) {
+    console.log('[DEBUG] Отображение моих откликов:', responses.length);
+    
+    const container = document.getElementById('myResponsesList');
+    
+    if (!responses || responses.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">📤</div>
+                <h3>Пока нет откликов</h3>
+                <p>Перейдите в раздел "Рынок" и откликнитесь на интересную заявку</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // Группируем отклики по статусу
+    const waiting = responses.filter(r => r.status === 'waiting');
+    const accepted = responses.filter(r => r.status === 'accepted');
+    const rejected = responses.filter(r => r.status === 'rejected');
+    
+    let html = '';
+    
+    if (waiting.length > 0) {
+        html += `<div class="response-group">
+            <h3 class="group-title">🟡 Ожидают рассмотрения (${waiting.length})</h3>
+            ${waiting.map(response => createMyResponseCard(response)).join('')}
+        </div>`;
+    }
+    
+    if (accepted.length > 0) {
+        html += `<div class="response-group">
+            <h3 class="group-title">🟢 Приняты (${accepted.length})</h3>
+            ${accepted.map(response => createMyResponseCard(response)).join('')}
+        </div>`;
+    }
+    
+    if (rejected.length > 0) {
+        html += `<div class="response-group">
+            <h3 class="group-title">🔴 Отклонены (${rejected.length})</h3>
+            ${rejected.map(response => createMyResponseCard(response)).join('')}
+        </div>`;
+    }
+    
+    container.innerHTML = html;
+}
+
+// Отображение откликов на мои заявки
+function displayResponsesToMyOrders(responses) {
+    console.log('[DEBUG] Отображение откликов на мои заявки:', responses.length);
+    
+    const container = document.getElementById('responsesToMyList');
+    
+    if (!responses || responses.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">📥</div>
+                <h3>Пока нет откликов</h3>
+                <p>Создайте заявку и ждите откликов от других пользователей</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // Группируем отклики по заявкам
+    const responsesByOrder = {};
+    responses.forEach(response => {
+        if (!responsesByOrder[response.order_id]) {
+            responsesByOrder[response.order_id] = [];
+        }
+        responsesByOrder[response.order_id].push(response);
+    });
+    
+    // Сортируем группы заявок: сначала те, что имеют waiting отклики
+    const sortedOrderGroups = Object.entries(responsesByOrder).sort(([, responsesA], [, responsesB]) => {
+        const hasWaitingA = responsesA.some(r => r.status === 'waiting') ? 1 : 0;
+        const hasWaitingB = responsesB.some(r => r.status === 'waiting') ? 1 : 0;
+        return hasWaitingB - hasWaitingA; // Заявки с waiting откликами наверх
+    });
+    
+    let html = '';
+    sortedOrderGroups.forEach(([orderId, orderResponses]) => {
+        const waitingResponses = orderResponses.filter(r => r.status === 'waiting');
+        
+        // Сортируем отклики внутри заявки: waiting → accepted → rejected
+        const sortedResponses = orderResponses.sort((a, b) => {
+            const statusOrder = { waiting: 0, accepted: 1, rejected: 2 };
+            return statusOrder[a.status] - statusOrder[b.status];
+        });
+        
+        // Берём первый отклик для получения информации о заявке
+        const firstResponse = sortedResponses[0];
+        const orderTypeText = firstResponse.order_type === 'buy' ? '🟢 Покупка' : '🔴 Продажа';
+        const totalAmount = firstResponse.total_amount || (firstResponse.amount * firstResponse.price);
+        
+        html += `<div class="order-responses-group">
+            <div class="order-info">
+                <h4>📋 Заявка #${orderId} - ${orderTypeText}</h4>
+                ${firstResponse.cryptocurrency ? `
+                    <div style="font-size: 12px; color: var(--tg-theme-hint-color, #708499); margin-top: 4px;">
+                        💰 ${firstResponse.amount || '?'} ${firstResponse.cryptocurrency || '?'} за ${firstResponse.price || '?'} ${firstResponse.fiat_currency || '?'} = ${totalAmount.toLocaleString('ru')} ${firstResponse.fiat_currency || '?'}
+                    </div>
+                ` : ''}
+                <span class="response-count">${waitingResponses.length} новых откликов</span>
+            </div>
+            ${sortedResponses.map(response => createOrderResponseCard(response)).join('')}
+        </div>`;
+    });
+    
+    container.innerHTML = html;
+}
+
+// Создание карточки моего отклика
+function createMyResponseCard(response) {
+    const statusConfig = {
+        waiting: { icon: '🟡', text: 'Ожидает', color: '#f59e0b' },
+        accepted: { icon: '🟢', text: 'Принят', color: '#22c55e' },
+        rejected: { icon: '🔴', text: 'Отклонен', color: '#ef4444' }
+    };
+    
+    const status = statusConfig[response.status] || statusConfig.waiting;
+    const createdDate = new Date(response.created_at).toLocaleString('ru-RU');
+    
+    return `
+        <div class="response-card my-response">
+            <div class="response-header">
+                <div class="response-status" style="color: ${status.color}">
+                    ${status.icon} ${status.text}
+                </div>
+                <div class="response-date">${createdDate}</div>
+            </div>
+            
+            <div class="response-order-info">
+                <h4 class="order-title">📋 Заявка #${response.order_id} - ${response.order_type === 'buy' ? '🟢 Покупка' : '🔴 Продажа'}</h4>
+                <div style="font-size: 13px; color: var(--tg-theme-hint-color, #708499); margin-top: 4px;">
+                    👤 Автор: ${response.author_username ? 
+                        `<span onclick="openTelegramProfile('${response.author_username}')" style="color: var(--tg-theme-link-color, #2BE47E); cursor: pointer; text-decoration: underline; font-weight: 500;">@${response.author_username}</span>` :
+                        `<span style="color: var(--tg-theme-text-color, #000); font-weight: 500;">${response.author_name || 'Неизвестен'}</span>`
+                    }
+                </div>
+                ${response.cryptocurrency ? `
+                    <div style="font-size: 12px; color: var(--tg-theme-hint-color, #708499); margin-top: 6px;">
+                        💰 ${response.amount || '?'} ${response.cryptocurrency || '?'} за ${response.price || '?'} ${response.fiat_currency || '?'} = ${(response.total_amount || (response.amount * response.price)).toLocaleString('ru')} ${response.fiat_currency || '?'}
+                    </div>
+                ` : ''}
+            </div>
+            
+            <div class="response-message">
+                <strong>💬 Ваше сообщение:</strong>
+                <p>${response.message || 'Без сообщения'}</p>
+            </div>
+            
+            ${response.status === 'accepted' ? `
+                <div class="response-actions">
+                    ${response.deal_status === 'completed' ? `
+                        <button disabled class="btn btn-secondary" style="background: #6b7280; cursor: not-allowed;">
+                            ✅ Сделка завершена
+                        </button>
+                    ` : `
+                        <button onclick="goToDeal(${response.id})" class="btn btn-primary">
+                            🤝 Перейти к сделке
+                        </button>
+                    `}
+                </div>
+            ` : ''}
+        </div>
+    `;
+}
+
+// Создание карточки отклика на мою заявку
+function createOrderResponseCard(response) {
+    const statusConfig = {
+        waiting: { icon: '🟡', text: 'Ожидает', color: '#f59e0b' },
+        accepted: { icon: '🟢', text: 'Принят', color: '#22c55e' },
+        rejected: { icon: '🔴', text: 'Отклонен', color: '#ef4444' }
+    };
+    
+    const status = statusConfig[response.status] || statusConfig.waiting;
+    const createdDate = new Date(response.created_at).toLocaleString('ru-RU');
+    
+    return `
+        <div class="response-card order-response">
+            <div class="response-header">
+                <div class="response-user">👤 ${response.username ? 
+                    `<span onclick="openTelegramProfile('${response.username}')" style="color: var(--tg-theme-link-color, #2BE47E); cursor: pointer; text-decoration: underline; font-weight: 500;">@${response.username}</span>` :
+                    `<span style="color: var(--tg-theme-text-color, #000); font-weight: 500;">${response.user_name || `Пользователь #${response.user_id}`}</span>`
+                }</div>
+                <div class="response-status" style="color: ${status.color}">
+                    ${status.icon} ${status.text}
+                </div>
+            </div>
+            
+            <div class="response-date">${createdDate}</div>
+            
+            <div style="font-size: 12px; color: var(--tg-theme-hint-color, #708499); margin: 8px 0;">
+                📋 ${response.order_type === 'buy' ? '🟢 Покупка' : '🔴 Продажа'} ${response.cryptocurrency || '?'} - ${response.amount || '?'} ${response.cryptocurrency || '?'} за ${response.price || '?'} ${response.fiat_currency || '?'} = ${(response.total_amount || (response.amount * response.price)).toLocaleString('ru')} ${response.fiat_currency || '?'}
+            </div>
+            
+            <div class="response-message">
+                <strong>💬 Сообщение:</strong>
+                <p>${response.message || 'Без сообщения'}</p>
+            </div>
+            
+            ${response.status === 'waiting' ? `
+                <div class="response-actions">
+                    <button onclick="acceptResponse(${response.id})" class="btn btn-success">
+                        ✅ Принять
+                    </button>
+                    <button onclick="rejectResponse(${response.id})" class="btn btn-danger">
+                        ❌ Отклонить
+                    </button>
+                </div>
+            ` : ''}
+        </div>
+    `;
+}
+
+// Принятие отклика
+async function acceptResponse(responseId) {
+    console.log('[DEBUG] Принятие отклика:', responseId);
+    
+    try {
+        const result = await apiRequest(`/api/v1/responses/${responseId}/accept`, 'POST');
+        
+        if (result.success) {
+            showAlert('✅ Отклик принят! Создана сделка.');
+            
+            // Переходим на страницу сделок
+            goToDeals();
+            
+            // Перезагружаем отклики на мои заявки
+            await loadResponsesToMyOrders();
+            // Также загружаем активные сделки
+            await loadActiveDeals();
+        } else {
+            showAlert('❌ ' + (result.message || 'Ошибка при принятии отклика'));
+        }
+    } catch (error) {
+        console.error('[ERROR] Ошибка принятия отклика:', error);
+        showAlert('❌ Ошибка при принятии отклика');
+    }
+}
+
+// Отклонение отклика
+async function rejectResponse(responseId) {
+    console.log('[DEBUG] Отклонение отклика:', responseId);
+    
+    try {
+        const result = await apiRequest(`/api/v1/responses/${responseId}/reject`, 'POST');
+        
+        if (result.success) {
+            showAlert('❌ Отклик отклонен');
+            // Перезагружаем отклики на мои заявки
+            await loadResponsesToMyOrders();
+        } else {
+            showAlert('❌ ' + (result.message || 'Ошибка при отклонении отклика'));
+        }
+    } catch (error) {
+        console.error('[ERROR] Ошибка отклонения отклика:', error);
+        showAlert('❌ Ошибка при отклонении отклика');
+    }
+}
+
+// Переход к сделке
+async function goToDeal(responseId) {
+    console.log('[DEBUG] Переход к сделке по отклику:', responseId);
+    
+    // Переключаемся на таб активных сделок
+    switchResponseTab('active-deals');
+}
+
+// Переход к заявкам (рынок)
+function goToOrders() {
+    console.log('[DEBUG] Переход к заявкам (рынок)');
+    
+    // Находим и кликаем на кнопку "Рынок"
+    const ordersTab = document.querySelector('[data-view="orders"]');
+    if (ordersTab) {
+        ordersTab.click();
+        console.log('[DEBUG] Переход к рынку выполнен');
+    } else {
+        console.error('[ERROR] Кнопка рынка не найдена');
+        showAlert('❌ Ошибка перехода к заявкам');
+    }
+}
+
+// Переход к моим откликам
+function goToMyResponses() {
+    console.log('[DEBUG] Переход к моим откликам');
+    
+    // Находим и кликаем на кнопку "Отклики"
+    const responsesTab = document.querySelector('[data-view="responses"]');
+    if (responsesTab) {
+        responsesTab.click();
+        
+        // Небольшая задержка, чтобы раздел успел загрузиться
+        setTimeout(() => {
+            // Используем существующую функцию переключения табов
+            switchResponseTab('my-responses');
+            console.log('[DEBUG] Переход к моим откликам выполнен');
+        }, 100);
+        
+    } else {
+        console.error('[ERROR] Кнопка откликов не найдена');
+        showAlert('❌ Ошибка перехода к откликам');
+    }
+}
+
+// Переход к сделкам
+function goToDeals() {
+    console.log('[DEBUG] Переход к сделкам');
+    
+    // Находим и кликаем на кнопку "Отклики"
+    const responsesTab = document.querySelector('[data-view="responses"]');
+    if (responsesTab) {
+        responsesTab.click();
+        
+        // Небольшая задержка, чтобы раздел успел загрузиться
+        setTimeout(() => {
+            // Переключаемся на таб "Сделки"
+            switchResponseTab('active-deals');
+            console.log('[DEBUG] Переход к сделкам выполнен');
+        }, 100);
+        
+    } else {
+        console.error('[ERROR] Кнопка откликов не найдена');
+        showAlert('❌ Ошибка перехода к сделкам');
+    }
+}
+
+// Отображение активных сделок
+function displayActiveDeals(deals) {
+    console.log('[DEBUG] Отображение активных сделок:', deals.length, deals);
+    
+    const container = document.getElementById('activeDealsList');
+    
+    if (!deals || deals.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">⏰</div>
+                <div class="empty-title">Активных сделок пока нет</div>
+                <div class="empty-subtitle">Когда вы примете отклик или ваш отклик будет принят,<br>здесь появятся активные сделки</div>
+            </div>
+        `;
+        return;
+    }
+    
+    // Отображаем реальные сделки
+    const dealsHTML = deals.map(deal => createDealCard(deal)).join('');
+    container.innerHTML = dealsHTML;
+}
+
+// Создание карточки активной сделки
+function createDealCard(deal) {
+    console.log('[DEBUG] Создание карточки сделки:', deal);
+    
+    // Определяем роль пользователя в сделке
+    const isAuthor = currentInternalUserId === deal.author_id;
+    
+    // Получаем данные автора и контрагента
+    const authorName = deal.author_name || `Пользователь ${deal.author_id}`;
+    const authorUsername = deal.author_username ? `@${deal.author_username}` : '';
+    const counterpartyName = deal.counterparty_name || `Пользователь ${deal.counterparty_id}`;
+    const counterpartyUsername = deal.counterparty_username ? `@${deal.counterparty_username}` : '';
+    
+    // Определяем контрагента для текущего пользователя
+    const counterpartyDisplayName = isAuthor ? counterpartyName : authorName;
+    const counterpartyDisplayUsername = isAuthor ? counterpartyUsername : authorUsername;
+    const counterpartyTelegramUsername = isAuthor ? deal.counterparty_username : deal.author_username;
+    const counterpartyUserId = isAuthor ? deal.counterparty_id : deal.author_id;
+    
+    console.log('[DEBUG] Telegram usernames:', {
+        authorUsername: deal.author_username,
+        counterpartyUsername: deal.counterparty_username,
+        counterpartyTelegramUsername: counterpartyTelegramUsername,
+        isAuthor: isAuthor
+    });
+    
+    // Статус сделки
+    const statusConfig = {
+        in_progress: { icon: '⏳', text: 'В процессе', color: '#f59e0b' },
+        waiting_payment: { icon: '💰', text: 'Ожидание оплаты', color: '#2BE47E' },
+        completed: { icon: '✅', text: 'Завершена', color: '#22c55e' },
+        cancelled: { icon: '❌', text: 'Отменена', color: '#ef4444' },
+        expired: { icon: '⏰', text: 'Истекла', color: '#6b7280' }
+    };
+    
+    const status = statusConfig[deal.status] || statusConfig.in_progress;
+    
+    // Убираем таймер - больше не используем
+    
+    // Подтверждения участников
+    const authorConfirmed = deal.author_confirmed || false;
+    const counterConfirmed = deal.counter_confirmed || false;
+    const myConfirmed = isAuthor ? authorConfirmed : counterConfirmed;
+    const partnerConfirmed = isAuthor ? counterConfirmed : authorConfirmed;
+    
+    return `
+        <div class="order-card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <span style="font-weight: 600; color: ${deal.order_type === 'buy' ? '#22c55e' : '#ef4444'};">
+                    ${deal.order_type === 'buy' ? '🟢 Покупка' : '🔴 Продажа'}
+                </span>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="color: ${status.color}; font-weight: 500; font-size: 14px;">
+                        ${status.icon} ${status.text}
+                    </span>
+                </div>
+            </div>
+            
+            <div style="margin-bottom: 12px;">
+                <strong style="font-size: 18px; color: var(--tg-theme-text-color, #000);">${deal.amount || '?'} ${deal.cryptocurrency || '?'}</strong> 
+                <span style="color: var(--tg-theme-hint-color, #708499);">за</span>
+                <strong style="font-size: 16px; color: var(--tg-theme-text-color, #000);">${deal.price || '?'} ${deal.fiat_currency || '?'}</strong>
+            </div>
+            
+            <div style="background: var(--tg-theme-secondary-bg-color, #f1f5f9); padding: 12px; border-radius: 6px; margin-bottom: 12px; font-size: 13px;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <div>
+                        <div style="color: var(--tg-theme-hint-color, #708499); margin-bottom: 4px;">📝 Автор:</div>
+                        <div style="font-weight: 500; color: var(--tg-theme-text-color, #000);">${authorName}</div>
+                        <div style="color: var(--tg-theme-link-color, #2BE47E); font-size: 12px;">${authorUsername}</div>
+                    </div>
+                    <div>
+                        <div style="color: var(--tg-theme-hint-color, #708499); margin-bottom: 4px;">🤝 Откликнулся:</div>
+                        <div style="font-weight: 500; color: var(--tg-theme-text-color, #000);">${counterpartyName}</div>
+                        <div style="color: var(--tg-theme-link-color, #2BE47E); font-size: 12px;">${counterpartyUsername}</div>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--tg-theme-section-separator-color, #e2e8f0);">
+                    <div style="color: var(--tg-theme-hint-color, #708499); margin-bottom: 4px;">💳 Способ оплаты:</div>
+                    <div style="font-weight: 500; color: var(--tg-theme-text-color, #000);">${(deal.payment_methods || []).join(', ') || 'Не указано'}</div>
+                </div>
+                
+                <div style="margin-top: 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 12px;">
+                    <div>
+                        <span style="color: var(--tg-theme-hint-color, #708499);">💰 Курс:</span>
+                        <span style="font-weight: 500; color: var(--tg-theme-text-color, #000);">${deal.price} ${deal.fiat_currency}</span>
+                    </div>
+                    <div>
+                        <span style="color: var(--tg-theme-hint-color, #708499);">💵 Сумма:</span>
+                        <span style="font-weight: 500; color: var(--tg-theme-text-color, #000);">${deal.total_amount || (deal.amount * deal.price).toFixed(2)} ${deal.fiat_currency}</span>
+                    </div>
+                </div>
+            </div>
+            
+
+            
+            <div style="background: var(--tg-theme-secondary-bg-color, #f8fafc); border-radius: 6px; padding: 8px; margin-bottom: 12px;">
+                <div style="font-size: 12px; color: var(--tg-theme-hint-color, #708499); margin-bottom: 6px;">Подтверждения:</div>
+                <div style="display: flex; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <span>${myConfirmed ? '✅' : '⏳'}</span>
+                        <span style="font-size: 12px; color: var(--tg-theme-text-color, #000);">Вы</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <span>${partnerConfirmed ? '✅' : '⏳'}</span>
+                        <span style="font-size: 12px; color: var(--tg-theme-text-color, #000);">Контрагент</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="display: flex; gap: 8px;">
+                ${counterpartyTelegramUsername ? `
+                    <button onclick="contactCounterparty('${counterpartyTelegramUsername}')" style="background: var(--tg-theme-button-color, #2BE47E); color: black; border: none; padding: 8px 12px; border-radius: 4px; font-size: 12px; flex: 1; font-weight: 700;">
+                        💬 Написать
+                    </button>
+                ` : ''}
+                
+                ${deal.status === 'completed' ? `
+                    <button onclick="openReviewModal(${deal.id}, ${counterpartyUserId}, '${counterpartyDisplayName}')" style="background: var(--tg-theme-button-color, #f59e0b); color: var(--tg-theme-button-text-color, white); border: none; padding: 8px 12px; border-radius: 4px; font-size: 12px; flex: 1;">
+                        ⭐ Оставить отзыв
+                    </button>
+                ` : `
+                    <button onclick="confirmPayment(${deal.id}, ${isAuthor})" style="background: ${myConfirmed ? 'var(--tg-theme-hint-color, #6c757d)' : 'var(--tg-theme-button-color, #22c55e)'}; color: var(--tg-theme-button-text-color, white); border: none; padding: 8px 12px; border-radius: 4px; font-size: 12px; flex: 1;" ${myConfirmed ? 'disabled' : ''}>
+                        ${myConfirmed ? '✅ Подтверждено' : '✅ Подтвердить'}
+                    </button>
+                `}
+            </div>
+        </div>
+    `;
+}
+
+// Функция таймера удалена - больше не используем таймеры в сделках
+
+// Связь с контрагентом в Telegram
+function contactCounterparty(username) {
+    console.log('[DEBUG] Открытие чата с контрагентом:', username);
+    
+    if (username) {
+        const telegramUrl = `https://t.me/${username}`;
+        
+        if (tg && tg.openTelegramLink) {
+            // Используем Telegram WebApp API для открытия ссылки
+            tg.openTelegramLink(telegramUrl);
+        } else {
+            // Резервный вариант - открываем в новом окне
+            window.open(telegramUrl, '_blank');
+        }
+    } else {
+        showAlert('❌ Не удалось найти username контрагента');
+    }
+}
+
+// Открытие Telegram профиля пользователя (для кликабельного username в заявках)
+function openTelegramProfile(username) {
+    console.log('[DEBUG] Открытие Telegram профиля:', username);
+    
+    if (username) {
+        const telegramUrl = `https://t.me/${username}`;
+        
+        if (tg && tg.openTelegramLink) {
+            // Используем Telegram WebApp API для открытия ссылки
+            tg.openTelegramLink(telegramUrl);
+        } else {
+            // Резервный вариант - открываем в новом окне
+            window.open(telegramUrl, '_blank');
+        }
+    } else {
+        showAlert('❌ Не удалось найти username пользователя');
+    }
+}
+
+// Просмотр откликов на заявку
+function viewOrderResponses(orderId) {
+    console.log('[DEBUG] Просмотр откликов на заявку:', orderId);
+    
+    // Переключаемся на раздел откликов и таб "На мои заявки"
+    const responsesTab = document.querySelector('[data-view="responses"]');
+    if (responsesTab) {
+        responsesTab.click(); // Переходим в раздел "Отклики"
+        
+        // Небольшая задержка, чтобы раздел успел загрузиться
+        setTimeout(() => {
+            switchResponseTab('responses-to-my'); // Переключаемся на таб "На мои заявки"
+        }, 100);
+    } else {
+        showAlert('❌ Не удалось перейти к откликам');
+    }
+}
+
+
+
+// Подтверждение платежа/получения в сделке  
+async function confirmPayment(dealId, isAuthor) {
+    console.log('[DEBUG] Подтверждение сделки:', { dealId, isAuthor });
+    
+    if (!currentUser) {
+        showAlert('❌ Требуется авторизация');
+        return;
+    }
+    
+    try {
+        // Подтверждаем через API
+        const result = await apiRequest(`/api/v1/deals/${dealId}/confirm`, 'POST', {
+            is_author: isAuthor
+        });
+        
+        if (result.success) {
+            const message = isAuthor ? 
+                '✅ Вы подтвердили получение средств!' : 
+                '✅ Вы подтвердили отправку средств!';
+            
+            showAlert(message);
+            
+            // Перезагружаем активные сделки
+            await loadActiveDeals();
+            
+            // Проверяем завершена ли сделка
+            if (result.deal_completed) {
+                showAlert('🎉 Сделка успешно завершена!\n\nВы можете оставить отзыв о контрагенте.');
+                
+                // Можно добавить переход к форме отзыва
+                setTimeout(() => {
+                    // switchResponseTab('completed-deals'); // если будет такой таб
+                }, 2000);
+            }
+            
+        } else {
+            showAlert('❌ ' + (result.message || 'Ошибка при подтверждении сделки'));
+        }
+        
+    } catch (error) {
+        console.error('[ERROR] Ошибка подтверждения сделки:', error);
+        showAlert('❌ Ошибка сети при подтверждении сделки');
+    }
+}
+
+// =====================================================
+// ФУНКЦИИ ДЛЯ РАБОТЫ С ОТЗЫВАМИ
+// =====================================================
+
+// Переменная для хранения текущего рейтинга
+let currentReviewRating = 0;
+
+// Открытие модального окна для оставления отзыва
+function openReviewModal(dealId, toUserId, counterpartyName) {
+    console.log('[DEBUG] Открытие модального окна отзыва:', { dealId, toUserId, counterpartyName });
+    
+    // Заполняем скрытые поля
+    document.getElementById('reviewDealId').value = dealId;
+    document.getElementById('reviewToUserId').value = toUserId;
+    document.getElementById('reviewCounterpartyName').textContent = counterpartyName || 'Неизвестный пользователь';
+    
+    // Сбрасываем форму
+    resetReviewForm();
+    
+    // Показываем модальное окно
+    const modal = document.getElementById('reviewModal');
+    modal.classList.add('show');
+    document.body.classList.add('modal-open');
+    
+    // Инициализируем звездный рейтинг
+    initializeStarRating();
+}
+
+// Закрытие модального окна отзыва
+function closeReviewModal() {
+    const modal = document.getElementById('reviewModal');
+    modal.classList.remove('show');
+    document.body.classList.remove('modal-open');
+    
+    // Сбрасываем форму при закрытии
+    resetReviewForm();
+}
+
+// Сброс формы отзыва к исходному состоянию
+function resetReviewForm() {
+    // Очищаем рейтинг
+    currentReviewRating = 0;
+    document.getElementById('reviewRating').value = '';
+    
+    // Сбрасываем звезды
+    const stars = document.querySelectorAll('#starRating .star');
+    stars.forEach(star => {
+        star.classList.remove('active', 'hovered', 'just-selected');
+    });
+    
+    // Сбрасываем текст рейтинга
+    document.getElementById('ratingValue').textContent = 'Выберите оценку от 1 до 5 звезд';
+    
+    // Очищаем комментарий
+    document.getElementById('reviewComment').value = '';
+    
+    // Сбрасываем чекбокс анонимности
+    document.getElementById('reviewAnonymous').checked = false;
+}
+
+// Инициализация звездного рейтинга
+function initializeStarRating() {
+    const stars = document.querySelectorAll('#starRating .star');
+    
+    stars.forEach((star, index) => {
+        const rating = parseInt(star.getAttribute('data-rating'));
+        
+        // Обработчик клика по звезде
+        star.addEventListener('click', function() {
+            selectStarRating(rating);
+        });
+        
+        // Обработчик наведения мыши
+        star.addEventListener('mouseenter', function() {
+            hoverStarRating(rating);
+        });
+    });
+    
+    // Обработчик покидания области звездного рейтинга
+    const starRating = document.getElementById('starRating');
+    starRating.addEventListener('mouseleave', function() {
+        clearHoverStarRating();
+    });
+}
+
+// Выбор рейтинга по звездам
+function selectStarRating(rating) {
+    console.log('[DEBUG] Выбран рейтинг:', rating);
+    
+    currentReviewRating = rating;
+    document.getElementById('reviewRating').value = rating;
+    
+    // Обновляем визуальное отображение звезд
+    updateStarsDisplay(rating, true);
+    
+    // Обновляем текст рейтинга
+    const ratingTexts = {
+        1: '1 звезда - Очень плохо',
+        2: '2 звезды - Плохо', 
+        3: '3 звезды - Нормально',
+        4: '4 звезды - Хорошо',
+        5: '5 звезд - Отлично'
+    };
+    
+    document.getElementById('ratingValue').textContent = ratingTexts[rating];
+    document.getElementById('ratingValue').style.color = rating >= 4 ? '#22c55e' : rating === 3 ? '#f59e0b' : '#ef4444';
+    
+    // Добавляем анимацию к выбранной звезде
+    const selectedStar = document.querySelector(`#starRating .star[data-rating="${rating}"]`);
+    selectedStar.classList.add('just-selected');
+    setTimeout(() => {
+        selectedStar.classList.remove('just-selected');
+    }, 300);
+}
+
+// Отображение hover эффекта для звезд
+function hoverStarRating(rating) {
+    updateStarsDisplay(rating, false, true);
+}
+
+// Очистка hover эффекта
+function clearHoverStarRating() {
+    updateStarsDisplay(currentReviewRating, true);
+}
+
+// Обновление визуального отображения звезд
+function updateStarsDisplay(rating, isSelected = false, isHovered = false) {
+    const stars = document.querySelectorAll('#starRating .star');
+    
+    stars.forEach((star, index) => {
+        const starRating = parseInt(star.getAttribute('data-rating'));
+        
+        // Удаляем все классы
+        star.classList.remove('active', 'hovered');
+        
+        if (starRating <= rating) {
+            if (isSelected) {
+                star.classList.add('active');
+            } else if (isHovered) {
+                star.classList.add('hovered');
+            }
+        }
+    });
+}
+
+// Обработчик отправки формы отзыва
+document.addEventListener('DOMContentLoaded', function() {
+    const reviewForm = document.getElementById('reviewForm');
+    if (reviewForm) {
+        reviewForm.addEventListener('submit', handleReviewSubmit);
+    }
+    
+    // Обработчик закрытия модального окна по клику вне его
+    const reviewModal = document.getElementById('reviewModal');
+    if (reviewModal) {
+        reviewModal.addEventListener('click', function(e) {
+            if (e.target === reviewModal) {
+                closeReviewModal();
+            }
+        });
+    }
+});
+
+// Обработка отправки отзыва
+async function handleReviewSubmit(event) {
+    event.preventDefault();
+    
+    console.log('[DEBUG] Отправка отзыва');
+    
+    if (!currentUser) {
+        showAlert('❌ Требуется авторизация');
+        return;
+    }
+    
+    // Проверяем обязательные поля
+    const dealId = parseInt(document.getElementById('reviewDealId').value);
+    const toUserId = parseInt(document.getElementById('reviewToUserId').value);
+    const rating = currentReviewRating;
+    
+    if (!dealId || !toUserId || !rating) {
+        showAlert('❌ Пожалуйста, заполните все обязательные поля');
+        return;
+    }
+    
+    if (rating < 1 || rating > 5) {
+        showAlert('❌ Рейтинг должен быть от 1 до 5 звезд');
+        return;
+    }
+    
+    // Собираем данные формы
+    const reviewData = {
+        deal_id: dealId,
+        to_user_id: toUserId,
+        rating: rating,
+        comment: document.getElementById('reviewComment').value.trim(),
+        is_anonymous: document.getElementById('reviewAnonymous').checked
+    };
+    
+    console.log('[DEBUG] Данные отзыва для отправки:', reviewData);
+    
+    try {
+        // Блокируем кнопку отправки
+        const submitButton = document.querySelector('#reviewForm button[type="submit"]');
+        const originalText = submitButton.textContent;
+        submitButton.disabled = true;
+        submitButton.textContent = 'Отправка...';
+        
+        // Отправляем отзыв через API
+        const result = await apiRequest('/api/v1/reviews', 'POST', reviewData);
+        
+        if (result.success) {
+            showAlert('✅ Отзыв успешно отправлен!\n\nСпасибо за ваше мнение.');
+            closeReviewModal();
+            
+            // Обновляем активные сделки
+            await loadActiveDeals();
+        } else {
+            console.error('[ERROR] Ошибка создания отзыва:', result.message);
+            showAlert('❌ Ошибка при отправке отзыва: ' + (result.message || 'Неизвестная ошибка'));
+        }
+        
+    } catch (error) {
+        console.error('[ERROR] Ошибка отправки отзыва:', error);
+        showAlert('❌ Ошибка сети при отправке отзыва');
+    } finally {
+        // Разблокируем кнопку
+        const submitButton = document.querySelector('#reviewForm button[type="submit"]');
+        if (submitButton) {
+            submitButton.disabled = false;
+            submitButton.textContent = originalText;
+        }
+    }
 }

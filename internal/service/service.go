@@ -30,21 +30,45 @@ type TelegramChatMemberResponse struct {
 // Содержит все основные операции P2P криптобиржи
 // Связывает слой обработчиков с репозиторием данных
 type Service struct {
-	repo          repository.RepositoryInterface // Интерфейс репозитория для работы с данными
-	telegramToken string                         // Токен Telegram бота для авторизации
-	chatID        string                         // ID закрытого чата для проверки членства
-	httpClient    *http.Client                   // HTTP клиент для запросов к Telegram Bot API
+	repo                repository.RepositoryInterface // Интерфейс репозитория для работы с данными
+	telegramToken       string                         // Токен Telegram бота для авторизации
+	chatID              string                         // ID закрытого чата для проверки членства
+	groupChatID         string                         // ID группового чата для публикации заявок (необязательно)
+	groupTopicID        string                         // ID темы в групповом чате (необязательно)
+	httpClient          *http.Client                   // HTTP клиент для запросов к Telegram Bot API
+	notificationService *NotificationService           // Сервис уведомлений для отправки сообщений в Telegram
 }
 
-// NewService создает новый экземпляр сервиса
+// NewService создает новый экземпляр сервиса (для обратной совместимости)
 // Принимает интерфейс репозитория, токен бота и ID чата
 func NewService(repo repository.RepositoryInterface, telegramToken, chatID string) *Service {
+	// Используем локальный URL для уведомлений по умолчанию
+	webAppURL := "https://localhost:8080"
+	return NewServiceWithWebApp(repo, telegramToken, chatID, webAppURL)
+}
+
+// NewServiceWithWebApp создает новый экземпляр сервиса с URL веб-приложения
+// Принимает интерфейс репозитория, токен бота, ID чата и URL веб-приложения
+func NewServiceWithWebApp(repo repository.RepositoryInterface, telegramToken, chatID, webAppURL string) *Service {
+	return NewServiceWithGroup(repo, telegramToken, chatID, webAppURL, "", "")
+}
+
+// NewServiceWithGroup создает новый экземпляр сервиса с поддержкой групповых уведомлений
+// Принимает все параметры включая настройки группового чата
+func NewServiceWithGroup(repo repository.RepositoryInterface, telegramToken, chatID, webAppURL, groupChatID, groupTopicID string) *Service {
 	log.Println("[INFO] Инициализация сервиса бизнес-логики")
+
+	// Инициализируем сервис уведомлений с переданными параметрами
+	notificationService := NewNotificationServiceWithGroup(telegramToken, webAppURL, groupChatID, groupTopicID)
+
 	return &Service{
-		repo:          repo,
-		telegramToken: telegramToken,
-		chatID:        chatID,
-		httpClient:    &http.Client{Timeout: 10 * time.Second}, // HTTP клиент с таймаутом 10 сек
+		repo:                repo,
+		telegramToken:       telegramToken,
+		chatID:              chatID,
+		groupChatID:         groupChatID,
+		groupTopicID:        groupTopicID,
+		httpClient:          &http.Client{Timeout: 10 * time.Second}, // HTTP клиент с таймаутом 10 сек
+		notificationService: notificationService,
 	}
 }
 
@@ -261,7 +285,8 @@ func (s *Service) CreateOrder(userID int64, orderData *model.Order) (*model.Orde
 	orderData.Status = model.OrderStatusActive
 	orderData.IsActive = true
 	orderData.TotalAmount = orderData.Amount * orderData.Price
-	orderData.ExpiresAt = time.Now().Add(24 * time.Hour) // Заявка действует 24 часа
+	// Устанавливаем ExpiresAt в далекое будущее - таймеры больше не используются
+	orderData.ExpiresAt = time.Now().Add(365 * 24 * time.Hour) // 1 год
 
 	// Если не указан минимальный и максимальный лимит, устанавливаем их равными общей сумме
 	if orderData.MinAmount == 0 {
@@ -277,13 +302,14 @@ func (s *Service) CreateOrder(userID int64, orderData *model.Order) (*model.Orde
 		return nil, fmt.Errorf("не удалось создать заявку: %w", err)
 	}
 
-	// Пытаемся автоматически сопоставить заявку если включено автосопоставление
-	if orderData.AutoMatch {
-		go s.tryAutoMatchOrder(orderData) // Запускаем в отдельной горутине для неблокирующего выполнения
-	}
+	// Автоматическое сопоставление больше не используется
+	// В новой логике пользователи создают отклики, а авторы их принимают
 
 	log.Printf("[INFO] Успешно создана заявка: ID=%d, UserID=%d, Type=%s",
 		orderData.ID, userID, orderData.Type)
+
+	// Отправляем групповое уведомление о новой заявке
+	go s.sendOrderCreatedGroupNotification(orderData, user)
 
 	return orderData, nil
 }
@@ -307,6 +333,27 @@ func (s *Service) GetOrders(filter *model.OrderFilter) ([]*model.Order, error) {
 	if err != nil {
 		log.Printf("[ERROR] Ошибка при поиске заявок: %v", err)
 		return nil, fmt.Errorf("не удалось получить заявки: %w", err)
+	}
+
+	// Обогащаем заявки данными пользователей для отображения на фронтенде
+	for _, order := range orders {
+		if user, err := s.repo.GetUserByID(order.UserID); err == nil {
+			// Добавляем данные пользователя к заявке (создаем дополнительные поля)
+			// Эти поля не входят в основную модель Order, но нужны для фронтенда
+			order.UserName = user.FirstName
+			if user.LastName != "" {
+				order.UserName += " " + user.LastName
+			}
+			order.Username = user.Username
+			order.FirstName = user.FirstName
+			order.LastName = user.LastName
+
+			log.Printf("[DEBUG] Обогащена заявка ID=%d данными пользователя: Name=%s, Username=%s",
+				order.ID, order.UserName, order.Username)
+		} else {
+			log.Printf("[WARN] Не удалось получить данные пользователя ID=%d для заявки ID=%d: %v",
+				order.UserID, order.ID, err)
+		}
 	}
 
 	log.Printf("[INFO] Найдено заявок: %d", len(orders))
@@ -493,14 +540,8 @@ func (s *Service) tryAutoMatchOrder(order *model.Order) {
 		return
 	}
 
-	// Создаем сделку
-	deal, err := s.createDealFromOrders(order, matchingOrder)
-	if err != nil {
-		log.Printf("[ERROR] Не удалось создать сделку для заявок ID=%d и ID=%d: %v", order.ID, matchingOrder.ID, err)
-		return
-	}
-
-	log.Printf("[INFO] Автоматическое сопоставление успешно: создана сделка ID=%d", deal.ID)
+	// Автосопоставление отключено в новой логике откликов
+	log.Printf("[INFO] Автосопоставление отключено, используйте систему откликов")
 
 	// TODO: Отправить уведомления участникам через Telegram бота
 	// s.notifyUsersAboutDeal(deal)
@@ -571,70 +612,8 @@ func (s *Service) hasCommonPaymentMethods(order1, order2 *model.Order) bool {
 	return false
 }
 
-// createDealFromOrders создает сделку на основе двух сопоставленных заявок
-func (s *Service) createDealFromOrders(order1, order2 *model.Order) (*model.Deal, error) {
-	var buyOrder, sellOrder *model.Order
-
-	// Определяем какая заявка на покупку, а какая на продажу
-	if order1.Type == model.OrderTypeBuy {
-		buyOrder = order1
-		sellOrder = order2
-	} else {
-		buyOrder = order2
-		sellOrder = order1
-	}
-
-	// Определяем параметры сделки
-	// Количество: минимум из двух заявок
-	dealAmount := buyOrder.Amount
-	if sellOrder.Amount < dealAmount {
-		dealAmount = sellOrder.Amount
-	}
-
-	// Цена: используем цену продавца (обычно более выгодная для покупателя)
-	dealPrice := sellOrder.Price
-
-	// Общая сумма
-	totalAmount := dealAmount * dealPrice
-
-	// Способ оплаты: берем первый общий метод
-	var paymentMethod model.PaymentMethod
-	for _, method := range buyOrder.PaymentMethods {
-		for _, method2 := range sellOrder.PaymentMethods {
-			if method == method2 {
-				paymentMethod = model.PaymentMethod(method)
-				break
-			}
-		}
-		if paymentMethod != "" {
-			break
-		}
-	}
-
-	// Создаем объект сделки
-	deal := &model.Deal{
-		BuyOrderID:      buyOrder.ID,
-		SellOrderID:     sellOrder.ID,
-		BuyerID:         buyOrder.UserID,
-		SellerID:        sellOrder.UserID,
-		Cryptocurrency:  buyOrder.Cryptocurrency,
-		FiatCurrency:    buyOrder.FiatCurrency,
-		Amount:          dealAmount,
-		Price:           dealPrice,
-		TotalAmount:     totalAmount,
-		PaymentMethod:   paymentMethod,
-		Status:          "pending", // Статус ожидания подтверждения
-		BuyerConfirmed:  false,
-		SellerConfirmed: false,
-	}
-
-	// Сохраняем сделку в базу данных
-	if err := s.repo.CreateDeal(deal); err != nil {
-		return nil, fmt.Errorf("не удалось создать сделку в базе данных: %w", err)
-	}
-
-	return deal, nil
-}
+// УДАЛЕНО: createDealFromOrders - устаревший метод автосопоставления
+// В новой логике откликов автоматическое сопоставление не используется
 
 // =====================================================
 // УПРАВЛЕНИЕ СДЕЛКАМИ
@@ -648,6 +627,39 @@ func (s *Service) GetUserDeals(userID int64) ([]*model.Deal, error) {
 	if err != nil {
 		log.Printf("[ERROR] Не удалось получить сделки пользователя ID=%d: %v", userID, err)
 		return nil, fmt.Errorf("не удалось получить сделки: %w", err)
+	}
+
+	// Обогащаем сделки данными пользователей для отображения на фронтенде
+	for _, deal := range deals {
+		// Добавляем данные автора заявки
+		if author, err := s.repo.GetUserByID(deal.AuthorID); err == nil {
+			deal.AuthorName = author.FirstName
+			if author.LastName != "" {
+				deal.AuthorName += " " + author.LastName
+			}
+			deal.AuthorUsername = author.Username
+
+			log.Printf("[DEBUG] Обогащена сделка ID=%d данными автора: Name=%s, Username=%s",
+				deal.ID, deal.AuthorName, deal.AuthorUsername)
+		} else {
+			log.Printf("[WARN] Не удалось получить данные автора ID=%d для сделки ID=%d: %v",
+				deal.AuthorID, deal.ID, err)
+		}
+
+		// Добавляем данные контрагента
+		if counterparty, err := s.repo.GetUserByID(deal.CounterpartyID); err == nil {
+			deal.CounterpartyName = counterparty.FirstName
+			if counterparty.LastName != "" {
+				deal.CounterpartyName += " " + counterparty.LastName
+			}
+			deal.CounterpartyUsername = counterparty.Username
+
+			log.Printf("[DEBUG] Обогащена сделка ID=%d данными контрагента: Name=%s, Username=%s",
+				deal.ID, deal.CounterpartyName, deal.CounterpartyUsername)
+		} else {
+			log.Printf("[WARN] Не удалось получить данные контрагента ID=%d для сделки ID=%d: %v",
+				deal.CounterpartyID, deal.ID, err)
+		}
 	}
 
 	log.Printf("[INFO] Найдено сделок для пользователя ID=%d: %d", userID, len(deals))
@@ -665,7 +677,7 @@ func (s *Service) GetDeal(dealID, userID int64) (*model.Deal, error) {
 	}
 
 	// Проверяем что пользователь участвует в сделке
-	if deal.BuyerID != userID && deal.SellerID != userID {
+	if deal.AuthorID != userID && deal.CounterpartyID != userID {
 		log.Printf("[WARN] Пользователь ID=%d пытается получить доступ к чужой сделке ID=%d", userID, dealID)
 		return nil, fmt.Errorf("доступ запрещен: вы не участвуете в данной сделке")
 	}
@@ -684,13 +696,13 @@ func (s *Service) ConfirmDeal(dealID, userID int64, paymentProof string) error {
 	}
 
 	// Проверяем что сделка в подходящем статусе
-	if deal.Status != "pending" && deal.Status != "payment_sent" {
+	if deal.Status != model.DealStatusInProgress && deal.Status != model.DealStatusWaitingConfirmation {
 		return fmt.Errorf("сделка в статусе '%s' не может быть подтверждена", deal.Status)
 	}
 
-	// Определяем тип подтверждения
+	// В новой логике доказательства могут предоставлять обе стороны
 	var isPaymentProof bool
-	if userID == deal.SellerID && paymentProof != "" {
+	if paymentProof != "" {
 		isPaymentProof = true
 	}
 
@@ -701,6 +713,66 @@ func (s *Service) ConfirmDeal(dealID, userID int64, paymentProof string) error {
 	}
 
 	log.Printf("[INFO] Сделка ID=%d подтверждена пользователем ID=%d", dealID, userID)
+	return nil
+}
+
+// ConfirmDealWithRole подтверждает сделку со стороны пользователя с указанием роли
+func (s *Service) ConfirmDealWithRole(dealID, userID int64, isAuthor bool, paymentProof string) error {
+	log.Printf("[INFO] Подтверждение сделки ID=%d пользователем ID=%d (isAuthor=%v)", dealID, userID, isAuthor)
+
+	// Проверяем доступ к сделке
+	deal, err := s.GetDeal(dealID, userID)
+	if err != nil {
+		return err
+	}
+
+	// Проверяем что сделка в подходящем статусе
+	if deal.Status != model.DealStatusInProgress && deal.Status != model.DealStatusWaitingConfirmation {
+		return fmt.Errorf("сделка в статусе '%s' не может быть подтверждена", deal.Status)
+	}
+
+	// Проверяем соответствие роли
+	if isAuthor && deal.AuthorID != userID {
+		return fmt.Errorf("пользователь не является автором сделки")
+	}
+	if !isAuthor && deal.CounterpartyID != userID {
+		return fmt.Errorf("пользователь не является контрагентом сделки")
+	}
+
+	// Подтверждаем сделку с указанием роли
+	if err := s.repo.ConfirmDealWithRole(dealID, userID, isAuthor, paymentProof); err != nil {
+		log.Printf("[ERROR] Не удалось подтвердить сделку ID=%d: %v", dealID, err)
+		return fmt.Errorf("не удалось подтвердить сделку: %w", err)
+	}
+
+	// Получаем обновленную сделку для проверки статуса
+	updatedDeal, err := s.repo.GetDealByID(dealID)
+	if err != nil {
+		log.Printf("[WARN] Не удалось получить обновленную сделку ID=%d: %v", dealID, err)
+	} else {
+		// Определяем кто подтвердил и кто ждет подтверждения
+		var confirmedByUserID, waitingForUserID int64
+
+		if isAuthor {
+			confirmedByUserID = deal.AuthorID
+			waitingForUserID = deal.CounterpartyID
+		} else {
+			confirmedByUserID = deal.CounterpartyID
+			waitingForUserID = deal.AuthorID
+		}
+
+		// Проверяем завершена ли сделка полностью
+		if updatedDeal.Status == model.DealStatusCompleted {
+			// Сделка завершена - отправляем уведомления о завершении обеим сторонам
+			go s.sendDealCompletedNotifications(updatedDeal)
+		} else if updatedDeal.Status == model.DealStatusWaitingConfirmation {
+			// Одна сторона подтвердила, вторая еще нет - отправляем уведомление ожидающему
+			go s.sendDealConfirmedNotification(updatedDeal, confirmedByUserID, waitingForUserID)
+		}
+	}
+
+	log.Printf("[INFO] Сделка ID=%d подтверждена пользователем ID=%d как %s", dealID, userID,
+		map[bool]string{true: "автор", false: "контрагент"}[isAuthor])
 	return nil
 }
 
@@ -1004,65 +1076,795 @@ func (s *Service) validateReviewData(review *model.CreateReviewRequest) error {
 	return nil
 }
 
-// CreateDealFromOrder создает сделку на основе заявки (отклик)
-func (s *Service) CreateDealFromOrder(userID, orderID int64, message string, autoAccept bool) (*model.Deal, error) {
-	log.Printf("[INFO] Создание сделки пользователем ID=%d на заявку ID=%d", userID, orderID)
+// УДАЛЕНО: CreateDealFromOrder - устаревший метод
+// В новой логике сделки создаются только через AcceptResponse после принятия отклика автором заявки
 
-	// Получаем заявку для создания сделки
-	order, err := s.GetOrder(orderID)
+// =====================================================
+// МЕТОДЫ ДЛЯ РАБОТЫ С ОТКЛИКАМИ
+// =====================================================
+
+// CreateResponse создает новый отклик на заявку
+func (s *Service) CreateResponse(userID int64, responseData *model.CreateResponseRequest) (*model.Response, error) {
+	log.Printf("[INFO] Создание отклика пользователем ID=%d на заявку ID=%d", userID, responseData.OrderID)
+
+	// Проверяем что заявка существует и активна
+	order, err := s.GetOrder(responseData.OrderID)
 	if err != nil {
-		log.Printf("[ERROR] Заявка ID=%d не найдена: %v", orderID, err)
+		log.Printf("[ERROR] Заявка не найдена: %v", err)
 		return nil, fmt.Errorf("заявка не найдена")
 	}
 
-	// Проверяем что пользователь не откликается на свою же заявку
+	// Проверяем что это не своя заявка
 	if order.UserID == userID {
-		log.Printf("[WARN] Пользователь ID=%d пытается откликнуться на свою заявку ID=%d", userID, orderID)
-		return nil, fmt.Errorf("нельзя откликнуться на собственную заявку")
+		log.Printf("[WARN] Пользователь ID=%d пытается откликнуться на свою заявку", userID)
+		return nil, fmt.Errorf("нельзя откликаться на собственную заявку")
 	}
 
-	// Проверяем что заявка активна
+	// Проверяем статус заявки
 	if order.Status != model.OrderStatusActive {
-		log.Printf("[WARN] Заявка ID=%d неактивна, статус: %s", orderID, order.Status)
-		return nil, fmt.Errorf("заявка недоступна для отклика")
+		log.Printf("[WARN] Заявка ID=%d имеет статус %s, нельзя откликаться", responseData.OrderID, order.Status)
+		return nil, fmt.Errorf("заявка недоступна для откликов")
+	}
+
+	// Убираем проверку срока истечения - таймеры больше не используются
+
+	// Создаем отклик
+	response := &model.Response{
+		OrderID: responseData.OrderID,
+		UserID:  userID,
+		Message: responseData.Message,
+	}
+
+	// Сохраняем отклик в репозитории
+	if err := s.repo.CreateResponse(response); err != nil {
+		log.Printf("[ERROR] Не удалось создать отклик: %v", err)
+		return nil, fmt.Errorf("не удалось создать отклик: %w", err)
+	}
+
+	// Отправляем уведомление автору заявки о новом отклике
+	go s.sendNewResponseNotification(order, response, userID)
+
+	log.Printf("[INFO] Отклик создан успешно: ID=%d", response.ID)
+	return response, nil
+}
+
+// GetMyResponses получает отклики пользователя (которые он оставлял)
+func (s *Service) GetMyResponses(userID int64) ([]*model.Response, error) {
+	log.Printf("[INFO] Получение откликов пользователя ID=%d", userID)
+
+	responses, err := s.repo.GetResponsesFromUser(userID)
+	if err != nil {
+		log.Printf("[ERROR] Не удалось получить отклики пользователя: %v", err)
+		return nil, fmt.Errorf("не удалось получить отклики: %w", err)
+	}
+
+	// Обогащаем отклики данными пользователей и заявок
+	for _, response := range responses {
+		// Добавляем данные откликнувшегося пользователя
+		if user, err := s.repo.GetUserByID(response.UserID); err == nil {
+			response.UserName = user.FirstName
+			if user.LastName != "" {
+				response.UserName += " " + user.LastName
+			}
+			response.Username = user.Username
+		}
+
+		// Получаем данные заявки и её автора
+		if order, err := s.GetOrder(response.OrderID); err == nil {
+			response.OrderType = string(order.Type)
+			response.Cryptocurrency = order.Cryptocurrency
+			response.FiatCurrency = order.FiatCurrency
+			response.Amount = order.Amount
+			response.Price = order.Price
+			response.TotalAmount = order.TotalAmount
+
+			// Добавляем данные автора заявки
+			if author, err := s.repo.GetUserByID(order.UserID); err == nil {
+				response.AuthorName = author.FirstName
+				if author.LastName != "" {
+					response.AuthorName += " " + author.LastName
+				}
+				response.AuthorUsername = author.Username
+
+				log.Printf("[DEBUG] Обогащен отклик ID=%d: User=%s(@%s) -> Author=%s(@%s), Order=%s %s",
+					response.ID, response.UserName, response.Username,
+					response.AuthorName, response.AuthorUsername,
+					response.OrderType, response.Cryptocurrency)
+			}
+		}
+	}
+
+	log.Printf("[INFO] Найдено откликов пользователя ID=%d: %d", userID, len(responses))
+	return responses, nil
+}
+
+// GetResponsesToMyOrders получает отклики на заявки пользователя (которые ему оставляли)
+func (s *Service) GetResponsesToMyOrders(authorID int64) ([]*model.Response, error) {
+	log.Printf("[INFO] Получение откликов на заявки автора ID=%d", authorID)
+
+	responses, err := s.repo.GetResponsesForAuthor(authorID)
+	if err != nil {
+		log.Printf("[ERROR] Не удалось получить отклики на заявки: %v", err)
+		return nil, fmt.Errorf("не удалось получить отклики: %w", err)
+	}
+
+	// Обогащаем отклики данными пользователей и заявок
+	for _, response := range responses {
+		// Добавляем данные откликнувшегося пользователя
+		if user, err := s.repo.GetUserByID(response.UserID); err == nil {
+			response.UserName = user.FirstName
+			if user.LastName != "" {
+				response.UserName += " " + user.LastName
+			}
+			response.Username = user.Username
+		}
+
+		// Получаем данные заявки и её автора (это сам authorID)
+		if order, err := s.GetOrder(response.OrderID); err == nil {
+			response.OrderType = string(order.Type)
+			response.Cryptocurrency = order.Cryptocurrency
+			response.FiatCurrency = order.FiatCurrency
+			response.Amount = order.Amount
+			response.Price = order.Price
+			response.TotalAmount = order.TotalAmount
+
+			// Добавляем данные автора заявки (сам authorID)
+			if author, err := s.repo.GetUserByID(authorID); err == nil {
+				response.AuthorName = author.FirstName
+				if author.LastName != "" {
+					response.AuthorName += " " + author.LastName
+				}
+				response.AuthorUsername = author.Username
+
+				log.Printf("[DEBUG] Обогащен отклик на заявку ID=%d: %s(@%s) -> Author=%s(@%s), Order=%s %s",
+					response.ID, response.UserName, response.Username,
+					response.AuthorName, response.AuthorUsername,
+					response.OrderType, response.Cryptocurrency)
+			}
+		}
+	}
+
+	log.Printf("[INFO] Найдено откликов на заявки автора ID=%d: %d", authorID, len(responses))
+	return responses, nil
+}
+
+// AcceptResponse принимает отклик и создает сделку
+func (s *Service) AcceptResponse(responseID, authorID int64) (*model.Deal, error) {
+	log.Printf("[INFO] Принятие отклика ID=%d автором ID=%d", responseID, authorID)
+
+	// Получаем отклик через фильтр
+	filter := &model.ResponseFilter{Limit: 100}
+	responses, err := s.repo.GetResponsesByFilter(filter)
+	if err != nil {
+		return nil, fmt.Errorf("не удалось получить отклик: %w", err)
+	}
+
+	var response *model.Response
+	for _, r := range responses {
+		if r.ID == responseID {
+			response = r
+			break
+		}
+	}
+
+	if response == nil {
+		return nil, fmt.Errorf("отклик не найден")
+	}
+
+	// Получаем заявку
+	order, err := s.GetOrder(response.OrderID)
+	if err != nil {
+		return nil, fmt.Errorf("заявка не найдена: %w", err)
+	}
+
+	// Проверяем что автор заявки принимает отклик
+	if order.UserID != authorID {
+		return nil, fmt.Errorf("только автор заявки может принимать отклики")
+	}
+
+	// Проверяем статус отклика
+	if response.Status != model.ResponseStatusWaiting {
+		return nil, fmt.Errorf("отклик уже был рассмотрен")
+	}
+
+	// Принимаем отклик
+	if err := s.repo.UpdateResponseStatus(responseID, model.ResponseStatusAccepted); err != nil {
+		return nil, fmt.Errorf("не удалось принять отклик: %w", err)
 	}
 
 	// Создаем сделку
 	deal := &model.Deal{
-		BuyOrderID:      orderID, // Используем заявку как основу
-		SellOrderID:     0,       // Пока не используется
-		BuyerID:         0,       // Определим ниже
-		SellerID:        0,       // Определим ниже
-		Cryptocurrency:  order.Cryptocurrency,
-		FiatCurrency:    order.FiatCurrency,
-		Amount:          order.Amount,
-		Price:           order.Price,
-		TotalAmount:     order.TotalAmount,
-		PaymentMethod:   "", // Пока пусто
-		Status:          "pending",
-		CreatedAt:       time.Now(),
-		BuyerConfirmed:  false,
-		SellerConfirmed: false,
-		Notes:           message,
+		ResponseID:     responseID,
+		OrderID:        order.ID,
+		AuthorID:       authorID,
+		CounterpartyID: response.UserID,
+		Cryptocurrency: order.Cryptocurrency,
+		FiatCurrency:   order.FiatCurrency,
+		Amount:         order.Amount,
+		Price:          order.Price,
+		TotalAmount:    order.TotalAmount,
+		PaymentMethods: order.PaymentMethods,
+		OrderType:      order.Type,
+		Status:         model.DealStatusInProgress,
+		// Убираем ExpiresAt - таймеры больше не используются
 	}
 
-	// Определяем кто покупатель, а кто продавец
-	if order.Type == model.OrderTypeBuy {
-		// Заявка на покупку - автор заявки покупатель, откликнувшийся продавец
-		deal.BuyerID = order.UserID
-		deal.SellerID = userID
-	} else {
-		// Заявка на продажу - автор заявки продавец, откликнувшийся покупатель
-		deal.BuyerID = userID
-		deal.SellerID = order.UserID
-	}
-
-	// Сохраняем сделку
 	if err := s.repo.CreateDeal(deal); err != nil {
-		log.Printf("[ERROR] Ошибка создания сделки: %v", err)
-		return nil, fmt.Errorf("не удалось создать сделку")
+		return nil, fmt.Errorf("не удалось создать сделку: %w", err)
 	}
 
-	log.Printf("[INFO] Сделка создана: ID=%d, Покупатель=%d, Продавец=%d", deal.ID, deal.BuyerID, deal.SellerID)
+	// Обновляем статус заявки на "в сделке"
+	if err := s.repo.UpdateOrderStatus(order.ID, model.OrderStatusInDeal); err != nil {
+		log.Printf("[WARN] Не удалось обновить статус заявки: %v", err)
+	}
+
+	// Отклоняем все остальные отклики на эту заявку
+	s.rejectOtherResponses(order.ID, responseID)
+
+	// Отправляем уведомления участникам
+	go s.sendResponseAcceptedNotification(order, response, deal)
+	go s.sendDealCreatedNotifications(deal)
+
+	log.Printf("[INFO] Отклик принят, создана сделка ID=%d", deal.ID)
 	return deal, nil
+}
+
+// RejectResponse отклоняет отклик
+func (s *Service) RejectResponse(responseID, authorID int64, reason string) error {
+	log.Printf("[INFO] Отклонение отклика ID=%d автором ID=%d", responseID, authorID)
+
+	// Получаем отклик для отправки уведомления
+	filter := &model.ResponseFilter{Limit: 100}
+	responses, err := s.repo.GetResponsesByFilter(filter)
+	if err != nil {
+		return fmt.Errorf("не удалось получить отклик: %w", err)
+	}
+
+	var response *model.Response
+	for _, r := range responses {
+		if r.ID == responseID {
+			response = r
+			break
+		}
+	}
+
+	if response == nil {
+		return fmt.Errorf("отклик не найден")
+	}
+
+	// Получаем заявку
+	order, err := s.GetOrder(response.OrderID)
+	if err != nil {
+		return fmt.Errorf("заявка не найдена: %w", err)
+	}
+
+	// Проверяем что автор заявки отклоняет отклик
+	if order.UserID != authorID {
+		return fmt.Errorf("только автор заявки может отклонять отклики")
+	}
+
+	// Проверяем статус отклика
+	if response.Status != model.ResponseStatusWaiting {
+		return fmt.Errorf("отклик уже был рассмотрен")
+	}
+
+	// Отклоняем отклик
+	if err := s.repo.UpdateResponseStatus(responseID, model.ResponseStatusRejected); err != nil {
+		return fmt.Errorf("не удалось отклонить отклик: %w", err)
+	}
+
+	// Отправляем уведомление пользователю об отклонении его отклика
+	go s.sendResponseRejectedNotification(order, response)
+
+	log.Printf("[INFO] Отклик ID=%d отклонен", responseID)
+	return nil
+}
+
+// rejectOtherResponses отклоняет все остальные отклики на заявку кроме принятого
+func (s *Service) rejectOtherResponses(orderID, acceptedResponseID int64) {
+	responses, err := s.repo.GetResponsesForOrder(orderID)
+	if err != nil {
+		log.Printf("[WARN] Не удалось получить отклики для отклонения: %v", err)
+		return
+	}
+
+	// Получаем заявку для отправки уведомлений
+	order, err := s.GetOrder(orderID)
+	if err != nil {
+		log.Printf("[WARN] Не удалось получить заявку ID=%d для уведомлений об отклонении: %v", orderID, err)
+	}
+
+	for _, response := range responses {
+		if response.ID != acceptedResponseID && response.Status == model.ResponseStatusWaiting {
+			// Отклоняем отклик
+			if err := s.repo.UpdateResponseStatus(response.ID, model.ResponseStatusRejected); err != nil {
+				log.Printf("[WARN] Не удалось отклонить отклик ID=%d: %v", response.ID, err)
+			} else {
+				// Отправляем уведомление пользователю об отклонении его отклика (автоматически)
+				if order != nil {
+					go s.sendResponseRejectedNotification(order, response)
+					log.Printf("[INFO] Отправлено уведомление об автоматическом отклонении отклика ID=%d", response.ID)
+				}
+			}
+		}
+	}
+}
+
+// =====================================================
+// МЕТОДЫ ДЛЯ УВЕДОМЛЕНИЙ
+// =====================================================
+
+// sendNewResponseNotification отправляет уведомление автору заявки о новом отклике
+func (s *Service) sendNewResponseNotification(order *model.Order, response *model.Response, responderUserID int64) {
+	log.Printf("[INFO] Отправка уведомления о новом отклике автору заявки ID=%d", order.UserID)
+
+	// Получаем данные автора заявки по внутреннему ID
+	author, err := s.repo.GetUserByID(order.UserID)
+	if err != nil {
+		log.Printf("[ERROR] Не удалось найти автора заявки ID=%d: %v", order.UserID, err)
+		return
+	}
+
+	// Получаем данные пользователя, который откликнулся
+	responder, err := s.repo.GetUserByID(responderUserID)
+	if err != nil {
+		log.Printf("[ERROR] Не удалось найти откликнувшегося пользователя ID=%d: %v", responderUserID, err)
+		return
+	}
+
+	// Формируем имя откликнувшегося пользователя
+	responderName := responder.FirstName
+	if responder.LastName != "" {
+		responderName += " " + responder.LastName
+	}
+	if responder.Username != "" {
+		responderName += " (@" + responder.Username + ")"
+	}
+
+	// Форматируем уведомление с использованием шаблона
+	title, message := s.notificationService.FormatResponseNotification(order, response, responderName)
+
+	// Создаем уведомление
+	notificationReq := &model.CreateNotificationRequest{
+		UserID:     author.ID,
+		Type:       model.NotificationTypeNewResponse,
+		Title:      title,
+		Message:    message,
+		OrderID:    &order.ID,
+		ResponseID: &response.ID,
+		Data: map[string]interface{}{
+			"order_type":       string(order.Type),
+			"cryptocurrency":   order.Cryptocurrency,
+			"fiat_currency":    order.FiatCurrency,
+			"amount":           order.Amount,
+			"price":            order.Price,
+			"total_amount":     order.TotalAmount,
+			"responder_name":   responderName,
+			"responder_id":     responderUserID,
+			"response_message": response.Message,
+		},
+	}
+
+	notification, err := s.notificationService.CreateNotification(notificationReq)
+	if err != nil {
+		log.Printf("[ERROR] Не удалось создать уведомление: %v", err)
+		return
+	}
+
+	// Отправляем уведомление в Telegram
+	if err := s.notificationService.SendNotification(notification, author.TelegramID); err != nil {
+		log.Printf("[ERROR] Не удалось отправить уведомление: %v", err)
+		return
+	}
+
+	log.Printf("[INFO] Уведомление о новом отклике отправлено автору TelegramID=%d", author.TelegramID)
+}
+
+// sendResponseAcceptedNotification отправляет уведомление участнику о принятом отклике
+func (s *Service) sendResponseAcceptedNotification(order *model.Order, response *model.Response, deal *model.Deal) {
+	log.Printf("[INFO] Отправка уведомления о принятии отклика пользователю ID=%d", response.UserID)
+
+	// Получаем данные пользователя, которому отправляем уведомление
+	responder, err := s.repo.GetUserByID(response.UserID)
+	if err != nil {
+		log.Printf("[ERROR] Не удалось найти пользователя ID=%d: %v", response.UserID, err)
+		return
+	}
+
+	// Получаем данные автора заявки
+	author, err := s.repo.GetUserByID(order.UserID)
+	if err != nil {
+		log.Printf("[ERROR] Не удалось найти автора заявки ID=%d: %v", order.UserID, err)
+		return
+	}
+
+	// Формируем имя автора заявки
+	authorName := author.FirstName
+	if author.LastName != "" {
+		authorName += " " + author.LastName
+	}
+	if author.Username != "" {
+		authorName += " (@" + author.Username + ")"
+	}
+
+	// Форматируем уведомление
+	title, message := s.notificationService.FormatAcceptedResponseNotification(order, authorName)
+
+	// Создаем уведомление
+	notificationReq := &model.CreateNotificationRequest{
+		UserID:     responder.ID,
+		Type:       model.NotificationTypeResponseAccepted,
+		Title:      title,
+		Message:    message,
+		OrderID:    &order.ID,
+		ResponseID: &response.ID,
+		DealID:     &deal.ID,
+		Data: map[string]interface{}{
+			"order_type":     string(order.Type),
+			"cryptocurrency": order.Cryptocurrency,
+			"fiat_currency":  order.FiatCurrency,
+			"amount":         order.Amount,
+			"price":          order.Price,
+			"total_amount":   order.TotalAmount,
+			"author_name":    authorName,
+			"deal_id":        deal.ID,
+		},
+	}
+
+	notification, err := s.notificationService.CreateNotification(notificationReq)
+	if err != nil {
+		log.Printf("[ERROR] Не удалось создать уведомление: %v", err)
+		return
+	}
+
+	// Отправляем уведомление в Telegram
+	if err := s.notificationService.SendNotification(notification, responder.TelegramID); err != nil {
+		log.Printf("[ERROR] Не удалось отправить уведомление: %v", err)
+		return
+	}
+
+	log.Printf("[INFO] Уведомление о принятии отклика отправлено пользователю TelegramID=%d", responder.TelegramID)
+}
+
+// sendResponseRejectedNotification отправляет уведомление участнику об отклоненном отклике
+func (s *Service) sendResponseRejectedNotification(order *model.Order, response *model.Response) {
+	log.Printf("[INFO] Отправка уведомления об отклонении отклика пользователю ID=%d", response.UserID)
+
+	// Получаем данные пользователя, которому отправляем уведомление
+	responder, err := s.repo.GetUserByID(response.UserID)
+	if err != nil {
+		log.Printf("[ERROR] Не удалось найти пользователя ID=%d: %v", response.UserID, err)
+		return
+	}
+
+	// Получаем данные автора заявки
+	author, err := s.repo.GetUserByID(order.UserID)
+	if err != nil {
+		log.Printf("[ERROR] Не удалось найти автора заявки ID=%d: %v", order.UserID, err)
+		return
+	}
+
+	// Формируем имя автора заявки
+	authorName := author.FirstName
+	if author.LastName != "" {
+		authorName += " " + author.LastName
+	}
+	if author.Username != "" {
+		authorName += " (@" + author.Username + ")"
+	}
+
+	// Форматируем уведомление
+	title, message := s.notificationService.FormatRejectedResponseNotification(order, authorName)
+
+	// Создаем уведомление
+	notificationReq := &model.CreateNotificationRequest{
+		UserID:     responder.ID,
+		Type:       model.NotificationTypeResponseRejected,
+		Title:      title,
+		Message:    message,
+		OrderID:    &order.ID,
+		ResponseID: &response.ID,
+		Data: map[string]interface{}{
+			"order_type":       string(order.Type),
+			"cryptocurrency":   order.Cryptocurrency,
+			"fiat_currency":    order.FiatCurrency,
+			"amount":           order.Amount,
+			"price":            order.Price,
+			"total_amount":     order.TotalAmount,
+			"author_name":      authorName,
+			"response_message": response.Message,
+		},
+	}
+
+	notification, err := s.notificationService.CreateNotification(notificationReq)
+	if err != nil {
+		log.Printf("[ERROR] Не удалось создать уведомление об отклонении: %v", err)
+		return
+	}
+
+	// Отправляем уведомление в Telegram
+	if err := s.notificationService.SendNotification(notification, responder.TelegramID); err != nil {
+		log.Printf("[ERROR] Не удалось отправить уведомление об отклонении: %v", err)
+		return
+	}
+
+	log.Printf("[INFO] Уведомление об отклонении отклика отправлено пользователю TelegramID=%d", responder.TelegramID)
+}
+
+// sendDealCreatedNotifications отправляет уведомления обеим сторонам о создании сделки
+func (s *Service) sendDealCreatedNotifications(deal *model.Deal) {
+	log.Printf("[INFO] Отправка уведомлений о создании сделки ID=%d", deal.ID)
+
+	// Получаем данные автора заявки
+	author, err := s.repo.GetUserByID(deal.AuthorID)
+	if err != nil {
+		log.Printf("[ERROR] Не удалось найти автора сделки ID=%d: %v", deal.AuthorID, err)
+		return
+	}
+
+	// Получаем данные контрагента
+	counterparty, err := s.repo.GetUserByID(deal.CounterpartyID)
+	if err != nil {
+		log.Printf("[ERROR] Не удалось найти контрагента сделки ID=%d: %v", deal.CounterpartyID, err)
+		return
+	}
+
+	// Отправляем уведомление автору заявки
+	go s.sendDealCreatedNotification(deal, author, counterparty, true)
+
+	// Отправляем уведомление контрагенту
+	go s.sendDealCreatedNotification(deal, counterparty, author, false)
+}
+
+// sendDealCreatedNotification отправляет уведомление о создании сделки конкретному пользователю
+func (s *Service) sendDealCreatedNotification(deal *model.Deal, recipient *model.User, counterparty *model.User, isAuthor bool) {
+	// Формируем имя контрагента
+	counterpartyName := counterparty.FirstName
+	if counterparty.LastName != "" {
+		counterpartyName += " " + counterparty.LastName
+	}
+	if counterparty.Username != "" {
+		counterpartyName += " (@" + counterparty.Username + ")"
+	}
+
+	// Форматируем уведомление
+	title, message := s.notificationService.FormatDealCreatedNotification(deal, counterpartyName)
+
+	// Создаем уведомление
+	notificationReq := &model.CreateNotificationRequest{
+		UserID:  recipient.ID,
+		Type:    model.NotificationTypeDealCreated,
+		Title:   title,
+		Message: message,
+		DealID:  &deal.ID,
+		Data: map[string]interface{}{
+			"deal_id":           deal.ID,
+			"order_type":        string(deal.OrderType),
+			"cryptocurrency":    deal.Cryptocurrency,
+			"fiat_currency":     deal.FiatCurrency,
+			"amount":            deal.Amount,
+			"price":             deal.Price,
+			"total_amount":      deal.TotalAmount,
+			"counterparty_name": counterpartyName,
+			"is_author":         isAuthor,
+			"author_id":         deal.AuthorID,
+			"counterparty_id":   deal.CounterpartyID,
+		},
+	}
+
+	notification, err := s.notificationService.CreateNotification(notificationReq)
+	if err != nil {
+		log.Printf("[ERROR] Не удалось создать уведомление о сделке: %v", err)
+		return
+	}
+
+	// Отправляем уведомление в Telegram
+	if err := s.notificationService.SendNotification(notification, recipient.TelegramID); err != nil {
+		log.Printf("[ERROR] Не удалось отправить уведомление о сделке: %v", err)
+		return
+	}
+
+	log.Printf("[INFO] Уведомление о создании сделки отправлено пользователю TelegramID=%d", recipient.TelegramID)
+}
+
+// sendDealConfirmedNotification отправляет уведомление о подтверждении сделки
+func (s *Service) sendDealConfirmedNotification(deal *model.Deal, confirmedByUserID int64, waitingForUserID int64) {
+	log.Printf("[INFO] Отправка уведомления о подтверждении сделки ID=%d", deal.ID)
+
+	// Получаем данные пользователя, который подтвердил
+	confirmedBy, err := s.repo.GetUserByID(confirmedByUserID)
+	if err != nil {
+		log.Printf("[ERROR] Не удалось найти пользователя который подтвердил ID=%d: %v", confirmedByUserID, err)
+		return
+	}
+
+	// Получаем данные пользователя, который ждет подтверждения
+	waitingFor, err := s.repo.GetUserByID(waitingForUserID)
+	if err != nil {
+		log.Printf("[ERROR] Не удалось найти пользователя который ждет подтверждения ID=%d: %v", waitingForUserID, err)
+		return
+	}
+
+	// Формируем имена пользователей
+	confirmedByName := confirmedBy.FirstName
+	if confirmedBy.LastName != "" {
+		confirmedByName += " " + confirmedBy.LastName
+	}
+
+	waitingForName := waitingFor.FirstName
+	if waitingFor.LastName != "" {
+		waitingForName += " " + waitingFor.LastName
+	}
+
+	// Форматируем уведомление
+	title, message := s.notificationService.FormatDealConfirmedNotification(deal, confirmedByName, waitingForName)
+
+	// Создаем уведомление для пользователя, который должен подтвердить
+	notificationReq := &model.CreateNotificationRequest{
+		UserID:  waitingFor.ID,
+		Type:    model.NotificationTypeDealConfirmed,
+		Title:   title,
+		Message: message,
+		DealID:  &deal.ID,
+		Data: map[string]interface{}{
+			"deal_id":           deal.ID,
+			"confirmed_by_id":   confirmedByUserID,
+			"confirmed_by_name": confirmedByName,
+			"waiting_for_id":    waitingForUserID,
+			"waiting_for_name":  waitingForName,
+			"order_type":        string(deal.OrderType),
+			"cryptocurrency":    deal.Cryptocurrency,
+			"fiat_currency":     deal.FiatCurrency,
+			"amount":            deal.Amount,
+			"price":             deal.Price,
+			"total_amount":      deal.TotalAmount,
+		},
+	}
+
+	notification, err := s.notificationService.CreateNotification(notificationReq)
+	if err != nil {
+		log.Printf("[ERROR] Не удалось создать уведомление о подтверждении сделки: %v", err)
+		return
+	}
+
+	// Отправляем уведомление в Telegram
+	if err := s.notificationService.SendNotification(notification, waitingFor.TelegramID); err != nil {
+		log.Printf("[ERROR] Не удалось отправить уведомление о подтверждении сделки: %v", err)
+		return
+	}
+
+	log.Printf("[INFO] Уведомление о подтверждении сделки отправлено пользователю TelegramID=%d", waitingFor.TelegramID)
+}
+
+// sendDealCompletedNotifications отправляет уведомления о завершении сделки обеим участникам
+func (s *Service) sendDealCompletedNotifications(deal *model.Deal) {
+	log.Printf("[INFO] Отправка уведомлений о завершении сделки ID=%d", deal.ID)
+
+	// Получаем данные автора заявки
+	author, err := s.repo.GetUserByID(deal.AuthorID)
+	if err != nil {
+		log.Printf("[ERROR] Не удалось найти автора сделки ID=%d: %v", deal.AuthorID, err)
+		return
+	}
+
+	// Получаем данные контрагента
+	counterparty, err := s.repo.GetUserByID(deal.CounterpartyID)
+	if err != nil {
+		log.Printf("[ERROR] Не удалось найти контрагента сделки ID=%d: %v", deal.CounterpartyID, err)
+		return
+	}
+
+	// Формируем имена участников
+	authorName := author.FirstName
+	if author.LastName != "" {
+		authorName += " " + author.LastName
+	}
+
+	counterpartyName := counterparty.FirstName
+	if counterparty.LastName != "" {
+		counterpartyName += " " + counterparty.LastName
+	}
+
+	// Форматируем уведомление
+	title, message := s.notificationService.FormatDealCompletedNotification(deal, authorName, counterpartyName)
+
+	// Отправляем уведомление автору заявки
+	go s.sendDealCompletedNotification(deal, author, title, message)
+
+	// Отправляем уведомление контрагенту
+	go s.sendDealCompletedNotification(deal, counterparty, title, message)
+}
+
+// sendDealCompletedNotification отправляет уведомление о завершении сделки конкретному пользователю
+func (s *Service) sendDealCompletedNotification(deal *model.Deal, recipient *model.User, title, message string) {
+	// Создаем уведомление
+	notificationReq := &model.CreateNotificationRequest{
+		UserID:  recipient.ID,
+		Type:    model.NotificationTypeDealCompleted,
+		Title:   title,
+		Message: message,
+		DealID:  &deal.ID,
+		Data: map[string]interface{}{
+			"deal_id":         deal.ID,
+			"order_type":      string(deal.OrderType),
+			"cryptocurrency":  deal.Cryptocurrency,
+			"fiat_currency":   deal.FiatCurrency,
+			"amount":          deal.Amount,
+			"price":           deal.Price,
+			"total_amount":    deal.TotalAmount,
+			"author_id":       deal.AuthorID,
+			"counterparty_id": deal.CounterpartyID,
+			"completed_at":    deal.CompletedAt,
+		},
+	}
+
+	notification, err := s.notificationService.CreateNotification(notificationReq)
+	if err != nil {
+		log.Printf("[ERROR] Не удалось создать уведомление о завершении сделки: %v", err)
+		return
+	}
+
+	// Отправляем уведомление в Telegram
+	if err := s.notificationService.SendNotification(notification, recipient.TelegramID); err != nil {
+		log.Printf("[ERROR] Не удалось отправить уведомление о завершении сделки: %v", err)
+		return
+	}
+
+	log.Printf("[INFO] Уведомление о завершении сделки отправлено пользователю TelegramID=%d", recipient.TelegramID)
+}
+
+// sendOrderCreatedGroupNotification отправляет групповое уведомление о создании новой заявки
+func (s *Service) sendOrderCreatedGroupNotification(order *model.Order, user *model.User) {
+	log.Printf("[INFO] Отправка группового уведомления о создании заявки ID=%d", order.ID)
+
+	// Формируем имя пользователя
+	userName := user.FirstName
+	if user.LastName != "" {
+		userName += " " + user.LastName
+	}
+
+	// Добавляем username если есть
+	if user.Username != "" {
+		userName += " (@" + user.Username + ")"
+	}
+
+	// Определяем тип операции
+	var operationType string
+	switch order.Type {
+	case "buy":
+		operationType = "ПОКУПКА"
+	case "sell":
+		operationType = "ПРОДАЖА"
+	default:
+		operationType = strings.ToUpper(string(order.Type))
+	}
+
+	// Формируем текст уведомления по шаблону со ссылкой на приложение
+	message := fmt.Sprintf(
+		"Пользователь <b>%s</b> создал новую заявку:\n\n💰 <b>%s %s %s</b>\n💎 Объем: <b>%.8f %s</b>\n💵 Курс: <b>%.2f %s</b> за 1 %s\n💸 Общая сумма: <b>%.2f %s</b>\n\n🚀 <i>Откликайтесь быстрее!</i>\n\n👉 <a href=\"%s/#orders\">Открыть приложение</a>",
+		userName,
+		operationType,
+		order.Cryptocurrency,
+		order.FiatCurrency,
+		order.Amount,
+		order.Cryptocurrency,
+		order.Price,
+		order.FiatCurrency,
+		order.Cryptocurrency,
+		order.TotalAmount,
+		order.FiatCurrency,
+		s.notificationService.webAppURL,
+	)
+
+	// Отправляем групповое уведомление
+	if err := s.notificationService.SendGroupNotification(
+		model.NotificationTypeOrderCreated,
+		message,
+		order,
+	); err != nil {
+		log.Printf("[ERROR] Не удалось отправить групповое уведомление о создании заявки: %v", err)
+		return
+	}
+
+	log.Printf("[INFO] Групповое уведомление о создании заявки отправлено")
 }

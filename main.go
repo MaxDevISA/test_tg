@@ -50,9 +50,31 @@ func main() {
 		log.Fatal("[ERROR] TELEGRAM_CHAT_ID обязательная переменная окружения не задана")
 	}
 
+	// Получаем URL веб-приложения из переменных окружения (необязательно)
+	webAppURL := os.Getenv("TELEGRAM_WEBAPP_URL")
+	if webAppURL == "" {
+		webAppURL = "https://localhost:" + port // Устанавливаем значение по умолчанию
+		log.Printf("[INFO] TELEGRAM_WEBAPP_URL не задан, используется по умолчанию: %s", webAppURL)
+	}
+
+	// Получаем ID группового чата для публикации новых заявок (необязательно)
+	groupChatID := os.Getenv("TELEGRAM_GROUP_CHAT_ID")
+	if groupChatID != "" {
+		log.Printf("[INFO] Групповые уведомления будут отправляться в чат ID: %s", groupChatID)
+	} else {
+		log.Println("[INFO] TELEGRAM_GROUP_CHAT_ID не задан, групповые уведомления отключены")
+	}
+
+	// Получаем ID темы в групповом чате (необязательно)
+	groupTopicID := os.Getenv("TELEGRAM_GROUP_TOPIC_ID")
+	if groupTopicID != "" && groupChatID != "" {
+		log.Printf("[INFO] Групповые уведомления будут отправляться в тему ID: %s", groupTopicID)
+	}
+
 	log.Println("[INFO] Запуск P2P криптобиржи...")
 	log.Printf("[INFO] Порт сервера: %s", port)
 	log.Printf("[INFO] Папка данных: %s", dataDir)
+	log.Printf("[INFO] URL веб-приложения: %s", webAppURL)
 
 	// Инициализируем файловый репозиторий для работы с JSON данными
 	// Репозиторий отвечает за все операции с данными в JSON файлах
@@ -65,8 +87,9 @@ func main() {
 
 	// Инициализируем слой сервисов для бизнес-логики
 	// Сервисы содержат всю логику работы с заявками, пользователями и отзывами
-	svc := service.NewService(repo, telegramToken, chatID)
+	svc := service.NewServiceWithGroup(repo, telegramToken, chatID, webAppURL, groupChatID, groupTopicID)
 	log.Println("[INFO] Сервисы инициализированы")
+	log.Println("[INFO] Система уведомлений готова к отправке сообщений участникам сделок")
 
 	// Инициализируем слой обработчиков HTTP запросов
 	// Обработчики принимают HTTP запросы и вызывают соответствующие сервисы

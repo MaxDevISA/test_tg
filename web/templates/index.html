@@ -10,15 +10,15 @@
 <body>
     <!-- Заголовок приложения -->
     <div class="header">
-        <h1>P2P Крипто Биржа ISA</h1>
+        <h1>ISA P2P</h1>
         <div class="user-info">Загрузка...</div>
     </div>
 
     <!-- Навигация -->
     <div class="navigation">
         <button class="nav-item active" data-view="orders">📋 Рынок</button>
-        <button class="nav-item" data-view="my-orders">📝 Заявки</button>
-        <button class="nav-item" data-view="deals">🤝 Сделки</button>
+        <button class="nav-item" data-view="my-orders">📝 Мои заявки</button>
+        <button class="nav-item" data-view="responses">📨 Отклики</button>
         <button class="nav-item" data-view="profile">👤 Профиль</button>
     </div>
 
@@ -59,9 +59,63 @@
             <!-- Контент будет загружен через JavaScript -->
         </div>
 
-        <!-- Раздел "Сделки" -->
-        <div id="dealsView" class="view hidden">
-            <!-- Контент будет загружен через JavaScript -->
+        <!-- Раздел "Отклики" -->
+        <div id="responsesView" class="view hidden">
+            <div class="response-tabs">
+                <button class="response-tab active" data-tab="my-responses">
+                    <span class="tab-icon">📤</span>
+                    <span class="tab-text">Мои отклики</span>
+                </button>
+                <button class="response-tab" data-tab="responses-to-my">
+                    <span class="tab-icon">📥</span>
+                    <span class="tab-text">На мои заявки</span>
+                </button>
+                <button class="response-tab" data-tab="active-deals">
+                    <span class="tab-icon">💰</span>
+                    <span class="tab-text">Сделки</span>
+                </button>
+            </div>
+
+            <div class="response-content">
+                <!-- Мои отклики -->
+                <div id="my-responses-content" class="response-tab-content active">
+                    <div class="section-header">
+                        <h2>📤 Мои отклики</h2>
+                        <p class="section-description">Отклики, которые вы оставляли на заявки других пользователей</p>
+                    </div>
+                    <div id="myResponsesList">
+                        <div class="loading">
+                            <div class="spinner"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Отклики на мои заявки -->
+                <div id="responses-to-my-content" class="response-tab-content">
+                    <div class="section-header">
+                        <h2>📥 Отклики на мои заявки</h2>
+                        <p class="section-description">Пользователи, которые хотят торговать с вами</p>
+                    </div>
+                    <div id="responsesToMyList">
+                        <div class="loading">
+                            <div class="spinner"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Активные сделки -->
+                <div id="active-deals-content" class="response-tab-content">
+                    <div class="section-header">
+                        <h2>💰 Сделки</h2>
+                        <p class="section-description">Тут будут отображаться ваши сделки и их статусы</p>
+                    </div>
+                    <div id="activeDealsList">
+                        <div class="loading">
+                            <div class="spinner"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Раздел "Профиль" -->
@@ -126,11 +180,11 @@
                 <div class="form-group">
                     <label class="form-label">Способы оплаты</label>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                        <label><input type="checkbox" name="payment_methods" value="sberbank"> Сбербанк</label>
+                        <label><input type="checkbox" name="payment_methods" value="sberbank"> СБЕР</label>
                         <label><input type="checkbox" name="payment_methods" value="tinkoff"> Тинькофф</label>
-                        <label><input type="checkbox" name="payment_methods" value="qiwi"> QIWI</label>
+                        <label><input type="checkbox" name="payment_methods" value="SPB"> СПБ</label>
                         <label><input type="checkbox" name="payment_methods" value="yandex_money"> ЮMoney</label>
-                        <label><input type="checkbox" name="payment_methods" value="bank_transfer"> Банк</label>
+                        <label><input type="checkbox" name="payment_methods" value="bank_transfer"> По № карты</label>
                         <label><input type="checkbox" name="payment_methods" value="cash"> Наличные</label>
                     </div>
                 </div>
@@ -140,15 +194,83 @@
                     <textarea class="form-textarea" name="description" rows="3" maxlength="200"></textarea>
                 </div>
                 
-                <div class="form-group">
-                    <label>
-                        <input type="checkbox" name="auto_match" checked> 
-                        Автоматическое сопоставление
-                    </label>
-                </div>
+                <!-- Автоматическое сопоставление отключено в новой логике откликов -->
                 
                 <button type="submit" class="btn btn-primary">Создать заявку</button>
             </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для оставления отзыва -->
+    <div id="reviewModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">⭐ Оставить отзыв</h3>
+                <button class="modal-close" onclick="closeReviewModal()">&times;</button>
+            </div>
+            
+            <div class="modal-body">
+                <form id="reviewForm">
+                    <!-- Скрытые поля для передачи данных -->
+                    <input type="hidden" id="reviewDealId" name="deal_id">
+                    <input type="hidden" id="reviewToUserId" name="to_user_id">
+                    
+                    <!-- Информация о контрагенте -->
+                    <div style="background: var(--tg-theme-secondary-bg-color, #f8fafc); border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+                        <div style="font-size: 12px; color: var(--tg-theme-hint-color, #708499); margin-bottom: 4px;">Контрагент:</div>
+                        <div id="reviewCounterpartyName" style="font-weight: 600;"></div>
+                    </div>
+                    
+                    <!-- Рейтинг звездами -->
+                    <div class="form-group">
+                        <label class="form-label">Оценка (обязательно)</label>
+                        <div class="star-rating" id="starRating">
+                            <span class="star" data-rating="1">⭐</span>
+                            <span class="star" data-rating="2">⭐</span>
+                            <span class="star" data-rating="3">⭐</span>
+                            <span class="star" data-rating="4">⭐</span>
+                            <span class="star" data-rating="5">⭐</span>
+                        </div>
+                        <div id="ratingValue" style="margin-top: 8px; font-size: 14px; color: var(--tg-theme-hint-color, #708499);">
+                            Выберите оценку от 1 до 5 звезд
+                        </div>
+                        <input type="hidden" id="reviewRating" name="rating" required>
+                    </div>
+                    
+                    <!-- Комментарий -->
+                    <div class="form-group">
+                        <label class="form-label">Отзыв (необязательно)</label>
+                        <textarea class="form-textarea" id="reviewComment" name="comment" 
+                                  rows="4" maxlength="500" 
+                                  placeholder="Расскажите о вашем опыте сделки..."></textarea>
+                        <div style="font-size: 12px; color: var(--tg-theme-hint-color, #708499); margin-top: 4px;">
+                            Максимум 500 символов
+                        </div>
+                    </div>
+                    
+                    <!-- Анонимность -->
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="reviewAnonymous" name="is_anonymous">
+                            <span class="checkmark"></span>
+                            Анонимный отзыв
+                        </label>
+                        <div style="font-size: 12px; color: var(--tg-theme-hint-color, #708499); margin-top: 4px;">
+                            Ваше имя не будет отображаться в отзыве
+                        </div>
+                    </div>
+                    
+                    <!-- Кнопки действий -->
+                    <div style="display: flex; gap: 12px; margin-top: 24px;">
+                        <button type="button" class="btn btn-secondary" onclick="closeReviewModal()" style="flex: 1;">
+                            Отменить
+                        </button>
+                        <button type="submit" class="btn btn-primary" style="flex: 1;">
+                            ⭐ Оставить отзыв
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
