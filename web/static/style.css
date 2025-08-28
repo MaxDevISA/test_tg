@@ -1049,7 +1049,7 @@ input[type="submit"]:hover:not(.btn-danger):not(.btn-secondary):not(.btn-warning
 
 .profile-stats-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, 1fr);
     gap: var(--space-lg);
     margin: var(--space-2xl) 0;
 }

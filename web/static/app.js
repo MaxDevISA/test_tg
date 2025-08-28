@@ -1806,6 +1806,20 @@ function displayUserProfileModal(profileData, reviews) {
                 <div class="profile-stat-number" style="color: #22c55e;">${Math.round(positivePercent)}%</div>
                 <div class="profile-stat-label">Положительных</div>
             </div>
+            <div class="profile-stat-card">
+                <div class="profile-stat-number" style="color: #3b82f6;">${user.total_deals || 0}</div>
+                <div class="profile-stat-label">Всего сделок</div>
+            </div>
+            <div class="profile-stat-card">
+                <div class="profile-stat-number" style="color: #6b7280; font-size: 14px;">
+                    ${user.created_at ? new Date(user.created_at).toLocaleDateString('ru', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric'
+                    }) : 'Не указано'}
+                </div>
+                <div class="profile-stat-label">В проекте с</div>
+            </div>
         </div>
     `;
     
