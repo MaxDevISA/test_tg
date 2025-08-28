@@ -1699,6 +1699,214 @@ a:hover {
     }
 }
 
+/* ============================================== */
+/* 📝 СТИЛИ ОТЗЫВОВ В ПРОФИЛЕ ПОЛЬЗОВАТЕЛЯ */
+/* ============================================== */
+
+/* Секция отзывов */
+.profile-reviews-section {
+    margin: var(--space-lg) 0;
+    padding: 0;
+}
+
+/* Заголовок секции отзывов */
+.profile-reviews-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: var(--space-md);
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.profile-reviews-title:before {
+    content: '';
+    width: 3px;
+    height: 20px;
+    background: var(--gradient-green);
+    border-radius: var(--radius-xs);
+    animation: greenGlow 2s infinite;
+}
+
+/* Карточка отзыва */
+.profile-review-card {
+    background: var(--background-card);
+    border: 1px solid var(--border-card);
+    border-radius: var(--radius-lg);
+    padding: var(--space-lg);
+    margin-bottom: var(--space-md);
+    box-shadow: var(--shadow-card);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.profile-review-card:before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--gradient-green);
+    border-radius: var(--radius-xs) var(--radius-xs) 0 0;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.profile-review-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-card-hover);
+    border-color: var(--border-primary);
+}
+
+.profile-review-card:hover:before {
+    opacity: 1;
+}
+
+/* Шапка отзыва */
+.profile-review-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-md);
+}
+
+/* Звездочки рейтинга */
+.profile-review-stars {
+    font-size: 16px;
+    letter-spacing: 2px;
+    background: var(--gradient-green);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    font-weight: 600;
+    text-shadow: 0 0 10px rgba(43, 228, 126, 0.3);
+}
+
+/* Дата отзыва */
+.profile-review-date {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: 500;
+    padding: 4px 8px;
+    background: rgba(29, 185, 84, 0.1);
+    border-radius: var(--radius-sm);
+    border: 1px solid rgba(29, 185, 84, 0.2);
+}
+
+/* Текст комментария */
+.profile-review-comment {
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text-secondary);
+    margin-bottom: var(--space-md);
+    padding: var(--space-md);
+    background: rgba(15, 15, 35, 0.3);
+    border-radius: var(--radius-md);
+    border: 1px solid rgba(29, 185, 84, 0.1);
+    font-style: italic;
+    position: relative;
+}
+
+.profile-review-comment:before {
+    content: '"';
+    position: absolute;
+    top: -5px;
+    left: 8px;
+    font-size: 24px;
+    color: var(--accent-green);
+    font-weight: 700;
+    opacity: 0.7;
+}
+
+.profile-review-comment:after {
+    content: '"';
+    position: absolute;
+    bottom: -10px;
+    right: 8px;
+    font-size: 24px;
+    color: var(--accent-green);
+    font-weight: 700;
+    opacity: 0.7;
+}
+
+/* Автор отзыва */
+.profile-review-author {
+    font-size: 11px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    margin-top: var(--space-sm);
+}
+
+.profile-review-author:before {
+    content: '👤';
+    font-size: 12px;
+    opacity: 0.7;
+}
+
+/* Анонимный отзыв */
+.profile-review-anonymous {
+    font-size: 11px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    margin-top: var(--space-sm);
+    font-style: italic;
+}
+
+.profile-review-anonymous:before {
+    content: '🕶️';
+    font-size: 12px;
+    opacity: 0.7;
+}
+
+/* Пустое состояние отзывов */
+.profile-reviews-empty {
+    text-align: center;
+    padding: var(--space-xl);
+    color: var(--text-muted);
+    background: rgba(15, 15, 35, 0.2);
+    border: 1px dashed var(--border-secondary);
+    border-radius: var(--radius-lg);
+    margin: var(--space-lg) 0;
+}
+
+.profile-reviews-empty:before {
+    content: '📝';
+    display: block;
+    font-size: 32px;
+    margin-bottom: var(--space-md);
+    opacity: 0.5;
+}
+
+/* Адаптивность для мобильных устройств */
+@media (max-width: 768px) {
+    .profile-review-card {
+        padding: var(--space-md);
+        margin-bottom: var(--space-sm);
+    }
+    
+    .profile-review-header {
+        flex-direction: column;
+        gap: var(--space-xs);
+        align-items: flex-start;
+    }
+    
+    .profile-review-stars {
+        font-size: 14px;
+    }
+    
+    .profile-review-comment {
+        padding: var(--space-sm);
+        font-size: 13px;
+    }
+}
+
 /* Убрали анимацию свечения - теперь чистый дизайн */
 /* .response-tab.active теперь имеет простые стили выше */
 
