@@ -183,8 +183,8 @@ func (cs *CleanupService) expireDeal(deal *model.Deal) bool {
 		return false
 	}
 
-	// Возвращаем связанные заявки в активное состояние
-	cs.reactivateOrdersFromExpiredDeal(deal)
+	// Завершаем связанные заявки (они больше не нужны)
+	cs.completeOrdersFromExpiredDeal(deal)
 
 	// Отправляем уведомления обеим сторонам
 	cs.sendDealExpiredNotifications(deal)
@@ -302,9 +302,9 @@ func (cs *CleanupService) sendDealExpiredNotifications(deal *model.Deal) {
 	log.Printf("[INFO] Процесс отправки уведомлений завершен для сделки ID=%d", deal.ID)
 }
 
-// reactivateOrdersFromExpiredDeal возвращает заявки в активное состояние после истечения сделки
-func (cs *CleanupService) reactivateOrdersFromExpiredDeal(deal *model.Deal) {
-	log.Printf("[INFO] Реактивация заявок для истекшей сделки ID=%d", deal.ID)
+// completeOrdersFromExpiredDeal завершает заявки после истечения связанной сделки
+func (cs *CleanupService) completeOrdersFromExpiredDeal(deal *model.Deal) {
+	log.Printf("[INFO] Завершение заявок для истекшей сделки ID=%d", deal.ID)
 
 	// Ищем заявки связанные со сделкой
 	// ResponseID в сделке - это ID заявки на которую откликнулись
@@ -313,26 +313,26 @@ func (cs *CleanupService) reactivateOrdersFromExpiredDeal(deal *model.Deal) {
 
 	if deal.ResponseID > 0 {
 		orderIDs = append(orderIDs, deal.ResponseID)
-		log.Printf("[DEBUG] Найдена исходная заявка ID=%d для реактивации", deal.ResponseID)
+		log.Printf("[DEBUG] Найдена исходная заявка ID=%d для завершения", deal.ResponseID)
 	}
 
 	if deal.OrderID > 0 && deal.OrderID != deal.ResponseID {
 		orderIDs = append(orderIDs, deal.OrderID)
-		log.Printf("[DEBUG] Найдена заявка отклика ID=%d для реактивации", deal.OrderID)
+		log.Printf("[DEBUG] Найдена заявка отклика ID=%d для завершения", deal.OrderID)
 	}
 
-	// Реактивируем каждую заявку
+	// Завершаем каждую заявку (статус cancelled - сделка не состоялась)
 	for _, orderID := range orderIDs {
-		err := cs.service.repo.UpdateOrderStatus(orderID, model.OrderStatusActive)
+		err := cs.service.repo.UpdateOrderStatus(orderID, model.OrderStatusCancelled)
 		if err != nil {
-			log.Printf("[ERROR] Не удалось реактивировать заявку ID=%d: %v", orderID, err)
+			log.Printf("[ERROR] Не удалось завершить заявку ID=%d: %v", orderID, err)
 		} else {
-			log.Printf("[INFO] Заявка ID=%d реактивирована (статус: active)", orderID)
+			log.Printf("[INFO] Заявка ID=%d завершена (статус: cancelled - сделка истекла)", orderID)
 		}
 	}
 
 	if len(orderIDs) == 0 {
-		log.Printf("[WARN] Не найдено заявок для реактивации по сделке ID=%d", deal.ID)
+		log.Printf("[WARN] Не найдено заявок для завершения по сделке ID=%d", deal.ID)
 	}
 }
 
