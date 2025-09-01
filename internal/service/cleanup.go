@@ -28,7 +28,7 @@ func NewCleanupService(service *Service) *CleanupService {
 		service:       service,
 		checkInterval: 30 * time.Minute,   // Проверяем каждые 30 минут
 		orderTimeout:  7 * 24 * time.Hour, // Заявки истекают через 7 дней
-		dealTimeout:   6 * time.Hour,     // Сделки истекают через 1 день
+		dealTimeout:   6 * time.Hour,      // Сделки истекают через 1 день
 		ctx:           ctx,
 		cancel:        cancel,
 	}
@@ -183,6 +183,9 @@ func (cs *CleanupService) expireDeal(deal *model.Deal) bool {
 		return false
 	}
 
+	// Возвращаем связанные заявки в активное состояние
+	cs.reactivateOrdersFromExpiredDeal(deal)
+
 	// Отправляем уведомления обеим сторонам
 	cs.sendDealExpiredNotifications(deal)
 
@@ -297,6 +300,40 @@ func (cs *CleanupService) sendDealExpiredNotifications(deal *model.Deal) {
 	}
 
 	log.Printf("[INFO] Процесс отправки уведомлений завершен для сделки ID=%d", deal.ID)
+}
+
+// reactivateOrdersFromExpiredDeal возвращает заявки в активное состояние после истечения сделки
+func (cs *CleanupService) reactivateOrdersFromExpiredDeal(deal *model.Deal) {
+	log.Printf("[INFO] Реактивация заявок для истекшей сделки ID=%d", deal.ID)
+
+	// Ищем заявки связанные со сделкой
+	// ResponseID в сделке - это ID заявки на которую откликнулись
+	// OrderID в сделке - это ID заявки автора отклика
+	orderIDs := []int64{}
+
+	if deal.ResponseID > 0 {
+		orderIDs = append(orderIDs, deal.ResponseID)
+		log.Printf("[DEBUG] Найдена исходная заявка ID=%d для реактивации", deal.ResponseID)
+	}
+
+	if deal.OrderID > 0 && deal.OrderID != deal.ResponseID {
+		orderIDs = append(orderIDs, deal.OrderID)
+		log.Printf("[DEBUG] Найдена заявка отклика ID=%d для реактивации", deal.OrderID)
+	}
+
+	// Реактивируем каждую заявку
+	for _, orderID := range orderIDs {
+		err := cs.service.repo.UpdateOrderStatus(orderID, model.OrderStatusActive)
+		if err != nil {
+			log.Printf("[ERROR] Не удалось реактивировать заявку ID=%d: %v", orderID, err)
+		} else {
+			log.Printf("[INFO] Заявка ID=%d реактивирована (статус: active)", orderID)
+		}
+	}
+
+	if len(orderIDs) == 0 {
+		log.Printf("[WARN] Не найдено заявок для реактивации по сделке ID=%d", deal.ID)
+	}
 }
 
 // getActiveDealsOlderThan получает активные сделки старше указанного времени
