@@ -206,14 +206,27 @@ func (cs *CleanupService) sendOrderExpiredNotification(order *model.Order) {
 		},
 	}
 
-	_, err := cs.service.notificationService.CreateNotification(notificationReq)
+	notification, err := cs.service.notificationService.CreateNotification(notificationReq)
 	if err != nil {
 		log.Printf("[ERROR] Не удалось создать уведомление об истекшей заявке ID=%d: %v",
 			order.ID, err)
-	} else {
-		log.Printf("[INFO] Отправлено уведомление пользователю ID=%d об истекшей заявке ID=%d",
-			order.UserID, order.ID)
+		return
 	}
+
+	// Получаем данные пользователя для отправки в Telegram
+	user, err := cs.service.repo.GetUserByID(order.UserID)
+	if err != nil {
+		log.Printf("[ERROR] Не удалось получить пользователя ID=%d для отправки уведомления: %v", order.UserID, err)
+		return
+	}
+
+	// Отправляем уведомление в Telegram
+	if err := cs.service.notificationService.SendNotification(notification, user.TelegramID); err != nil {
+		log.Printf("[ERROR] Не удалось отправить уведомление в Telegram пользователю ID=%d: %v", order.UserID, err)
+		return
+	}
+
+	log.Printf("[INFO] Отправлено уведомление пользователю ID=%d об истекшей заявке ID=%d", order.UserID, order.ID)
 }
 
 // sendDealExpiredNotifications отправляет уведомления обеим сторонам об истекшей сделке
@@ -247,15 +260,42 @@ func (cs *CleanupService) sendDealExpiredNotifications(deal *model.Deal) {
 	}
 
 	// Отправляем уведомления
-	if _, err := cs.service.notificationService.CreateNotification(authorNotificationReq); err != nil {
-		log.Printf("[ERROR] Не удалось создать уведомление автору о сделке ID=%d: %v", deal.ID, err)
+	// Получаем данные пользователей
+	author, err := cs.service.repo.GetUserByID(deal.AuthorID)
+	if err != nil {
+		log.Printf("[ERROR] Не удалось получить автора ID=%d для отправки уведомления: %v", deal.AuthorID, err)
+	} else {
+		// Создаем и отправляем уведомление автору
+		authorNotification, err := cs.service.notificationService.CreateNotification(authorNotificationReq)
+		if err != nil {
+			log.Printf("[ERROR] Не удалось создать уведомление автору о сделке ID=%d: %v", deal.ID, err)
+		} else {
+			if err := cs.service.notificationService.SendNotification(authorNotification, author.TelegramID); err != nil {
+				log.Printf("[ERROR] Не удалось отправить уведомление в Telegram автору ID=%d: %v", deal.AuthorID, err)
+			} else {
+				log.Printf("[INFO] Отправлено уведомление автору ID=%d о сделке ID=%d", deal.AuthorID, deal.ID)
+			}
+		}
 	}
 
-	if _, err := cs.service.notificationService.CreateNotification(counterpartyNotificationReq); err != nil {
-		log.Printf("[ERROR] Не удалось создать уведомление контрагенту о сделке ID=%d: %v", deal.ID, err)
+	counterparty, err := cs.service.repo.GetUserByID(deal.CounterpartyID)
+	if err != nil {
+		log.Printf("[ERROR] Не удалось получить контрагента ID=%d для отправки уведомления: %v", deal.CounterpartyID, err)
+	} else {
+		// Создаем и отправляем уведомление контрагенту
+		counterpartyNotification, err := cs.service.notificationService.CreateNotification(counterpartyNotificationReq)
+		if err != nil {
+			log.Printf("[ERROR] Не удалось создать уведомление контрагенту о сделке ID=%d: %v", deal.ID, err)
+		} else {
+			if err := cs.service.notificationService.SendNotification(counterpartyNotification, counterparty.TelegramID); err != nil {
+				log.Printf("[ERROR] Не удалось отправить уведомление в Telegram контрагенту ID=%d: %v", deal.CounterpartyID, err)
+			} else {
+				log.Printf("[INFO] Отправлено уведомление контрагенту ID=%d о сделке ID=%d", deal.CounterpartyID, deal.ID)
+			}
+		}
 	}
 
-	log.Printf("[INFO] Отправлены уведомления обеим сторонам сделки ID=%d", deal.ID)
+	log.Printf("[INFO] Процесс отправки уведомлений завершен для сделки ID=%d", deal.ID)
 }
 
 // getActiveDealsOlderThan получает активные сделки старше указанного времени

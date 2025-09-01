@@ -592,7 +592,10 @@ func (r *Repository) UpdateDealStatus(dealID int64, status string) error {
 	// SQL запрос для обновления статуса сделки
 	query := `
 		UPDATE deals 
-		SET status = $1, updated_at = NOW()
+		SET status = $1, completed_at = CASE 
+			WHEN $1 IN ('completed', 'expired', 'cancelled') THEN NOW() 
+			ELSE completed_at 
+		END
 		WHERE id = $2`
 
 	// Выполняем обновление
