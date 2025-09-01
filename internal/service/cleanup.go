@@ -304,36 +304,49 @@ func (cs *CleanupService) sendDealExpiredNotifications(deal *model.Deal) {
 
 // completeOrdersFromExpiredDeal завершает заявки после истечения связанной сделки
 func (cs *CleanupService) completeOrdersFromExpiredDeal(deal *model.Deal) {
-	log.Printf("[INFO] Завершение заявок для истекшей сделки ID=%d", deal.ID)
+	log.Printf("[INFO] Завершение заявок для истекшей сделки ID=%d (участники: %d и %d)",
+		deal.ID, deal.AuthorID, deal.CounterpartyID)
 
-	// Ищем заявки связанные со сделкой
-	// ResponseID в сделке - это ID заявки на которую откликнулись
-	// OrderID в сделке - это ID заявки автора отклика
-	orderIDs := []int64{}
+	// Завершаем ВСЕ заявки автора в статусе in_deal
+	cs.completeUserOrdersInDeal(deal.AuthorID, "автора")
 
-	if deal.ResponseID > 0 {
-		orderIDs = append(orderIDs, deal.ResponseID)
-		log.Printf("[DEBUG] Найдена исходная заявка ID=%d для завершения", deal.ResponseID)
+	// Завершаем ВСЕ заявки контрагента в статусе in_deal
+	cs.completeUserOrdersInDeal(deal.CounterpartyID, "контрагента")
+}
+
+// completeUserOrdersInDeal завершает все заявки пользователя в статусе in_deal
+func (cs *CleanupService) completeUserOrdersInDeal(userID int64, role string) {
+	log.Printf("[INFO] Поиск заявок %s (ID=%d) в статусе in_deal", role, userID)
+
+	// Ищем все заявки пользователя в статусе in_deal
+	filter := &model.OrderFilter{
+		UserID: &userID,
+		Status: (*model.OrderStatus)(&[]model.OrderStatus{model.OrderStatusInDeal}[0]),
+		Limit:  50, // На случай если у пользователя много заявок
 	}
 
-	if deal.OrderID > 0 && deal.OrderID != deal.ResponseID {
-		orderIDs = append(orderIDs, deal.OrderID)
-		log.Printf("[DEBUG] Найдена заявка отклика ID=%d для завершения", deal.OrderID)
+	orders, err := cs.service.GetOrders(filter)
+	if err != nil {
+		log.Printf("[ERROR] Не удалось найти заявки %s ID=%d: %v", role, userID, err)
+		return
 	}
 
-	// Завершаем каждую заявку (статус cancelled - сделка не состоялась)
-	for _, orderID := range orderIDs {
-		err := cs.service.repo.UpdateOrderStatus(orderID, model.OrderStatusCancelled)
+	if len(orders) == 0 {
+		log.Printf("[DEBUG] У %s ID=%d нет заявок в статусе in_deal", role, userID)
+		return
+	}
+
+	// Завершаем каждую найденную заявку
+	for _, order := range orders {
+		err := cs.service.repo.UpdateOrderStatus(order.ID, model.OrderStatusCancelled)
 		if err != nil {
-			log.Printf("[ERROR] Не удалось завершить заявку ID=%d: %v", orderID, err)
+			log.Printf("[ERROR] Не удалось завершить заявку %s ID=%d: %v", role, order.ID, err)
 		} else {
-			log.Printf("[INFO] Заявка ID=%d завершена (статус: cancelled - сделка истекла)", orderID)
+			log.Printf("[INFO] Заявка %s ID=%d завершена (статус: cancelled)", role, order.ID)
 		}
 	}
 
-	if len(orderIDs) == 0 {
-		log.Printf("[WARN] Не найдено заявок для завершения по сделке ID=%d", deal.ID)
-	}
+	log.Printf("[INFO] Завершено заявок %s: %d", role, len(orders))
 }
 
 // getActiveDealsOlderThan получает активные сделки старше указанного времени
