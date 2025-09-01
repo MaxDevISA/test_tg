@@ -27,8 +27,8 @@ func NewCleanupService(service *Service) *CleanupService {
 	return &CleanupService{
 		service:       service,
 		checkInterval: 30 * time.Minute,   // Проверяем каждые 30 минут
-		orderTimeout:  1 * 24 * time.Hour, // Заявки истекают через 7 дней
-		dealTimeout:   24 * time.Hour,     // Сделки истекают через 1 день
+		orderTimeout:  7 * 24 * time.Hour, // Заявки истекают через 7 дней
+		dealTimeout:   6 * time.Hour,     // Сделки истекают через 1 день
 		ctx:           ctx,
 		cancel:        cancel,
 	}
@@ -231,13 +231,14 @@ func (cs *CleanupService) sendOrderExpiredNotification(order *model.Order) {
 
 // sendDealExpiredNotifications отправляет уведомления обеим сторонам об истекшей сделке
 func (cs *CleanupService) sendDealExpiredNotifications(deal *model.Deal) {
-	message := generateDealExpiredMessage(deal)
+	// Форматируем уведомление используя правильный шаблон
+	title, message := cs.service.notificationService.FormatDealCancelledNotification(deal)
 
 	// Уведомление автору
 	authorNotificationReq := &model.CreateNotificationRequest{
 		UserID:  deal.AuthorID,
 		Type:    model.NotificationTypeDealCancelled,
-		Title:   "Сделка автоматически отменена",
+		Title:   title,
 		Message: message,
 		DealID:  &deal.ID,
 		Data: map[string]interface{}{
@@ -250,7 +251,7 @@ func (cs *CleanupService) sendDealExpiredNotifications(deal *model.Deal) {
 	counterpartyNotificationReq := &model.CreateNotificationRequest{
 		UserID:  deal.CounterpartyID,
 		Type:    model.NotificationTypeDealCancelled,
-		Title:   "Сделка автоматически отменена",
+		Title:   title,
 		Message: message,
 		DealID:  &deal.ID,
 		Data: map[string]interface{}{
@@ -319,14 +320,5 @@ func generateOrderExpiredMessage(order *model.Order) string {
 		"⏰ Ваша заявка на %s %.8f %s по цене %.2f %s была автоматически удалена после 7 дней без активности.\n\n"+
 			"💡 Вы можете создать новую заявку в любое время.",
 		orderType, order.Amount, order.Cryptocurrency, order.Price, order.FiatCurrency,
-	)
-}
-
-// generateDealExpiredMessage формирует сообщение об истекшей сделке
-func generateDealExpiredMessage(deal *model.Deal) string {
-	return fmt.Sprintf(
-		"⏰ Сделка №%d на %.8f %s была автоматически отменена из-за отсутствия активности более 24 часов.\n\n"+
-			"💡 Для завершения сделок требуется активное участие обеих сторон.",
-		deal.ID, deal.Amount, deal.Cryptocurrency,
 	)
 }

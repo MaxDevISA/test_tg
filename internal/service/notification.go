@@ -121,6 +121,14 @@ func (ns *NotificationService) initTemplates() {
 		Description: "Уведомление об успешном завершении сделки",
 	}
 
+	// Шаблон для отменённой сделки
+	ns.templates[model.NotificationTypeDealCancelled] = &model.NotificationTemplate{
+		Type:        model.NotificationTypeDealCancelled,
+		Title:       "⏰ Сделка автоматически отменена",
+		Message:     "Сделка #%d была автоматически отменена из-за отсутствия активности более 24 часов.\n\n📊 Детали:\n• Объем: %.2f %s\n• Сумма: %.2f %s\n\n💡 Для завершения сделок требуется активное участие обеих сторон.",
+		Description: "Уведомление об автоматической отмене сделки по таймауту",
+	}
+
 	// Шаблон для системных сообщений
 	ns.templates[model.NotificationTypeSystemMessage] = &model.NotificationTemplate{
 		Type:        model.NotificationTypeSystemMessage,
@@ -479,6 +487,22 @@ func (ns *NotificationService) FormatDealCreatedNotification(deal *model.Deal, c
 		deal.FiatCurrency,                       // RUB
 		deal.TotalAmount,                        // 28500.00
 		deal.FiatCurrency,                       // RUB
+	)
+
+	return title, message
+}
+
+// FormatDealCancelledNotification форматирует уведомление об отменённой сделке
+func (ns *NotificationService) FormatDealCancelledNotification(deal *model.Deal) (string, string) {
+	template := ns.templates[model.NotificationTypeDealCancelled]
+
+	title := template.Title
+	message := fmt.Sprintf(template.Message,
+		deal.ID,             // Номер сделки
+		deal.Amount,         // 0.01000000
+		deal.Cryptocurrency, // BTC
+		deal.TotalAmount,    // 28500.00
+		deal.FiatCurrency,   // RUB
 	)
 
 	return title, message
